@@ -7575,6 +7575,7 @@ html[data-theme="light"] #routing-forced-rules-modal .xk-chip[data-kind="ip"] {
   width: min(96vw, 1120px);
   max-width: 1120px;
   max-height: min(92vh, 920px);
+  min-height: min(680px, 92vh);
   padding: 12px 14px 14px;
   border-radius: 24px;
   border-color: rgba(71, 85, 105, 0.82);
@@ -7617,8 +7618,11 @@ html[data-theme="light"] #routing-forced-rules-modal .xk-chip[data-kind="ip"] {
 .xk-mi-body {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
   gap: 12px;
   margin: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .xk-mi-lead {
@@ -7691,6 +7695,7 @@ html[data-theme="light"] #routing-forced-rules-modal .xk-chip[data-kind="ip"] {
 .xk-mi-grid {
   display: grid;
   grid-template-columns: minmax(360px, 0.98fr) minmax(420px, 1.02fr);
+  flex: 1 1 auto;
   gap: 12px;
   min-height: 0;
 }
@@ -7712,6 +7717,11 @@ html[data-theme="light"] #routing-forced-rules-modal .xk-chip[data-kind="ip"] {
 }
 
 .xk-mi-panel--controls {
+  overflow: auto;
+}
+
+.xk-mi-panel--preview {
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -7862,6 +7872,8 @@ html[data-theme="light"] #routing-forced-rules-modal .xk-chip[data-kind="ip"] {
 
 .xk-mi-preview-wrap {
   position: relative;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
   flex: 1 1 auto;
   border-radius: 16px;
@@ -7872,12 +7884,16 @@ html[data-theme="light"] #routing-forced-rules-modal .xk-chip[data-kind="ip"] {
 
 #mihomo-import-preview,
 #mihomo-import-preview-monaco,
-#mihomo-import-modal .xk-mihomo-import-preview .CodeMirror {
+#mihomo-import-modal .xk-mihomo-import-preview,
+#mihomo-import-modal .xk-mihomo-import-preview.CodeMirror,
+#mihomo-import-modal .xk-mihomo-import-preview .CodeMirror,
+#mihomo-import-modal .xk-mihomo-import-preview .cm-editor {
   min-height: 360px;
-  height: 360px;
+  height: 100%;
 }
 
 #mihomo-import-modal .xk-mihomo-import-preview .CodeMirror,
+#mihomo-import-modal .xk-mihomo-import-preview.CodeMirror,
 #mihomo-import-preview {
   margin: 0;
   border: 0;
@@ -7945,9 +7961,12 @@ html[data-theme="light"] #routing-forced-rules-modal .xk-chip[data-kind="ip"] {
 
   #mihomo-import-preview,
   #mihomo-import-preview-monaco,
-  #mihomo-import-modal .xk-mihomo-import-preview .CodeMirror {
+  #mihomo-import-modal .xk-mihomo-import-preview,
+  #mihomo-import-modal .xk-mihomo-import-preview.CodeMirror,
+  #mihomo-import-modal .xk-mihomo-import-preview .CodeMirror,
+  #mihomo-import-modal .xk-mihomo-import-preview .cm-editor {
     min-height: 280px;
-    height: 280px;
+    height: 100%;
   }
 }
 

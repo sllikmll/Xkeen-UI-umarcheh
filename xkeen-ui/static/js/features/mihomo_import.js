@@ -61,6 +61,8 @@ let mihomoImportModuleApi = null;
   let _previewLastText = '';
   let _engineUnsub = null;
   let _engineSyncing = false;
+  let _previewLayoutRaf = 0;
+  let _previewResizeObserver = null;
 
   // Groups selection (proxy-groups)
   const GROUPS_PREF_KEY = 'xkeen.mihomo.import.groups.v1';
@@ -217,8 +219,8 @@ let mihomoImportModuleApi = null;
       const subWord = pluralRu(groups.length, ['подписка', 'подписки', 'подписок']);
       const nodeWord = pluralRu(count, ['узел', 'узла', 'узлов']);
       note.textContent = hasXray
-        ? `Будет создана запись автообновления: ${groups.length} ${subWord}, ${count} ${nodeWord}. Интервал от 1 часа до 7 дней.`
-        : 'От 1 часа до 7 дней. Запись автообновления будет создана после вставки в конфиг.';
+        ? `Будет создана запись автообновления: ${groups.length} ${subWord}, ${count} ${nodeWord}. Интервал применится при «Вставить в конфиг».`
+        : 'От 1 часа до 7 дней. Отдельная кнопка сохранения не нужна: интервал применяется при вставке в конфиг.';
     }
   }
 
@@ -576,6 +578,7 @@ let mihomoImportModuleApi = null;
 
       _previewKind = 'monaco';
       try { if (_previewMonacoFacade) _previewMonacoFacade.scrollTo(0, 0); } catch (e6) {}
+      try { layoutPreviewEditor(); } catch (e7) {}
       return 'monaco';
     }
 
@@ -614,6 +617,7 @@ let mihomoImportModuleApi = null;
     }
 
     _previewKind = 'codemirror';
+    try { layoutPreviewEditor(); } catch (e5) {}
     return 'codemirror';
   }
 
@@ -631,6 +635,60 @@ let mihomoImportModuleApi = null;
 
   function scheduleEngineSync() {
     try { setTimeout(() => { try { syncEngineNow(); } catch (e) {} }, 0); } catch (e) {}
+  }
+
+  function layoutPreviewEditor() {
+    try {
+      if (_previewLayoutRaf) return;
+      _previewLayoutRaf = requestAnimationFrame(() => {
+        _previewLayoutRaf = 0;
+        try {
+          if (_previewCm) {
+            if (typeof _previewCm.setSize === 'function') _previewCm.setSize(null, '100%');
+            if (typeof _previewCm.refresh === 'function') _previewCm.refresh();
+            else if (typeof _previewCm.layout === 'function') _previewCm.layout();
+          }
+        } catch (e1) {}
+        try {
+          if (_previewCmFacade && typeof _previewCmFacade.layout === 'function') _previewCmFacade.layout();
+        } catch (e2) {}
+        try {
+          if (_previewMonacoFacade && typeof _previewMonacoFacade.layout === 'function') _previewMonacoFacade.layout();
+          else if (_previewMonaco && typeof _previewMonaco.layout === 'function') _previewMonaco.layout();
+        } catch (e3) {}
+      });
+    } catch (e) {
+      try { if (_previewCm && typeof _previewCm.refresh === 'function') _previewCm.refresh(); } catch (e2) {}
+      try { if (_previewMonaco && typeof _previewMonaco.layout === 'function') _previewMonaco.layout(); } catch (e3) {}
+    }
+  }
+
+  function bindPreviewResizeObserver() {
+    const modal = $(IDS.modal);
+    if (!modal || (modal.dataset && modal.dataset.mihomoImportPreviewResizeBound === '1')) return;
+    try {
+      const content = modal.querySelector ? modal.querySelector('.modal-content') : null;
+      if (content && typeof ResizeObserver !== 'undefined') {
+        _previewResizeObserver = new ResizeObserver(() => {
+          if (!modalOpen()) return;
+          layoutPreviewEditor();
+        });
+        _previewResizeObserver.observe(content);
+      }
+    } catch (e) {}
+    try {
+      window.addEventListener('resize', () => {
+        if (modalOpen()) layoutPreviewEditor();
+      });
+    } catch (e2) {}
+    try {
+      document.addEventListener('xkeen-modal-resize', (event) => {
+        const detail = event && event.detail ? event.detail : {};
+        if (detail.modal && detail.modal !== IDS.modal) return;
+        if (modalOpen()) layoutPreviewEditor();
+      });
+    } catch (e3) {}
+    if (modal.dataset) modal.dataset.mihomoImportPreviewResizeBound = '1';
   }
 
 
@@ -664,9 +722,8 @@ let mihomoImportModuleApi = null;
     try {
       const w = _previewCm.getWrapperElement();
       w.classList.add('xkeen-cm', 'xk-mihomo-import-preview');
-      const previewHeight = window.innerWidth <= 720 ? '280px' : '360px';
-      if (typeof _previewCm.setSize === 'function') _previewCm.setSize(null, previewHeight);
-      else if (w) w.style.height = previewHeight;
+      if (typeof _previewCm.setSize === 'function') _previewCm.setSize(null, '100%');
+      else if (w) w.style.height = '100%';
     } catch (e) {}
 
     _previewCmFacade = createCodeMirrorFacade(_previewCm);
@@ -763,6 +820,7 @@ let mihomoImportModuleApi = null;
         const inp = $(IDS.input);
         if (inp) inp.focus();
       } catch (e3) {}
+      try { layoutPreviewEditor(); } catch (e5) {}
     }
   }
 
@@ -1870,6 +1928,8 @@ let mihomoImportModuleApi = null;
         });
       }
     }
+
+    try { bindPreviewResizeObserver(); } catch (e) {}
 
     // Close on backdrop click (outside content)
     if (!modal.dataset || modal.dataset.xkBackdrop !== '1') {
