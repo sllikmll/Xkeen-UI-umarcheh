@@ -452,6 +452,7 @@ def test_p3_devtools_screen_module_keeps_host_alive_and_stops_background_tasks_o
 
 def test_devtools_update_blocked_runs_render_inline_diagnostics_and_stop_retry_launch():
     text = Path('xkeen-ui/static/js/features/devtools/update.js').read_text(encoding='utf-8')
+    styles = Path('xkeen-ui/static/devtools.css').read_text(encoding='utf-8')
 
     assert 'function _showBlockedUpdateReason(btnRun) {' in text
     assert 'function _buildClientSideCheckFailureData(error) {' in text
@@ -461,8 +462,13 @@ def test_devtools_update_blocked_runs_render_inline_diagnostics_and_stop_retry_l
     assert 'state.lastCheck = failureData;' in text
     assert '_renderCheck(failureData);' in text
     assert 'if (_showBlockedUpdateReason(btnRun)) return;' in text
-    assert 'Сломалась не установка, а предварительная проверка обновления' in text
-    assert 'Частая причина: GitHub, GitHub API или release asset URLs недоступны с роутера' in text
+    assert 'function _classifyCheckFailure(data) {' in text
+    assert 'function _appendAlertDetails(parent, title, detailLines) {' in text
+    assert 'DNS не смог разрешить адрес GitHub. Обновление не запускалось.' in text
+    assert 'Чаще всего причина в недоступности GitHub/API/assets с роутера.' in text
+    assert 'Технические детали' in text
+    assert '.dt-alert .dt-alert-details' in styles
+    assert '.dt-alert .dt-alert-details-pre' in styles
 
 
 def test_file_manager_monaco_modal_tracks_modal_resize_and_fills_available_height():

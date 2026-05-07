@@ -414,8 +414,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     if (hint) return hint;
     const err = data && data.error ? String(data.error) : 'check_failed';
     const meta = (data && data.meta && typeof data.meta === 'object') ? data.meta : {};
-    const rawMsg = meta && meta.message ? String(meta.message) : '';
-    const low = (err + ' ' + rawMsg).toLowerCase();
+    const low = _checkFailureSearchText(data);
 
     if (meta && meta.reason === 'no_releases') {
       return 'Панель не нашла опубликованный release для self-update. Подробности показаны в карточке обновления.';
@@ -428,6 +427,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
       low.indexOf('name or service not known') >= 0 ||
       low.indexOf('getaddrinfo') >= 0 ||
       low.indexOf('failed to resolve') >= 0 ||
+      low.indexOf('could not resolve') >= 0 ||
       low.indexOf('nodename nor servname') >= 0
     ) {
       return 'Панель не смогла разрешить адрес GitHub по DNS. Часто это означает сетевую блокировку или проблему DNS на роутере.';
@@ -448,6 +448,171 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
       return 'Панель не смогла пройти TLS/SSL-проверку при обращении к GitHub.';
     }
     return 'Панель не смогла проверить обновление через GitHub. Часто это означает, что GitHub или release asset URLs недоступны с роутера.';
+  }
+
+  function _safeJson(value, maxLen) {
+    let out = '';
+    try {
+      out = JSON.stringify(value, null, 2);
+    } catch (e) {
+      try { out = String(value || ''); } catch (e2) { out = ''; }
+    }
+    const limit = Math.max(200, Number(maxLen || 1600));
+    if (out.length > limit) out = out.slice(0, limit - 1) + '…';
+    return out;
+  }
+
+  function _checkFailureSearchText(data) {
+    const err = data && data.error ? String(data.error) : 'check_failed';
+    const meta = (data && data.meta && typeof data.meta === 'object') ? data.meta : {};
+    const hint = data && data.hint ? String(data.hint) : '';
+    return (err + ' ' + hint + ' ' + _safeJson(meta, 2400)).toLowerCase();
+  }
+
+  function _classifyCheckFailure(data) {
+    const err = data && data.error ? String(data.error) : 'check_failed';
+    const meta = (data && data.meta && typeof data.meta === 'object') ? data.meta : {};
+    const low = _checkFailureSearchText(data);
+
+    if (meta && meta.reason === 'no_releases') return 'no_releases';
+    if (err === 'timeout' || low.indexOf('timeout') >= 0 || low.indexOf('timed out') >= 0) return 'timeout';
+    if (
+      low.indexOf('temporary failure') >= 0 ||
+      low.indexOf('name or service not known') >= 0 ||
+      low.indexOf('getaddrinfo') >= 0 ||
+      low.indexOf('failed to resolve') >= 0 ||
+      low.indexOf('could not resolve') >= 0 ||
+      low.indexOf('nodename nor servname') >= 0
+    ) return 'dns';
+    if (
+      low.indexOf('network is unreachable') >= 0 ||
+      low.indexOf('failed to connect') >= 0 ||
+      low.indexOf('connection refused') >= 0 ||
+      low.indexOf('connection reset') >= 0 ||
+      low.indexOf('no route to host') >= 0
+    ) return 'connect';
+    if (
+      low.indexOf('403') >= 0 ||
+      low.indexOf('forbidden') >= 0 ||
+      low.indexOf('429') >= 0 ||
+      low.indexOf('rate limit') >= 0
+    ) return 'limited';
+    if (
+      low.indexOf('ssl') >= 0 ||
+      low.indexOf('tls') >= 0 ||
+      low.indexOf('certificate') >= 0
+    ) return 'tls';
+    return 'generic';
+  }
+
+  function _buildCheckFailureView(data) {
+    const kind = _classifyCheckFailure(data || {});
+    if (kind === 'no_releases') {
+      return {
+        title: '⚠️ Release не найден',
+        lines: [
+          'Для выбранного канала нет опубликованного release или нужного install-архива.',
+          'Проверь repo/channel и наличие xkeen-ui-routing.tar.gz в GitHub Releases.',
+        ],
+      };
+    }
+    if (kind === 'timeout') {
+      return {
+        title: '⚠️ GitHub не ответил',
+        lines: [
+          'Проверка latest дошла до таймаута. Установка не начиналась.',
+          'Повтори позже или проверь доступ роутера к GitHub/release assets.',
+        ],
+      };
+    }
+    if (kind === 'dns') {
+      return {
+        title: '⚠️ Роутер не видит GitHub',
+        lines: [
+          'DNS не смог разрешить адрес GitHub. Обновление не запускалось.',
+          'Проверь DNS/интернет на роутере; при блокировке разреши GitHub hosts или используй рабочий маршрут.',
+        ],
+      };
+    }
+    if (kind === 'connect') {
+      return {
+        title: '⚠️ Нет соединения с GitHub',
+        lines: [
+          'Адрес найден, но соединение не установилось. Обновление не запускалось.',
+          'Проверь блокировки, firewall и маршрут до GitHub с самого роутера.',
+        ],
+      };
+    }
+    if (kind === 'limited') {
+      return {
+        title: '⚠️ GitHub отклонил запрос',
+        lines: [
+          'GitHub вернул отказ или rate limit. Установка не начиналась.',
+          'Повтори позже; если автопроверка включена часто, увеличь интервал.',
+        ],
+      };
+    }
+    if (kind === 'tls') {
+      return {
+        title: '⚠️ TLS-проверка не прошла',
+        lines: [
+          'Панель не смогла установить безопасное HTTPS-соединение с GitHub.',
+          'Проверь время на роутере, сертификаты и сетевой перехват HTTPS.',
+        ],
+      };
+    }
+    return {
+      title: '⚠️ Не удалось проверить обновление',
+      lines: [
+        'Панель не получила latest с GitHub. Обновление не запускалось.',
+        'Чаще всего причина в недоступности GitHub/API/assets с роутера.',
+      ],
+    };
+  }
+
+  function _appendAlertDetails(parent, title, detailLines) {
+    const lines = Array.isArray(detailLines) ? detailLines.filter(Boolean) : [];
+    if (!parent || !lines.length) return;
+    const details = document.createElement('details');
+    details.className = 'dt-alert-details';
+    const summary = document.createElement('summary');
+    summary.textContent = title || 'Технические детали';
+    details.appendChild(summary);
+    const pre = document.createElement('pre');
+    pre.className = 'dt-alert-details-pre';
+    pre.textContent = lines.join('\n');
+    details.appendChild(pre);
+    parent.appendChild(details);
+  }
+
+  function _collectCheckFailureDetails(data, sec) {
+    const out = [];
+    const err = data && data.error ? String(data.error) : '';
+    const repo = data && data.repo ? String(data.repo) : '';
+    const channel = data && data.channel ? String(data.channel) : '';
+    const branch = data && data.branch ? String(data.branch) : '';
+    const meta = (data && data.meta && typeof data.meta === 'object') ? data.meta : null;
+    if (err) out.push('Ошибка: ' + err);
+    if (repo || channel || branch) out.push('Источник: ' + [repo, channel, branch].filter(Boolean).join(' · '));
+    if (meta) out.push('Meta: ' + _safeJson(meta, 1400));
+    if (sec && typeof sec === 'object') {
+      const st = (sec.settings && typeof sec.settings === 'object') ? sec.settings : null;
+      if (st) out.push('Policy: ' + _safeJson(st, 900));
+    }
+    return out;
+  }
+
+  function _collectSecurityDetails(sec) {
+    const out = [];
+    if (!sec || typeof sec !== 'object') return out;
+    try {
+      const warnings = Array.isArray(sec.warnings) ? sec.warnings.map((w) => String(w)) : [];
+      if (warnings.length) out.push('Warnings: ' + warnings.join(' · '));
+      if (sec.download) out.push('Download: ' + _safeJson(sec.download, 700));
+      if (sec.checksum) out.push('Checksum: ' + _safeJson(sec.checksum, 700));
+      if (sec.settings) out.push('Policy: ' + _safeJson(sec.settings, 900));
+    } catch (e) {}
+    return out;
   }
 
   function _renderSecurity(sec, opts) {
@@ -485,8 +650,9 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     try { box.className = 'dt-alert ' + sev; } catch (e) {}
 
     const title = document.createElement('strong');
-    if (checkError) title.textContent = '⚠️ Не удалось проверить обновление';
-    else if (willBlock) title.textContent = '⚠️ Обновление будет заблокировано политикой безопасности';
+    const checkFailureView = checkError ? _buildCheckFailureView(checkData) : null;
+    if (checkError) title.textContent = checkFailureView.title;
+    else if (willBlock) title.textContent = '⚠️ Обновление остановлено политикой';
     else title.textContent = '⚠️ Предупреждения безопасности';
     box.appendChild(title);
 
@@ -501,91 +667,40 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     }
 
     if (checkError) {
-      const err = checkData && checkData.error ? String(checkData.error) : 'check_failed';
-      const meta = (checkData && checkData.meta && typeof checkData.meta === 'object') ? checkData.meta : {};
-      const rawMsg = meta && meta.message ? String(meta.message) : '';
-      const low = (err + ' ' + rawMsg).toLowerCase();
-
-      addLine('Сломалась не установка, а предварительная проверка обновления: панель не смогла понять, что именно скачивать и откуда.');
-
-      if (meta && meta.reason === 'no_releases') {
-        addLine('Для выбранного канала нет опубликованного release или подходящего install-архива.');
-      } else if (err === 'timeout' || low.indexOf('timeout') >= 0 || low.indexOf('timed out') >= 0) {
-        addLine('GitHub не ответил вовремя: проверка упёрлась в таймаут.');
-      } else if (
-        low.indexOf('temporary failure') >= 0 ||
-        low.indexOf('name or service not known') >= 0 ||
-        low.indexOf('getaddrinfo') >= 0 ||
-        low.indexOf('failed to resolve') >= 0 ||
-        low.indexOf('nodename nor servname') >= 0
-      ) {
-        addLine('Роутер не смог разрешить адрес GitHub по DNS.');
-      } else if (
-        low.indexOf('403') >= 0 ||
-        low.indexOf('forbidden') >= 0 ||
-        low.indexOf('429') >= 0 ||
-        low.indexOf('rate limit') >= 0
-      ) {
-        addLine('GitHub отклонил запрос или ограничил доступ к API/asset URL.');
-      } else if (
-        low.indexOf('ssl') >= 0 ||
-        low.indexOf('tls') >= 0 ||
-        low.indexOf('certificate') >= 0
-      ) {
-        addLine('При обращении к GitHub возникла TLS/SSL-ошибка.');
-      } else {
-        addLine('Частая причина: GitHub, GitHub API или release asset URLs недоступны с роутера из-за блокировки, DNS или firewall.');
-      }
-
-      if (rawMsg) addLine('Техническая деталь: ' + rawMsg + '.');
-      const repo = checkData && checkData.repo ? String(checkData.repo) : '';
-      const channel = checkData && checkData.channel ? String(checkData.channel) : '';
-      if (repo || channel) addLine('Источник проверки: ' + [repo, channel].filter(Boolean).join(' · '), 0.9);
+      const viewLines = (checkFailureView && Array.isArray(checkFailureView.lines)) ? checkFailureView.lines : [];
+      for (const line of viewLines) addLine(line);
     } else {
       if (willBlock) {
-        addLine('Self-update остановлен до запуска: URL архива или checksum не проходит текущую политику безопасности панели.');
+        addLine('Панель нашла обновление, но не будет запускать скачивание с текущими настройками безопасности.');
       }
       for (const w of warnings) {
         if (w === 'checksum_required_missing') {
-          addLine('Политика требует checksum, но для релиза не найден sha-файл (XKEEN_UI_UPDATE_REQUIRE_SHA=1).');
+          addLine('Для релиза не найден sha-файл, а политика требует checksum.');
           continue;
         }
         if (w.startsWith('download_url_blocked:')) {
           const reason = w.slice('download_url_blocked:'.length);
           const host = _extractHostFromUrl(sec && sec.download && sec.download.url);
-          addLine('Загрузка install-архива заблокирована: ' + _prettyUrlReason(reason) + (host ? (' · host=' + host) : '') + '.');
+          addLine('URL архива не разрешён: ' + _prettyUrlReason(reason) + (host ? (' · ' + host) : '') + '.');
           continue;
         }
         if (w.startsWith('checksum_url_blocked:')) {
           const reason = w.slice('checksum_url_blocked:'.length);
           const host = _extractHostFromUrl(sec && sec.checksum && sec.checksum.url);
-          addLine('Загрузка checksum заблокирована: ' + _prettyUrlReason(reason) + (host ? (' · host=' + host) : '') + '.');
+          addLine('URL checksum не разрешён: ' + _prettyUrlReason(reason) + (host ? (' · ' + host) : '') + '.');
           continue;
         }
         addLine(w);
       }
-    }
-
-    // Add compact policy summary (helps debug allow-list / strict sha).
-    if (sec && typeof sec === 'object') {
-      try {
-        const st = (sec.settings && typeof sec.settings === 'object') ? sec.settings : {};
-        const allowHosts = st.allow_hosts ? String(st.allow_hosts) : '';
-        const requireSha = st.require_sha ? String(st.require_sha) : '';
-        const shaStrict = st.sha_strict ? String(st.sha_strict) : '';
-        const maxBytes = st.max_bytes ? _fmtBytes(st.max_bytes) : '';
-        const dlTimeout = st.download_timeout ? String(st.download_timeout) : '';
-        const parts = [];
-        if (allowHosts) parts.push('allow_hosts=' + allowHosts);
-        if (requireSha) parts.push('require_sha=' + requireSha);
-        if (shaStrict) parts.push('sha_strict=' + shaStrict);
-        if (maxBytes) parts.push('max=' + maxBytes);
-        if (dlTimeout) parts.push('dl_timeout=' + dlTimeout + 's');
-        if (parts.length) addLine('Policy: ' + parts.join(' · '), 0.85);
-      } catch (e) {}
+      if (willBlock) addLine('Проверь allow-list/SHA-настройки или верни штатные GitHub URLs.', 0.9);
     }
 
     box.appendChild(linesWrap);
+    if (checkError) {
+      _appendAlertDetails(box, 'Технические детали', _collectCheckFailureDetails(checkData, sec));
+    } else {
+      _appendAlertDetails(box, 'Policy / URL детали', _collectSecurityDetails(sec));
+    }
   }
 
   function _isBackupTarUnsupported(data) {
