@@ -15,11 +15,12 @@ import os
 import re
 import threading
 import time
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Sequence, Tuple
 from urllib.parse import urlparse
 
 from mihomo_config_generator import build_full_config
 from services.io.atomic import _atomic_write_json, _atomic_write_text
+from services.mihomo_proxy_config import apply_proxy_insert
 from services.mihomo_xray_json import convert_subscription_text
 from services.url_policy import env_flag
 from services.xray_subscriptions import fetch_subscription_body
@@ -133,9 +134,14 @@ def _normalise_saved_state(raw: Any) -> Dict[str, Any]:
         entry = dict(item)
         entry["id"] = sub_id
         entry["url"] = url
+        entry["source"] = str(item.get("source") or ("config" if item.get("proxy_names") else "generator")).strip() or "generator"
         entry["tag"] = str(item.get("tag") or _derive_tag_from_url(url)).strip() or "xray-sub"
         entry["enabled"] = bool(item.get("enabled", True))
         entry["interval_hours"] = _clamp_interval(item.get("interval_hours", item.get("intervalHours")))
+        entry["groups"] = _clean_string_list(item.get("groups"))
+        entry["proxy_names"] = _clean_string_list(item.get("proxy_names") or item.get("proxyNames"))
+        if "managed_yaml" in item:
+            entry["managed_yaml"] = str(item.get("managed_yaml") or "")
         if not entry["enabled"]:
             entry["next_update_ts"] = None
         elif entry.get("next_update_ts") in (None, ""):
@@ -294,6 +300,7 @@ def _entry_from_proxy_meta(
         **prev,
         "id": meta["id"],
         "url": meta["url"],
+        "source": "generator",
         "tag": meta["tag"],
         "enabled": bool(meta.get("enabled", True)),
         "interval_hours": int(meta.get("interval_hours") or DEFAULT_INTERVAL_HOURS),
@@ -358,9 +365,18 @@ def sync_from_generator_state(
             proxy.pop("xraySubscription", None)
             entries.append(_entry_from_proxy_meta(proxy, meta, previous=previous, now_ts=now_ts))
 
+        generator_ids = {str(item.get("id") or "") for item in entries if isinstance(item, dict)}
+        preserved_entries = [
+            copy.deepcopy(item)
+            for item in previous_state.get("subscriptions") or []
+            if isinstance(item, dict)
+            and str(item.get("source") or "generator") != "generator"
+            and str(item.get("id") or "") not in generator_ids
+        ]
+
         out_state = {
             "version": STATE_VERSION,
-            "subscriptions": entries,
+            "subscriptions": entries + preserved_entries,
             "generator_state": state_copy,
             "last_config_hash": previous_state.get("last_config_hash") or "",
             "last_synced_ts": now_ts,
@@ -370,6 +386,83 @@ def sync_from_generator_state(
 
         _write_state(ui_state_dir, out_state)
         return copy.deepcopy(out_state)
+
+
+def sync_imported_xray_subscription(
+    ui_state_dir: str,
+    *,
+    url: str,
+    config_text: str,
+    proxy_yamls: Sequence[Any],
+    groups: Sequence[Any] | None = None,
+    interval_hours: Any = DEFAULT_INTERVAL_HOURS,
+    tag: str | None = None,
+) -> Dict[str, Any]:
+    """Persist an Xray-JSON subscription inserted directly into config.yaml.
+
+    The Mihomo panel import modal patches raw YAML instead of saving generator
+    state.  These entries keep enough source metadata to refresh only the
+    inserted proxy blocks inside the active config.
+    """
+    clean_url = str(url or "").strip()
+    if not clean_url:
+        raise ValueError("url is required")
+
+    blocks = [str(item or "").strip() for item in proxy_yamls or [] if str(item or "").strip()]
+    if not blocks:
+        raise ValueError("proxy_yamls is required")
+
+    clean_tag = str(tag or _derive_tag_from_url(clean_url)).strip() or "xray-sub"
+    sub_id = _entry_id_from_url(clean_url, clean_tag)
+    proxy_names = _extract_proxy_names_from_yaml("\n\n".join(blocks))
+    if not proxy_names:
+        raise ValueError("proxy_names is required")
+
+    with _STATE_LOCK:
+        state = load_subscription_state(ui_state_dir)
+        previous_by_id = {
+            str(item.get("id") or ""): item
+            for item in state.get("subscriptions") or []
+            if isinstance(item, dict)
+        }
+        prev = dict(previous_by_id.get(sub_id) or {})
+        now_ts = _now()
+        interval = _clamp_interval(interval_hours)
+        enabled = bool(prev.get("enabled", True))
+        schedule_changed = int(prev.get("interval_hours") or 0) != interval or bool(prev.get("enabled", True)) != enabled
+
+        entry = {
+            **prev,
+            "id": sub_id,
+            "url": clean_url,
+            "source": "config",
+            "tag": clean_tag,
+            "enabled": enabled,
+            "interval_hours": interval,
+            "groups": _clean_string_list(groups or prev.get("groups")),
+            "proxy_names": proxy_names,
+            "managed_yaml": "\n\n".join(blocks),
+            "updated_from_import_ts": now_ts,
+            "last_ok": True,
+            "last_error": "",
+            "last_count": len(proxy_names),
+            "last_hash": _hash_text("\n\n".join(blocks)),
+        }
+        entry.setdefault("created_ts", now_ts)
+        if not enabled:
+            entry["next_update_ts"] = None
+        elif schedule_changed or entry.get("next_update_ts") in (None, ""):
+            entry["next_update_ts"] = now_ts + interval * 3600
+
+        state["subscriptions"] = [
+            copy.deepcopy(item)
+            for item in state.get("subscriptions") or []
+            if isinstance(item, dict) and str(item.get("id") or "") != sub_id
+        ] + [entry]
+        state["last_config_hash"] = _hash_text(config_text)
+        state["last_synced_ts"] = now_ts
+        _write_state(ui_state_dir, state)
+        return copy.deepcopy(entry)
 
 
 def _find_subscription(state: Dict[str, Any], sub_id: str) -> Tuple[int, Dict[str, Any] | None]:
@@ -449,6 +542,176 @@ def _format_proxy_yaml_blocks(proxies: Any) -> str:
     return "\n\n".join(blocks)
 
 
+def _normalise_proxy_block_name(raw: Any) -> str:
+    value = str(raw or "").strip()
+    if not value:
+        return ""
+    value = re.sub(r"\s+#.*$", "", value).strip()
+    if len(value) >= 2 and ((value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'"))):
+        value = value[1:-1]
+    return value.replace("''", "'").strip()
+
+
+def _all_proxy_names_from_config(config_text: str) -> List[str]:
+    return _extract_proxy_names_from_yaml(config_text)
+
+
+def _remove_group_references(content: str, proxy_names: Sequence[str]) -> str:
+    targets = {str(name or "").strip() for name in proxy_names if str(name or "").strip()}
+    if not targets:
+        return content
+
+    def _inline_item_name(raw: str) -> str:
+        return _normalise_proxy_block_name(raw)
+
+    def _filter_inline(line: str) -> str:
+        match = re.match(r"^(\s*proxies\s*:\s*\[)(.*?)(\]\s*(#.*)?)$", line)
+        if not match:
+            return line
+        inner = (match.group(2) or "").strip()
+        if not inner:
+            return line
+        items = [item.strip() for item in inner.split(",")]
+        kept = [item for item in items if _inline_item_name(item) not in targets]
+        if len(kept) == len(items):
+            return line
+        return f"{match.group(1)}{', '.join(kept)}{match.group(3)}"
+
+    lines = str(content or "").replace("\r\n", "\n").replace("\r", "\n").splitlines()
+    out: List[str] = []
+    in_groups = False
+    in_group_proxies = False
+    proxies_indent = -1
+
+    for line in lines:
+        stripped = line.lstrip()
+        indent = len(line) - len(stripped)
+
+        if indent == 0 and stripped.startswith("proxy-groups:"):
+            in_groups = True
+            in_group_proxies = False
+            proxies_indent = -1
+            out.append(line)
+            continue
+
+        if in_groups and indent == 0 and stripped and not stripped.startswith("#"):
+            in_groups = False
+            in_group_proxies = False
+            proxies_indent = -1
+
+        if in_groups and in_group_proxies and stripped and not stripped.startswith("#") and indent <= proxies_indent:
+            in_group_proxies = False
+            proxies_indent = -1
+
+        if in_groups and stripped.startswith("proxies:"):
+            if "[" in stripped and "]" in stripped:
+                out.append(_filter_inline(line))
+            else:
+                in_group_proxies = True
+                proxies_indent = indent
+                out.append(line)
+            continue
+
+        if in_groups and in_group_proxies:
+            match = re.match(r"^(\s*)-\s*(.+?)\s*$", line)
+            if match and len(match.group(1)) > proxies_indent:
+                if _normalise_proxy_block_name(match.group(2)) in targets:
+                    continue
+
+        out.append(line)
+
+    return "\n".join(out) + ("\n" if str(content or "").endswith("\n") else "")
+
+
+def _remove_proxy_blocks(content: str, proxy_names: Sequence[str]) -> str:
+    targets = {str(name or "").strip() for name in proxy_names if str(name or "").strip()}
+    if not targets:
+        return content
+
+    content_n = str(content or "").replace("\r\n", "\n").replace("\r", "\n")
+    had_trailing_newline = content_n.endswith("\n")
+    lines = content_n.splitlines()
+
+    proxies_idx = None
+    for idx, line in enumerate(lines):
+        if line.strip() == "proxies:" and (len(line) - len(line.lstrip()) == 0):
+            proxies_idx = idx
+            break
+    if proxies_idx is None:
+        return content_n if had_trailing_newline else content_n.rstrip("\n")
+
+    end_idx = len(lines)
+    for idx in range(proxies_idx + 1, len(lines)):
+        line = lines[idx]
+        stripped = line.lstrip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if (len(line) - len(stripped) == 0) and not stripped.startswith("-"):
+            end_idx = idx
+            break
+
+    name_line_re = re.compile(r"^(\s*)-\s+name:\s*(.+?)\s*$")
+    item_indent_len = None
+    for idx in range(proxies_idx + 1, end_idx):
+        match = name_line_re.match(lines[idx])
+        if match:
+            item_indent_len = len(match.group(1))
+            break
+    if item_indent_len is None:
+        return content_n
+
+    remove_ranges: List[Tuple[int, int]] = []
+    idx = proxies_idx + 1
+    while idx < end_idx:
+        match = name_line_re.match(lines[idx])
+        if not match or len(match.group(1)) != item_indent_len:
+            idx += 1
+            continue
+        block_start = idx
+        block_end = end_idx
+        for nxt in range(idx + 1, end_idx):
+            match2 = name_line_re.match(lines[nxt])
+            if match2 and len(match2.group(1)) == item_indent_len:
+                block_end = nxt
+                break
+        if _normalise_proxy_block_name(match.group(2)) in targets:
+            remove_ranges.append((block_start, block_end))
+        idx = block_end
+
+    if not remove_ranges:
+        return content_n
+
+    keep = [True] * len(lines)
+    for start, end in remove_ranges:
+        while start > proxies_idx + 1 and not lines[start - 1].strip():
+            start -= 1
+        for pos in range(start, end):
+            keep[pos] = False
+
+    out = "\n".join(line for pos, line in enumerate(lines) if keep[pos]).rstrip("\n")
+    return out + ("\n" if had_trailing_newline else "")
+
+
+def _replace_config_subscription_blocks(
+    content: str,
+    *,
+    old_proxy_names: Sequence[str],
+    new_proxy_blocks: Sequence[str],
+    groups: Sequence[Any],
+) -> str:
+    patched = _remove_group_references(content, old_proxy_names)
+    patched = _remove_proxy_blocks(patched, old_proxy_names)
+    for block in new_proxy_blocks:
+        block_text = str(block or "").strip()
+        if not block_text:
+            continue
+        names = _extract_proxy_names_from_yaml(block_text)
+        proxy_name = names[0] if names else ""
+        if proxy_name:
+            patched = apply_proxy_insert(patched, block_text, proxy_name, groups)
+    return patched
+
+
 def _schedule_next(entry: Dict[str, Any], now_ts: float) -> None:
     if not bool(entry.get("enabled", True)):
         entry["next_update_ts"] = None
@@ -482,6 +745,100 @@ def _mark_failed(
     }
 
 
+def _refresh_config_subscription(
+    ui_state_dir: str,
+    state: Dict[str, Any],
+    sub_idx: int,
+    sub: Dict[str, Any],
+    *,
+    active_text: str,
+    mihomo_config_file: str,
+    restart_xkeen: RestartCallback | None,
+    restart: bool,
+    save_callback: SaveCallback | None,
+    now_ts: float,
+) -> Dict[str, Any]:
+    try:
+        old_names = _clean_string_list(sub.get("proxy_names"))
+        if not old_names:
+            old_names = _extract_proxy_names_from_yaml(sub.get("managed_yaml") or "")
+        if not old_names:
+            raise RuntimeError("managed_proxy_not_found")
+
+        old_names_set = set(old_names)
+        existing_names = [name for name in _all_proxy_names_from_config(active_text) if name not in old_names_set]
+        body, _headers = fetch_subscription_body(str(sub.get("url") or ""))
+        proxies, skipped = convert_subscription_text(body, existing_names=existing_names)
+        if not proxies:
+            raise RuntimeError("no_supported_proxies")
+
+        new_blocks = [str(getattr(proxy, "yaml", "") or "").strip() for proxy in proxies]
+        new_blocks = [block for block in new_blocks if block]
+        if not new_blocks:
+            raise RuntimeError("empty_proxy_yaml")
+
+        new_names = _extract_proxy_names_from_yaml("\n\n".join(new_blocks))
+        groups = _clean_string_list(sub.get("groups"))
+        patched = _replace_config_subscription_blocks(
+            active_text,
+            old_proxy_names=old_names,
+            new_proxy_blocks=new_blocks,
+            groups=groups,
+        )
+        cfg_to_save = patched.rstrip("\n")
+        changed = _hash_text(cfg_to_save) != _hash_text(active_text)
+        if changed:
+            if save_callback is not None:
+                save_callback(cfg_to_save)
+            else:
+                _atomic_write_text(mihomo_config_file, cfg_to_save + "\n")
+
+            if restart and restart_xkeen is not None:
+                try:
+                    restart_xkeen(source="mihomo-subscription-refresh")
+                except TypeError:
+                    restart_xkeen("mihomo-subscription-refresh")
+
+        sub["source"] = "config"
+        sub["groups"] = groups
+        sub["proxy_names"] = new_names
+        sub["managed_yaml"] = "\n\n".join(new_blocks)
+        sub["last_ok"] = True
+        sub["last_error"] = ""
+        sub["last_update_ts"] = now_ts
+        sub["last_count"] = len(new_names)
+        sub["last_skipped_count"] = len(skipped)
+        sub["last_hash"] = _hash_text(sub["managed_yaml"])
+        sub["last_changed"] = bool(changed)
+        _schedule_next(sub, now_ts)
+
+        state["last_config_hash"] = _hash_text(cfg_to_save if changed else active_text)
+        state["last_synced_ts"] = now_ts
+        state["subscriptions"][sub_idx] = sub
+        _write_state(ui_state_dir, state)
+
+        return {
+            "ok": True,
+            "id": sub.get("id"),
+            "changed": bool(changed),
+            "restarted": bool(changed and restart and restart_xkeen is not None),
+            "count": len(new_names),
+            "skipped": skipped,
+            "next_update_ts": sub.get("next_update_ts"),
+        }
+    except RuntimeError as exc:
+        return _mark_failed(ui_state_dir, state, sub_idx, sub, str(exc), now_ts=now_ts)
+    except Exception as exc:
+        return _mark_failed(
+            ui_state_dir,
+            state,
+            sub_idx,
+            sub,
+            f"{type(exc).__name__}: {exc}",
+            now_ts=now_ts,
+        )
+
+
 def refresh_subscription(
     ui_state_dir: str,
     sub_id: str,
@@ -509,6 +866,20 @@ def refresh_subscription(
                 sub_idx,
                 sub,
                 "active_config_changed",
+                now_ts=now_ts,
+            )
+
+        if str(sub.get("source") or "generator") == "config":
+            return _refresh_config_subscription(
+                ui_state_dir,
+                state,
+                sub_idx,
+                sub,
+                active_text=active_text,
+                mihomo_config_file=mihomo_config_file,
+                restart_xkeen=restart_xkeen,
+                restart=restart,
+                save_callback=save_callback,
                 now_ts=now_ts,
             )
 

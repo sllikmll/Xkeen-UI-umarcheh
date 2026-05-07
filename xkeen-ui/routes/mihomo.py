@@ -65,6 +65,7 @@ from services.mihomo_subscriptions import (
     list_subscriptions as _mh_sub_list_subscriptions,
     refresh_due_subscriptions as _mh_sub_refresh_due_subscriptions,
     refresh_subscription as _mh_sub_refresh_subscription,
+    sync_imported_xray_subscription as _mh_sub_sync_imported_xray_subscription,
     sync_from_generator_state as _mh_sub_sync_from_generator_state,
     update_subscription_settings as _mh_sub_update_subscription_settings,
 )
@@ -1117,6 +1118,57 @@ def create_mihomo_blueprint(
             )
         ok_count = sum(1 for item in results if item.get("ok"))
         return jsonify({"ok": True, "updated": len(results), "ok_count": ok_count, "results": results}), 200
+
+    @bp.post("/api/mihomo/subscriptions/imported-xray")
+    def api_mihomo_subscription_register_imported_xray():
+        """Register an Xray-JSON subscription inserted via the raw Mihomo import modal."""
+        guard = _patch_guard()
+        if guard is not None:
+            return guard
+
+        payload = request.get_json(silent=True) or {}
+        config_text = _norm_text(payload.get("config") or payload.get("config_text") or payload.get("content") or "")
+        url = (payload.get("url") or "").strip()
+        proxies_raw = payload.get("proxies") or payload.get("proxy_yamls") or []
+        if not isinstance(proxies_raw, list):
+            proxies_raw = []
+
+        proxy_yamls = []
+        for item in proxies_raw:
+            if isinstance(item, dict):
+                value = item.get("proxy_yaml") or item.get("proxyYaml") or item.get("content") or ""
+            else:
+                value = item
+            if str(value or "").strip():
+                proxy_yamls.append(str(value))
+
+        if request.content_length is None:
+            total = len(config_text) + len(url) + sum(len(item) for item in proxy_yamls)
+            if total > _PATCH_MAX_BYTES:
+                return _api_error("payload too large", 413, ok=False)
+
+        if not url or not config_text.strip() or not proxy_yamls:
+            return _api_error("url, config and proxies are required", 400, ok=False)
+
+        try:
+            subscription = _mh_sub_sync_imported_xray_subscription(
+                ui_state_dir,
+                url=url,
+                config_text=config_text,
+                proxy_yamls=proxy_yamls,
+                groups=_norm_groups(payload.get("groups") or []),
+                interval_hours=payload.get("interval_hours", payload.get("intervalHours")),
+                tag=(payload.get("tag") or "").strip() or None,
+            )
+        except Exception as e:
+            return _mihomo_exception(
+                "Не удалось сохранить настройки автообновления Xray-JSON.",
+                code="mihomo_subscription_import_register_failed",
+                hint="Проверьте URL подписки, YAML preview и попробуйте снова.",
+                exc=e,
+                status=400,
+            )
+        return jsonify({"ok": True, "subscription": subscription}), 200
 
     @bp.post("/api/mihomo/parse/xray-json")
     def api_mihomo_parse_xray_json():

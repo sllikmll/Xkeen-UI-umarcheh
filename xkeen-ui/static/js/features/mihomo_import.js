@@ -42,6 +42,9 @@ let mihomoImportModuleApi = null;
     groupsAllBtn: 'mihomo-import-groups-all-btn',
     groupsNoneBtn: 'mihomo-import-groups-none-btn',
     groupsRemember: 'mihomo-import-groups-remember',
+    xrayRefreshBlock: 'mihomo-import-xray-refresh-block',
+    xrayInterval: 'mihomo-import-xray-interval',
+    xrayRefreshNote: 'mihomo-import-xray-refresh-note',
 
     btnParse: 'mihomo-import-parse-btn',
     btnInsert: 'mihomo-import-insert-btn',
@@ -62,6 +65,10 @@ let mihomoImportModuleApi = null;
   // Groups selection (proxy-groups)
   const GROUPS_PREF_KEY = 'xkeen.mihomo.import.groups.v1';
   const GROUPS_REMEMBER_KEY = 'xkeen.mihomo.import.groups.remember_v1';
+  const XRAY_INTERVAL_PREF_KEY = 'xkeen.mihomo.import.xray_interval_hours.v1';
+  const XRAY_DEFAULT_INTERVAL_HOURS = 24;
+  const XRAY_MIN_INTERVAL_HOURS = 1;
+  const XRAY_MAX_INTERVAL_HOURS = 168;
 
 
   // Import mode (Auto / Proxy / Subscription / WireGuard)
@@ -137,6 +144,82 @@ let mihomoImportModuleApi = null;
     const value = String(msg || '');
     el.textContent = value;
     el.classList.toggle('hidden', !value.trim());
+  }
+
+  function clampXrayIntervalHours(value) {
+    let hours = Number.parseInt(String(value || '').trim(), 10);
+    if (!Number.isFinite(hours)) hours = XRAY_DEFAULT_INTERVAL_HOURS;
+    return Math.max(XRAY_MIN_INTERVAL_HOURS, Math.min(XRAY_MAX_INTERVAL_HOURS, hours));
+  }
+
+  function pluralRu(count, forms) {
+    const n = Math.abs(Number(count) || 0);
+    const mod10 = n % 10;
+    const mod100 = n % 100;
+    if (mod10 === 1 && mod100 !== 11) return forms[0];
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return forms[1];
+    return forms[2];
+  }
+
+  function loadXrayIntervalPref() {
+    try {
+      if (window.localStorage) {
+        const value = localStorage.getItem(XRAY_INTERVAL_PREF_KEY);
+        if (value) return clampXrayIntervalHours(value);
+      }
+    } catch (e) {}
+    return XRAY_DEFAULT_INTERVAL_HOURS;
+  }
+
+  function saveXrayIntervalPref(value) {
+    try {
+      if (window.localStorage) localStorage.setItem(XRAY_INTERVAL_PREF_KEY, String(clampXrayIntervalHours(value)));
+    } catch (e) {}
+  }
+
+  function readXrayIntervalHours() {
+    const input = $(IDS.xrayInterval);
+    const hours = clampXrayIntervalHours(input ? input.value : loadXrayIntervalPref());
+    if (input) {
+      try { input.value = String(hours); } catch (e) {}
+    }
+    return hours;
+  }
+
+  function xrayBulkOutputs(outputs) {
+    return (Array.isArray(outputs) ? outputs : []).filter((item) => item && item.xrayBulk && item.type === 'proxy');
+  }
+
+  function groupXrayOutputsByUri(outputs) {
+    const map = new Map();
+    xrayBulkOutputs(outputs).forEach((item) => {
+      const uri = String(item && item.uri || '').trim();
+      if (!uri) return;
+      if (!map.has(uri)) map.set(uri, []);
+      map.get(uri).push(item);
+    });
+    return Array.from(map.entries()).map(([uri, items]) => ({ uri, items }));
+  }
+
+  function updateXrayRefreshUi(outputs) {
+    const block = $(IDS.xrayRefreshBlock);
+    const note = $(IDS.xrayRefreshNote);
+    const input = $(IDS.xrayInterval);
+    const groups = groupXrayOutputsByUri(outputs);
+    if (!block) return;
+    const hasXray = groups.length > 0;
+    block.classList.toggle('hidden', !hasXray);
+    if (input && !String(input.value || '').trim()) {
+      input.value = String(loadXrayIntervalPref());
+    }
+    if (note) {
+      const count = groups.reduce((sum, group) => sum + group.items.length, 0);
+      const subWord = pluralRu(groups.length, ['подписка', 'подписки', 'подписок']);
+      const nodeWord = pluralRu(count, ['узел', 'узла', 'узлов']);
+      note.textContent = hasXray
+        ? `Будет создана запись автообновления: ${groups.length} ${subWord}, ${count} ${nodeWord}. Интервал от 1 часа до 7 дней.`
+        : 'От 1 часа до 7 дней. Запись автообновления будет создана после вставки в конфиг.';
+    }
   }
 
   function cmThemeFromPage() {
@@ -658,6 +741,11 @@ let mihomoImportModuleApi = null;
       setStatus('', false);
       setHint('');
       setPreview('');
+      try {
+        const intervalInput = $(IDS.xrayInterval);
+        if (intervalInput) intervalInput.value = String(loadXrayIntervalPref());
+        updateXrayRefreshUi([]);
+      } catch (e4d) {}
       const ins = $(IDS.btnInsert);
       if (ins) ins.disabled = true;
 
@@ -1303,6 +1391,37 @@ let mihomoImportModuleApi = null;
     return String(data.content || '');
   }
 
+  async function registerImportedXraySubscriptions(configText, groups) {
+    const grouped = groupXrayOutputsByUri(_lastResult && _lastResult.outputs);
+    if (!grouped.length) return [];
+
+    const intervalHours = readXrayIntervalHours();
+    saveXrayIntervalPref(intervalHours);
+
+    const http = getMihomoCoreHttpApi();
+    const post = http && typeof http.postJSON === 'function' ? http.postJSON : null;
+    if (!post) throw new Error('core http.postJSON недоступен');
+
+    const results = [];
+    for (const group of grouped) {
+      const data = await post('/api/mihomo/subscriptions/imported-xray', {
+        url: group.uri,
+        config: String(configText || ''),
+        groups: Array.isArray(groups) ? groups : [],
+        interval_hours: intervalHours,
+        proxies: group.items.map((item) => ({
+          proxy_name: String(item.proxy_name || '').trim(),
+          proxy_yaml: String(item.content || '').trimEnd(),
+        })),
+      });
+      if (!data || data.ok === false) {
+        throw new Error((data && data.error) ? data.error : 'subscription register failed');
+      }
+      if (data.subscription) results.push(data.subscription);
+    }
+    return results;
+  }
+
 
   function escapeRegExp(s) {
     return String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -1422,6 +1541,7 @@ let mihomoImportModuleApi = null;
       setStatus(msg, true);
       setHint('');
       setPreview('');
+      updateXrayRefreshUi([]);
       const ins = $(IDS.btnInsert);
       if (ins) ins.disabled = true;
       return;
@@ -1463,6 +1583,7 @@ let mihomoImportModuleApi = null;
         setStatus('Вставь данные и нажми «Преобразовать».', true);
         setHint('');
         setPreview('');
+        updateXrayRefreshUi([]);
         const ins = $(IDS.btnInsert);
         if (ins) ins.disabled = true;
         return;
@@ -1514,6 +1635,7 @@ let mihomoImportModuleApi = null;
       setStatus(errors.join('\n') || 'Не удалось распознать данные.', true);
       setHint('');
       setPreview('');
+      updateXrayRefreshUi([]);
       const ins = $(IDS.btnInsert);
       if (ins) ins.disabled = true;
       return;
@@ -1558,12 +1680,14 @@ let mihomoImportModuleApi = null;
     setHint('Будет добавлено в секцию: ' + targets.join(' + '));
 
     const xrayNodeCount = outputs.filter((o) => o.xrayBulk).length;
+    updateXrayRefreshUi(outputs);
     if (errors.length) {
       setStatus('Часть данных распознана, часть — нет. Проверь строки ниже в preview.', true);
       setPreview(preview + '\n\n# Ошибки\n' + errors.map((x) => '# ' + x).join('\n') + '\n');
     } else if (xrayNodeCount > 0) {
+      const intervalHours = readXrayIntervalHours();
       setStatus(
-        `Распознана Xray-подписка: ${xrayNodeCount} узлов будут вставлены как блок proxies. Нажми «Вставить в конфиг».`,
+        `Распознана Xray-подписка: ${xrayNodeCount} узлов будут вставлены как блок proxies. Автообновление: каждые ${intervalHours} ч после вставки.`,
         false,
       );
     } else {
@@ -1608,6 +1732,21 @@ let mihomoImportModuleApi = null;
         txt = await applyInsertProxy(txt, o, groups);
       }
 
+      let registeredXrayCount = 0;
+      let xrayRegisterFailed = false;
+      try {
+        const registered = await registerImportedXraySubscriptions(txt, groups);
+        registeredXrayCount = Array.isArray(registered) ? registered.length : 0;
+      } catch (registerErr) {
+        xrayRegisterFailed = true;
+        try { console.warn('mihomo import subscription register failed', registerErr); } catch (e4a) {}
+        toastMsg(
+          'YAML вставлен, но автообновление Xray-JSON не сохранилось: ' +
+            (registerErr && registerErr.message ? registerErr.message : String(registerErr || 'ошибка')),
+          true,
+        );
+      }
+
       setEditorText(txt);
       refreshEditor();
 
@@ -1615,7 +1754,14 @@ let mihomoImportModuleApi = null;
       try { maybePersistGroupsSelection(); } catch (e3) {}
 
       showModal(false);
-      toastMsg('Добавлено в config.yaml ✅', false);
+      if (!xrayRegisterFailed) {
+        toastMsg(
+          registeredXrayCount
+            ? `Добавлено в config.yaml. Автообновление Xray-JSON: ${registeredXrayCount} ${pluralRu(registeredXrayCount, ['подписка', 'подписки', 'подписок'])}.`
+            : 'Добавлено в config.yaml ✅',
+          false,
+        );
+      }
 
       try {
         // mark last activity badge
@@ -1686,6 +1832,21 @@ let mihomoImportModuleApi = null;
     if (groupsBox && (!groupsBox.dataset || groupsBox.dataset.mihomoImportGroupsBound !== '1')) {
       groupsBox.addEventListener('change', () => { try { maybePersistGroupsSelection(); } catch (e) {} });
       if (groupsBox.dataset) groupsBox.dataset.mihomoImportGroupsBound = '1';
+    }
+
+    const xrayIntervalInput = $(IDS.xrayInterval);
+    if (xrayIntervalInput && (!xrayIntervalInput.dataset || xrayIntervalInput.dataset.mihomoImportXrayIntervalBound !== '1')) {
+      xrayIntervalInput.addEventListener('change', () => {
+        const hours = readXrayIntervalHours();
+        saveXrayIntervalPref(hours);
+        if (_lastResult && xrayBulkOutputs(_lastResult.outputs).length) {
+          setStatus(
+            `Распознана Xray-подписка: ${xrayBulkOutputs(_lastResult.outputs).length} узлов будут вставлены как блок proxies. Автообновление: каждые ${hours} ч после вставки.`,
+            false,
+          );
+        }
+      });
+      if (xrayIntervalInput.dataset) xrayIntervalInput.dataset.mihomoImportXrayIntervalBound = '1';
     }
 
     // Engine toggle (preview)

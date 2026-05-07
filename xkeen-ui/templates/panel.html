@@ -2776,6 +2776,20 @@ https://..."></textarea>
                   <span>Запомнить выбор</span>
                 </label>
               </div>
+
+              <div id="mihomo-import-xray-refresh-block" class="xk-mi-groups-card xk-mi-refresh-card hidden">
+                <div class="xk-mi-section-head">
+                  <div>
+                    <div class="xk-mi-section-title">Автообновление Xray-JSON</div>
+                    <div class="xk-mi-section-subtitle">Появляется для Xray-JSON подписок, которые импортируются как статический блок <code>proxies</code>.</div>
+                  </div>
+                </div>
+                <label class="xk-mi-field xk-mi-refresh-field">
+                  <span class="hint-label">Интервал обновления, часов</span>
+                  <input id="mihomo-import-xray-interval" class="xray-log-select xk-mi-control" type="number" min="1" max="168" step="1" value="24" inputmode="numeric">
+                </label>
+                <p id="mihomo-import-xray-refresh-note" class="modal-hint xk-mi-refresh-note">От 1 часа до 7 дней. Запись автообновления будет создана после вставки в конфиг.</p>
+              </div>
             </section>
 
             <section class="xk-mi-panel xk-mi-panel--preview">

@@ -86,6 +86,10 @@ def insert_proxy_into_groups(content: str, proxy_name: str, target_groups: Itera
                     _inject_proxy_before_leave(out, proxy_name)
                 in_proxies_list = False
 
+    if in_groups and in_proxies_list and current_group in groups_set:
+        _inject_proxy_before_leave(out, proxy_name)
+        in_proxies_list = False
+
     content_after_first = "\n".join(out) + "\n"
 
     lines2 = content_after_first.splitlines()

@@ -169,3 +169,96 @@ def test_update_subscription_settings_clamps_interval_and_updates_generator_meta
     assert saved["subscriptions"][0]["interval_hours"] == 168
     proxy_meta = saved["generator_state"]["proxies"][0]["xray_json_subscription"]
     assert proxy_meta["interval_hours"] == 168
+
+
+def test_sync_imported_xray_subscription_stores_config_source(tmp_path):
+    proxy_yaml = "- name: Old Node\n  type: vless\n  server: 1.1.1.1\n  port: 443\n"
+    config = (
+        "proxies:\n"
+        "  - name: Old Node\n"
+        "    type: vless\n"
+        "    server: 1.1.1.1\n"
+        "    port: 443\n"
+        "proxy-groups:\n"
+        "  - name: Заблок. сервисы\n"
+        "    type: select\n"
+        "    proxies:\n"
+        "      - \"Old Node\"\n"
+    )
+
+    saved = svc.sync_imported_xray_subscription(
+        str(tmp_path),
+        url="https://example.test/xray.json",
+        config_text=config,
+        proxy_yamls=[proxy_yaml],
+        groups=["Заблок. сервисы"],
+        interval_hours=999,
+    )
+
+    assert saved["source"] == "config"
+    assert saved["interval_hours"] == 168
+    assert saved["proxy_names"] == ["Old Node"]
+    assert saved["groups"] == ["Заблок. сервисы"]
+    state = svc.load_subscription_state(str(tmp_path))
+    assert state["subscriptions"][0]["id"] == saved["id"]
+    assert state["last_config_hash"] == svc._hash_text(config)
+
+
+def test_refresh_config_subscription_replaces_imported_proxy_blocks(tmp_path, monkeypatch):
+    old_body = _subscription_body("Old Node", "1.1.1.1", "11111111-1111-1111-1111-111111111111")
+    old_proxies, _ = svc.convert_subscription_text(old_body)
+    old_yaml = "\n\n".join(p.yaml.strip() for p in old_proxies)
+    old_name = old_proxies[0].name
+    current_config = (
+        "proxies:\n"
+        + "\n".join("  " + line for line in old_yaml.splitlines())
+        + "\nproxy-groups:\n"
+        + "  - name: Заблок. сервисы\n"
+        + "    type: select\n"
+        + "    proxies:\n"
+        + f"      - \"{old_name}\"\n"
+    )
+
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(current_config, encoding="utf-8")
+    saved = svc.sync_imported_xray_subscription(
+        str(tmp_path),
+        url="https://example.test/xray.json",
+        config_text=current_config,
+        proxy_yamls=[old_yaml],
+        groups=["Заблок. сервисы"],
+        interval_hours=24,
+    )
+
+    new_body = _subscription_body("New Node", "2.2.2.2", "22222222-2222-2222-2222-222222222222")
+    monkeypatch.setattr(svc, "fetch_subscription_body", lambda url: (new_body, {}))
+
+    restarts: list[str] = []
+
+    def _restart(*, source="api"):
+        restarts.append(source)
+
+    def _save(text: str):
+        config_path.write_text(text, encoding="utf-8")
+
+    result = svc.refresh_subscription(
+        str(tmp_path),
+        saved["id"],
+        mihomo_config_file=str(config_path),
+        restart_xkeen=_restart,
+        save_callback=_save,
+    )
+
+    assert result["ok"] is True
+    assert result["changed"] is True
+    assert restarts == ["mihomo-subscription-refresh"]
+    written = config_path.read_text(encoding="utf-8")
+    assert "Old Node" not in written
+    assert "New Node" in written
+    assert "2.2.2.2" in written
+    assert '      - "New Node"' in written
+    state = svc.load_subscription_state(str(tmp_path))
+    sub = state["subscriptions"][0]
+    assert sub["source"] == "config"
+    assert sub["proxy_names"] == ["New Node"]
+    assert "New Node" in sub["managed_yaml"]
