@@ -819,6 +819,24 @@ def test_mihomo_yaml_schema_runtime_is_wired_into_panel_editor():
     assert "mihomo-editor-yaml-badge" in template
 
 
+def test_codemirror_mihomo_yaml_uses_rich_syntax_decorations():
+    codemirror_runtime = Path('xkeen-ui/static/js/ui/codemirror6_boot.js').read_text(encoding='utf-8')
+    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+
+    assert "function buildYamlDecorations(view)" in codemirror_runtime
+    assert "function isYamlMappingColon(text, index, end)" in codemirror_runtime
+    assert "function scanYamlValue(builder, base, text, start, end)" in codemirror_runtime
+    assert "const yamlKeyMark = Decoration.mark({ class: 'cm-yaml-key' });" in codemirror_runtime
+    assert "const yamlAnchorMark = Decoration.mark({ class: 'cm-yaml-anchor' });" in codemirror_runtime
+    assert "const yamlUrlMark = Decoration.mark({ class: 'cm-yaml-url' });" in codemirror_runtime
+    assert "if (next === 'text/yaml') return [yaml(), createYamlSyntaxExtension()];" in codemirror_runtime
+    assert "'.cm-yaml-root-key'" in codemirror_runtime
+    assert "'.cm-yaml-atom'" in codemirror_runtime
+    assert "--xk-cm-yaml-key" in styles
+    assert "--xk-cm-yaml-scalar" in styles
+    assert "--xk-cm-yaml-anchor" in styles
+
+
 def test_phase2_semantic_validation_runtime_is_wired_into_mihomo_and_xray_editors():
     semantic_runtime = Path('xkeen-ui/static/js/ui/schema_semantic_validation.js').read_text(encoding='utf-8')
     editor_schema_runtime = Path('xkeen-ui/static/js/ui/editor_schema.js').read_text(encoding='utf-8')

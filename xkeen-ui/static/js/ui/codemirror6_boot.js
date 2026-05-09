@@ -180,6 +180,30 @@ const jsonBracketMarks = [
 const jsonPunctuationCommaMark = Decoration.mark({ class: 'cm-json-punctuation-comma' });
 const jsonPunctuationColonMark = Decoration.mark({ class: 'cm-json-punctuation-colon' });
 
+const yamlKeyMark = Decoration.mark({ class: 'cm-yaml-key' });
+const yamlRootKeyMark = Decoration.mark({ class: 'cm-yaml-key cm-yaml-root-key' });
+const yamlColonMark = Decoration.mark({ class: 'cm-yaml-colon' });
+const yamlSequenceMark = Decoration.mark({ class: 'cm-yaml-sequence' });
+const yamlStringMark = Decoration.mark({ class: 'cm-yaml-string' });
+const yamlScalarMark = Decoration.mark({ class: 'cm-yaml-scalar' });
+const yamlNumberMark = Decoration.mark({ class: 'cm-yaml-number' });
+const yamlAtomMark = Decoration.mark({ class: 'cm-yaml-atom' });
+const yamlAnchorMark = Decoration.mark({ class: 'cm-yaml-anchor' });
+const yamlTagMark = Decoration.mark({ class: 'cm-yaml-tag' });
+const yamlCommentMark = Decoration.mark({ class: 'cm-yaml-comment' });
+const yamlUrlMark = Decoration.mark({ class: 'cm-yaml-url' });
+const yamlCommaMark = Decoration.mark({ class: 'cm-yaml-comma' });
+const yamlBracketMarks = [
+  Decoration.mark({ class: 'cm-yaml-bracket-depth-0' }),
+  Decoration.mark({ class: 'cm-yaml-bracket-depth-1' }),
+  Decoration.mark({ class: 'cm-yaml-bracket-depth-2' }),
+];
+
+const YAML_ATOM_RE = /^(?:true|false|null|~|yes|no|on|off)$/i;
+const YAML_NUMBER_RE = /^[+-]?(?:0|[1-9]\d*)(?:\.\d+)?(?:e[+-]?\d+)?$/i;
+const YAML_TOKEN_BREAK_RE = /[\s,\[\]\{\}:#]/;
+const URL_AT_START_RE = /^(?:https?:\/\/|ftp:\/\/|file:\/\/|mailto:|magnet:)[^\s<>"'`\)\]\}]+/;
+
 function buildJsonDecorations(view, opts = {}) {
   const text = asString(view && view.state && view.state.doc ? view.state.doc.toString() : '');
   const allowComments = !!opts.allowComments;
@@ -256,6 +280,243 @@ function buildJsonDecorations(view, opts = {}) {
     }
   }
   return builder.finish();
+}
+
+function findYamlCommentIndex(text, start, end) {
+  let quote = '';
+  let escaped = false;
+  for (let i = start; i < end; i += 1) {
+    const ch = text.charAt(i);
+    if (quote) {
+      if (quote === '"' && escaped) {
+        escaped = false;
+        continue;
+      }
+      if (quote === '"' && ch === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (ch === quote) quote = '';
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      escaped = false;
+      continue;
+    }
+    if (ch === '#' && (i === 0 || /\s/.test(text.charAt(i - 1)))) return i;
+  }
+  return -1;
+}
+
+function isYamlMappingColon(text, index, end) {
+  return index + 1 >= end || /\s/.test(text.charAt(index + 1));
+}
+
+function findYamlColonIndex(text, start, end) {
+  let quote = '';
+  let escaped = false;
+  let flowDepth = 0;
+  for (let i = start; i < end; i += 1) {
+    const ch = text.charAt(i);
+    if (quote) {
+      if (quote === '"' && escaped) {
+        escaped = false;
+        continue;
+      }
+      if (quote === '"' && ch === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (ch === quote) quote = '';
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      escaped = false;
+      continue;
+    }
+    if (ch === '[' || ch === '{') {
+      flowDepth += 1;
+      continue;
+    }
+    if (ch === ']' || ch === '}') {
+      flowDepth = Math.max(0, flowDepth - 1);
+      continue;
+    }
+    if (ch === ':' && flowDepth === 0 && isYamlMappingColon(text, i, end)) return i;
+  }
+  return -1;
+}
+
+function scanYamlValue(builder, base, text, start, end) {
+  let i = start;
+  const bracketStack = [];
+  while (i < end) {
+    const ch = text.charAt(i);
+    if (!ch || /\s/.test(ch)) {
+      i += 1;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      const quote = ch;
+      const from = i;
+      i += 1;
+      let escaped = false;
+      while (i < end) {
+        const next = text.charAt(i);
+        if (quote === '"' && escaped) {
+          escaped = false;
+          i += 1;
+          continue;
+        }
+        if (quote === '"' && next === '\\') {
+          escaped = true;
+          i += 1;
+          continue;
+        }
+        i += 1;
+        if (next === quote) break;
+      }
+      builder.add(base + from, base + i, yamlStringMark);
+      continue;
+    }
+    const url = URL_AT_START_RE.exec(text.slice(i, end));
+    if (url && url[0]) {
+      const to = i + url[0].length;
+      builder.add(base + i, base + to, yamlUrlMark);
+      i = to;
+      continue;
+    }
+    if (ch === '&' || ch === '*') {
+      const from = i;
+      i += 1;
+      while (i < end && /[A-Za-z0-9_.@-]/.test(text.charAt(i))) i += 1;
+      builder.add(base + from, base + i, yamlAnchorMark);
+      continue;
+    }
+    if (ch === '!') {
+      const from = i;
+      i += 1;
+      while (i < end && !/\s/.test(text.charAt(i)) && !'[]{}:,'.includes(text.charAt(i))) i += 1;
+      builder.add(base + from, base + i, yamlTagMark);
+      continue;
+    }
+    if (ch === '[' || ch === '{') {
+      const depth = bracketStack.length;
+      builder.add(base + i, base + i + 1, yamlBracketMarks[depth % yamlBracketMarks.length]);
+      bracketStack.push(ch);
+      i += 1;
+      continue;
+    }
+    if (ch === ']' || ch === '}') {
+      const depth = Math.max(0, bracketStack.length - 1);
+      if (bracketStack.length) bracketStack.pop();
+      builder.add(base + i, base + i + 1, yamlBracketMarks[depth % yamlBracketMarks.length]);
+      i += 1;
+      continue;
+    }
+    if (ch === ',') {
+      builder.add(base + i, base + i + 1, yamlCommaMark);
+      i += 1;
+      continue;
+    }
+    if (ch === ':') {
+      builder.add(base + i, base + i + 1, yamlColonMark);
+      i += 1;
+      continue;
+    }
+
+    const from = i;
+    while (i < end && !YAML_TOKEN_BREAK_RE.test(text.charAt(i))) i += 1;
+    if (i <= from) {
+      i += 1;
+      continue;
+    }
+    const token = text.slice(from, i);
+    const nextNonSpace = (() => {
+      let j = i;
+      while (j < end && /\s/.test(text.charAt(j))) j += 1;
+      return j;
+    })();
+    if (text.charAt(nextNonSpace) === ':' && isYamlMappingColon(text, nextNonSpace, end)) {
+      builder.add(base + from, base + i, yamlKeyMark);
+      builder.add(base + nextNonSpace, base + nextNonSpace + 1, yamlColonMark);
+      i = nextNonSpace + 1;
+    } else if (YAML_ATOM_RE.test(token)) {
+      builder.add(base + from, base + i, yamlAtomMark);
+    } else if (YAML_NUMBER_RE.test(token)) {
+      builder.add(base + from, base + i, yamlNumberMark);
+    } else {
+      builder.add(base + from, base + i, yamlScalarMark);
+    }
+  }
+}
+
+function scanYamlLine(builder, line) {
+  const text = line.text;
+  const base = line.from;
+  const length = text.length;
+  if (!length) return;
+  const commentIndex = findYamlCommentIndex(text, 0, length);
+  const contentEnd = commentIndex >= 0 ? commentIndex : length;
+  const indentMatch = /^(\s*)/.exec(text);
+  const indent = indentMatch ? indentMatch[1].length : 0;
+  let cursor = indent;
+  let isListItem = false;
+
+  if (cursor < contentEnd && text.charAt(cursor) === '-' && (cursor + 1 >= contentEnd || /\s/.test(text.charAt(cursor + 1)))) {
+    builder.add(base + cursor, base + cursor + 1, yamlSequenceMark);
+    cursor += 1;
+    while (cursor < contentEnd && /\s/.test(text.charAt(cursor))) cursor += 1;
+    isListItem = true;
+  }
+
+  const colonIndex = findYamlColonIndex(text, cursor, contentEnd);
+  if (colonIndex > cursor) {
+    const keyEnd = (() => {
+      let end = colonIndex;
+      while (end > cursor && /\s/.test(text.charAt(end - 1))) end -= 1;
+      return end;
+    })();
+    if (keyEnd > cursor) {
+      builder.add(base + cursor, base + keyEnd, (!isListItem && indent === 0) ? yamlRootKeyMark : yamlKeyMark);
+      builder.add(base + colonIndex, base + colonIndex + 1, yamlColonMark);
+      scanYamlValue(builder, base, text, colonIndex + 1, contentEnd);
+    }
+  } else {
+    scanYamlValue(builder, base, text, cursor, contentEnd);
+  }
+
+  if (commentIndex >= 0) builder.add(base + commentIndex, base + length, yamlCommentMark);
+}
+
+function buildYamlDecorations(view) {
+  const builder = new RangeSetBuilder();
+  const doc = view && view.state ? view.state.doc : null;
+  if (!doc) return Decoration.none;
+  for (const range of view.visibleRanges || [{ from: 0, to: doc.length }]) {
+    let line = doc.lineAt(range.from);
+    while (line.from <= range.to) {
+      scanYamlLine(builder, line);
+      if (line.number >= doc.lines) break;
+      line = doc.line(line.number + 1);
+    }
+  }
+  return builder.finish();
+}
+
+function createYamlSyntaxExtension() {
+  return ViewPlugin.fromClass(class {
+    constructor(view) {
+      this.decorations = buildYamlDecorations(view);
+    }
+    update(update) {
+      if (update.docChanged || update.viewportChanged) this.decorations = buildYamlDecorations(update.view);
+    }
+  }, {
+    decorations: (plugin) => plugin.decorations,
+  });
 }
 
 function createJsonDecorationsExtension(getMode, opts = {}) {
@@ -470,7 +731,7 @@ function languageExtensionFor(mode) {
   const next = normalizeMode(mode);
   if (next === 'application/json') return jsonStrictExtension;
   if (next === 'application/jsonc' || next === 'application/javascript') return jsoncExtension;
-  if (next === 'text/yaml') return yaml();
+  if (next === 'text/yaml') return [yaml(), createYamlSyntaxExtension()];
   return [];
 }
 
@@ -774,6 +1035,22 @@ function createThemeExtension(theme) {
       '.cm-json-bracket-depth-2': { color: 'var(--xk-cm-bracket-depth-2)' },
       '.cm-json-punctuation-comma': { color: 'var(--xk-cm-comma)' },
       '.cm-json-punctuation-colon': { color: 'var(--xk-cm-colon)' },
+      '.cm-yaml-key': { color: 'var(--xk-cm-yaml-key, var(--xk-cm-property))', fontWeight: '650' },
+      '.cm-yaml-root-key': { color: 'var(--xk-cm-yaml-root-key, var(--xk-cm-type))', fontWeight: '750' },
+      '.cm-yaml-colon': { color: 'var(--xk-cm-yaml-colon, var(--xk-cm-colon))' },
+      '.cm-yaml-sequence': { color: 'var(--xk-cm-yaml-sequence, var(--xk-cm-warning))', fontWeight: '700' },
+      '.cm-yaml-string': { color: 'var(--xk-cm-yaml-string, var(--xk-cm-string))' },
+      '.cm-yaml-scalar': { color: 'var(--xk-cm-yaml-scalar, var(--xk-cm-variable))' },
+      '.cm-yaml-number': { color: 'var(--xk-cm-yaml-number, var(--xk-cm-number))' },
+      '.cm-yaml-atom': { color: 'var(--xk-cm-yaml-atom, var(--xk-cm-atom))', fontWeight: '650' },
+      '.cm-yaml-anchor': { color: 'var(--xk-cm-yaml-anchor, var(--xk-cm-bracket-depth-0))', fontWeight: '650' },
+      '.cm-yaml-tag': { color: 'var(--xk-cm-yaml-tag, var(--xk-cm-meta))' },
+      '.cm-yaml-comment': { color: 'var(--xk-cm-yaml-comment, var(--xk-cm-comment))', fontStyle: 'italic' },
+      '.cm-yaml-url': { color: 'var(--xk-cm-yaml-url, var(--xk-cm-link, #7ab8ff))', textDecoration: 'underline' },
+      '.cm-yaml-comma': { color: 'var(--xk-cm-yaml-comma, var(--xk-cm-comma))' },
+      '.cm-yaml-bracket-depth-0': { color: 'var(--xk-cm-yaml-bracket-depth-0, var(--xk-cm-bracket-depth-0))' },
+      '.cm-yaml-bracket-depth-1': { color: 'var(--xk-cm-yaml-bracket-depth-1, var(--xk-cm-bracket-depth-1))' },
+      '.cm-yaml-bracket-depth-2': { color: 'var(--xk-cm-yaml-bracket-depth-2, var(--xk-cm-bracket-depth-2))' },
     }, { dark }),
     Prec.highest(EditorView.theme({
       '.cm-selectionLayer': { display: 'none' },
