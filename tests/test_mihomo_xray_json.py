@@ -146,6 +146,18 @@ def test_convert_vless_tcp_reality_vision_emits_expected_yaml():
     # short-id roundtrip preserves string type even for hex-with-letters values
     assert ro["short-id"] == "ab12cd34"
     assert isinstance(ro["short-id"], str)
+    assert "support-x25519mlkem768" not in ro
+
+
+def test_convert_vless_reality_preserves_explicit_mlkem_support_only():
+    outbound = _outbound_vless_tcp_reality_vision()
+    outbound["streamSettings"]["realitySettings"]["support-x25519mlkem768"] = True
+
+    result = convert_outbound_to_mihomo(outbound, "Reality-PQ")
+    assert result is not None
+    parsed = yaml.safe_load(result.yaml)[0]
+
+    assert parsed["reality-opts"]["support-x25519mlkem768"] is True
 
 
 def test_convert_vless_grpc_without_service_omits_empty_grpc_opts():

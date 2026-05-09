@@ -1418,6 +1418,12 @@ let mihomoImportModuleApi = null;
               shortId: realityParam(params, 'sid', 'shortId', 'short-id', 'short_id', 'shortid'),
               spiderX: string(params.spx),
               mldsa65Verify: string(params.pqv),
+              supportX25519MLKEM768: boolMaybe(
+                params,
+                'support-x25519mlkem768',
+                'supportX25519MLKEM768',
+                'support_x25519mlkem768',
+              ),
             }
           : undefined,
     };
@@ -1620,10 +1626,17 @@ let mihomoImportModuleApi = null;
 
       if (streamSettings.security === 'reality') {
         const shortId = reality.shortId;
+        const supportX25519MLKEM768 = boolMaybe(
+          reality,
+          'support-x25519mlkem768',
+          'supportX25519MLKEM768',
+          'support_x25519mlkem768',
+        );
         common['reality-opts'] = {
           'public-key': reality.publicKey,
           'short-id': shortId == null ? undefined : String(shortId),
-          'support-x25519mlkem768': true,
+          'support-x25519mlkem768': supportX25519MLKEM768 === true ? true : undefined,
+          'spider-x': reality.spiderX == null ? undefined : String(reality.spiderX),
         };
       }
     }

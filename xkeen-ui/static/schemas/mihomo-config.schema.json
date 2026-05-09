@@ -904,6 +904,10 @@
               "description": "Короткий идентификатор (hex, 0–16 символов). Должен совпадать с одним из `shortIds` на сервере.",
               "examples": ["", "abcd1234", "0123456789abcdef"]
             },
+            "spider-x": {
+              "type": "string",
+              "description": "SpiderX/path для Reality из vless-параметра `spx`; часто `/`."
+            },
             "support-x25519mlkem768": {
               "type": "boolean",
               "default": false,
@@ -1212,6 +1216,7 @@
           "properties": {
             "public-key": { "type": "string", "description": "Публичный ключ Reality-сервера." },
             "short-id": { "type": "string", "description": "Short ID Reality-сервера." },
+            "spider-x": { "type": "string", "description": "SpiderX/path Reality." },
             "support-x25519mlkem768": { "type": "boolean", "description": "Включить поддержку X25519-MLKEM768." }
           }
         },

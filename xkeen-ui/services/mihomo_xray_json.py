@@ -18,6 +18,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from .mihomo_proxy_parsers import (
     ProxyParseResult,
     _build_xhttp_opts,
+    _mapping_bool,
     _yaml_append_key,
     _yaml_list,
     _yaml_str,
@@ -124,7 +125,13 @@ def _convert_vless(
             yaml_lines.append(f"    public-key: {_yaml_str(public_key)}")
         if short_id is not None:
             yaml_lines.append(f"    short-id: {_yaml_str(short_id)}")
-        yaml_lines.append("    support-x25519mlkem768: true")
+        if _mapping_bool(
+            rs,
+            "support-x25519mlkem768",
+            "supportX25519MLKEM768",
+            "support_x25519mlkem768",
+        ) is True:
+            yaml_lines.append("    support-x25519mlkem768: true")
         if spider_x:
             yaml_lines.append(f"    spider-x: {_yaml_str(spider_x)}")
         yaml_lines.append(f"  client-fingerprint: {_yaml_str(fp or 'chrome')}")

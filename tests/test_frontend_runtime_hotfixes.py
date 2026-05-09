@@ -893,6 +893,7 @@ def test_mihomo_schema_tracks_xhttp_transport_and_multiplexing_fields():
     assert 'certificate' in proxy_props
     assert 'private-key' in proxy_props
     assert 'support-x25519mlkem768' in proxy_props['reality-opts']['properties']
+    assert 'spider-x' in proxy_props['reality-opts']['properties']
 
     grpc_props = proxy_props['grpc-opts']['properties']
     assert 'grpc-user-agent' in grpc_props
@@ -923,6 +924,7 @@ def test_mihomo_schema_tracks_xhttp_transport_and_multiplexing_fields():
 
     download_props = schema['definitions']['xhttpDownloadSettings']['properties']
     assert 'support-x25519mlkem768' in download_props['reality-opts']['properties']
+    assert 'spider-x' in download_props['reality-opts']['properties']
     assert 'query-server-name' in download_props['ech-opts']['properties']
 
 

@@ -138,6 +138,51 @@ def _query_first(mapping: Dict[str, str], *keys: str) -> str:
     return ""
 
 
+def _query_bool(mapping: Dict[str, str], *keys: str) -> Optional[bool]:
+    raw = _query_first(mapping, *keys)
+    if raw == "":
+        return None
+    text = str(raw).strip().lower()
+    if text in {"1", "true", "yes", "on"}:
+        return True
+    if text in {"0", "false", "no", "off"}:
+        return False
+    return None
+
+
+def _append_reality_pq_support_from_query(lines: List[str], mapping: Dict[str, str]) -> None:
+    support = _query_bool(
+        mapping,
+        "support-x25519mlkem768",
+        "supportX25519MLKEM768",
+        "support_x25519mlkem768",
+    )
+    if support is True:
+        lines.append("    support-x25519mlkem768: true")
+
+
+def _append_reality_pq_support_from_mapping(lines: List[str], mapping: Any) -> None:
+    support = _mapping_bool(
+        mapping,
+        "support-x25519mlkem768",
+        "supportX25519MLKEM768",
+        "support_x25519mlkem768",
+    )
+    if support is True:
+        lines.append("    support-x25519mlkem768: true")
+
+
+def _append_reality_pq_support_from_qs(lines: List[str], parsed_qs: Dict[str, List[str]]) -> None:
+    support = _qs_bool(
+        parsed_qs,
+        "support-x25519mlkem768",
+        "supportX25519MLKEM768",
+        "support_x25519mlkem768",
+    )
+    if support:
+        lines.append("    support-x25519mlkem768: true")
+
+
 def _sanitize_headers(value: Any) -> Optional[Dict[str, Any]]:
     if not isinstance(value, dict):
         return None
@@ -494,7 +539,7 @@ def parse_vless(link: str, custom_name: Optional[str] = None) -> ProxyParseResul
             yaml_lines.append(f"    public-key: {_yaml_str(public_key)}")
         if short_id:
             yaml_lines.append(f"    short-id: {_yaml_str(short_id)}")
-        yaml_lines.append("    support-x25519mlkem768: true")
+        _append_reality_pq_support_from_query(yaml_lines, qs)
         if spx:
             yaml_lines.append(f"    spider-x: {_yaml_str(spx)}")
         yaml_lines.append(f"  client-fingerprint: {_yaml_str(fp or 'chrome')}")
@@ -713,7 +758,7 @@ def parse_trojan(link: str, custom_name: Optional[str] = None) -> ProxyParseResu
                 yaml_lines.append(f"    public-key: {_yaml_str(pbk)}")
             if sid:
                 yaml_lines.append(f"    short-id: {_yaml_str(sid)}")
-            yaml_lines.append("    support-x25519mlkem768: true")
+            _append_reality_pq_support_from_qs(yaml_lines, qs)
 
     yaml_lines.append(f"  network: {_yaml_str(net)}")
     if net == "xhttp":
@@ -808,7 +853,7 @@ def parse_vmess(link: str, custom_name: Optional[str] = None) -> ProxyParseResul
                 yaml_lines.append(f"    public-key: {_yaml_str(pbk)}")
             if sid:
                 yaml_lines.append(f"    short-id: {_yaml_str(sid)}")
-            yaml_lines.append("    support-x25519mlkem768: true")
+            _append_reality_pq_support_from_mapping(yaml_lines, data)
 
     yaml_lines.append(f"  network: {_yaml_str(net)}")
     if net == "xhttp":
