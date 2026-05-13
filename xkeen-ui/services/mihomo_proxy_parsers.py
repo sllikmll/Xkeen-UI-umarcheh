@@ -594,12 +594,29 @@ def parse_vless(link: str, custom_name: Optional[str] = None) -> ProxyParseResul
 
 def parse_wireguard(conf_text: str, custom_name: Optional[str] = None) -> ProxyParseResult:
     """Parse WireGuard .conf and return ProxyParseResult with Mihomo YAML proxy."""
-    lines = [l.strip() for l in conf_text.splitlines() if l.strip()]
     section = None
     iface: Dict[str, str] = {}
     peer: Dict[str, str] = {}
 
-    for line in lines:
+    def _strip_inline_comment(value: str) -> str:
+        return re.sub(r"\s+[;#].*$", "", str(value or "")).strip()
+
+    def _strip_optional_quotes(value: str) -> str:
+        raw = str(value or "").strip()
+        if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in {"'", '"'}:
+            return raw[1:-1]
+        return raw
+
+    def _put(target: Dict[str, str], key: str, value: str) -> None:
+        k = str(key or "").strip().lower().replace("-", "")
+        if not k:
+            return
+        target[k] = _strip_inline_comment(value)
+
+    for raw_line in conf_text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or line.startswith(";"):
+            continue
         if line.startswith("[") and line.endswith("]"):
             section = line.strip("[]").lower()
             continue
@@ -607,38 +624,93 @@ def parse_wireguard(conf_text: str, custom_name: Optional[str] = None) -> ProxyP
             continue
         k, v = [x.strip() for x in line.split("=", 1)]
         if section == "interface":
-            iface[k] = v
+            _put(iface, k, v)
         elif section == "peer":
-            peer[k] = v
+            _put(peer, k, v)
 
-    if "PrivateKey" not in iface or "PublicKey" not in peer or "Endpoint" not in peer:
+    if "privatekey" not in iface or "publickey" not in peer or "endpoint" not in peer:
         raise ValueError("Invalid WireGuard config: missing mandatory keys")
 
-    host, port = _split_endpoint(peer["Endpoint"])
-    name = custom_name or peer.get("Name") or host
+    host, port = _split_endpoint(peer["endpoint"])
+    name = custom_name or peer.get("name") or iface.get("name") or host
 
-    address = iface.get("Address", "")
+    def _strip_ip_cidr(value: str) -> str:
+        return str(value or "").strip().split("/", 1)[0].strip()
+
+    address = iface.get("address", "")
     ip_v4 = ""
     ip_v6 = ""
     if address:
         parts = [p.strip() for p in address.split(",")]
         for p in parts:
             if ":" in p:
-                ip_v6 = p
+                ip_v6 = _strip_ip_cidr(p)
             else:
-                ip_v4 = p
+                ip_v4 = _strip_ip_cidr(p)
 
-    dns = iface.get("DNS", "")
+    dns = iface.get("dns", "")
     dns_list = [d.strip() for d in dns.split(",") if d.strip()] if dns else []
 
-    mtu = iface.get("MTU")
-    allowed_ips = peer.get("AllowedIPs", "0.0.0.0/0, ::/0")
-    keepalive = peer.get("PersistentKeepalive", "")
+    mtu = iface.get("mtu")
+    allowed_ips = peer.get("allowedips", "0.0.0.0/0, ::/0")
+    keepalive = peer.get("persistentkeepalive", "")
+
+    def _first_value(*keys: str) -> str:
+        for key in keys:
+            normalized = key.lower().replace("-", "")
+            if normalized in peer and peer[normalized] != "":
+                return peer[normalized]
+            if normalized in iface and iface[normalized] != "":
+                return iface[normalized]
+        return ""
+
+    def _append_yaml_scalar(key: str, value: str, *, indent: int = 2, allow_empty: bool = False) -> None:
+        raw = str(value or "").strip()
+        if not raw and not allow_empty:
+            return
+        pad = " " * indent
+        if re.fullmatch(r"-?\d+", raw):
+            yaml_lines.append(f"{pad}{key}: {raw}")
+        else:
+            yaml_lines.append(f"{pad}{key}: {_yaml_str(raw)}")
+
+    def _append_reserved(value: str) -> None:
+        raw = str(value or "").strip()
+        if not raw:
+            return
+        cleaned = raw.strip("[] ")
+        parts = [p.strip() for p in cleaned.split(",") if p.strip()]
+        if len(parts) >= 3 and all(re.fullmatch(r"\d+", p) for p in parts):
+            yaml_lines.append("  reserved: [" + ", ".join(parts) + "]")
+            return
+        yaml_lines.append(f"  reserved: {_yaml_str(raw)}")
 
     amz: Dict[str, str] = {}
-    for key in ("jc", "jmin", "jmax", "s1", "s2", "h1", "h2", "h3", "h4"):
-        if key in peer:
-            amz[key] = peer[key]
+    for key in (
+        "jc",
+        "jmin",
+        "jmax",
+        "s1",
+        "s2",
+        "s3",
+        "s4",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "i1",
+        "i2",
+        "i3",
+        "i4",
+        "i5",
+        "j1",
+        "j2",
+        "j3",
+        "itime",
+    ):
+        value = _first_value(key)
+        if value != "":
+            amz[key] = _strip_optional_quotes(value)
 
     yaml_lines: List[str] = []
     yaml_lines.append(f"- name: {_yaml_str(name)}")
@@ -649,13 +721,18 @@ def parse_wireguard(conf_text: str, custom_name: Optional[str] = None) -> ProxyP
         yaml_lines.append(f"  ip: {_yaml_str(ip_v4)}")
     if ip_v6:
         yaml_lines.append(f"  ipv6: {_yaml_str(ip_v6)}")
-    yaml_lines.append(f"  private-key: {_yaml_str(iface['PrivateKey'])}")
-    yaml_lines.append(f"  public-key: {_yaml_str(peer['PublicKey'])}")
+    yaml_lines.append(f"  private-key: {_yaml_str(iface['privatekey'])}")
+    yaml_lines.append(f"  public-key: {_yaml_str(peer['publickey'])}")
 
-    if "PresharedKey" in peer:
-        yaml_lines.append(f"  preshared-key: {_yaml_str(peer['PresharedKey'])}")
+    preshared_key = _first_value("presharedkey", "pre-shared-key")
+    if preshared_key:
+        yaml_lines.append(f"  pre-shared-key: {_yaml_str(preshared_key)}")
+    reserved = _first_value("reserved", "clientid", "client-id")
+    if reserved:
+        _append_reserved(reserved)
     if dns_list:
         yaml_lines.append(f"  dns: {_yaml_list(dns_list)}")
+        yaml_lines.append("  remote-dns-resolve: true")
     if mtu:
         yaml_lines.append(f"  mtu: {mtu}")
     if keepalive:
@@ -663,10 +740,11 @@ def parse_wireguard(conf_text: str, custom_name: Optional[str] = None) -> ProxyP
     if allowed_ips:
         items = [x.strip() for x in allowed_ips.split(",") if x.strip()]
         yaml_lines.append(f"  allowed-ips: {_yaml_list(items)}")
+    yaml_lines.append("  udp: true")
     if amz:
         yaml_lines.append("  amnezia-wg-option:")
         for k, v in amz.items():
-            yaml_lines.append(f"    {k}: {v}" if str(v).isdigit() else f"    {k}: {_yaml_str(v)}")
+            _append_yaml_scalar(k, v, indent=4, allow_empty=True)
 
     yaml = "\n".join(yaml_lines) + "\n"
     return ProxyParseResult(name=name, yaml=yaml)
