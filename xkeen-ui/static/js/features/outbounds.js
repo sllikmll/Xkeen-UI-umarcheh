@@ -4756,6 +4756,12 @@ let outboundsModuleApi = null;
                   </div>
                   <div class="xk-sub-tablewrap">
                     <table class="xk-pool-table xk-sub-table">
+                      <colgroup>
+                        <col class="xk-sub-col-tag">
+                        <col class="xk-sub-col-status">
+                        <col class="xk-sub-col-file">
+                        <col class="xk-sub-col-actions">
+                      </colgroup>
                       <thead>
                         <tr>
                           <th>Tag</th>
@@ -5660,39 +5666,41 @@ let outboundsModuleApi = null;
             </button>
           </td>
           <td class="xk-sub-row-actions">
-            <button
-              type="button"
-              class="btn-secondary btn-compact xk-sub-list-action xk-sub-list-action-refresh xk-sub-refresh"
-              data-id="${id}"
-              title="Обновить"
-              data-tooltip="Скачать подписку сейчас и перегенерировать outbounds-фрагмент."
-              aria-label="Обновить подписку"
-            >
-              <span class="xk-sub-icon-glyph" aria-hidden="true">&#8635;</span>
-              <span class="xk-visually-hidden">Обновить</span>
-            </button>
-            <button
-              type="button"
-              class="btn-secondary btn-compact xk-sub-list-action xk-sub-list-action-duplicate xk-sub-duplicate"
-              data-id="${id}"
-              title="Дублировать"
-              data-tooltip="Создать новый черновик с тем же URL и фильтрами, но с отдельным tag prefix."
-              aria-label="Дублировать подписку"
-            >
-              <span class="xk-sub-icon-glyph" aria-hidden="true">&#10697;</span>
-              <span class="xk-visually-hidden">Дублировать</span>
-            </button>
-            <button
-              type="button"
-              class="btn-danger btn-compact xk-sub-list-action xk-sub-list-action-delete xk-sub-delete"
-              data-id="${id}"
-              title="Удалить"
-              data-tooltip="Удалить подписку и generated-фрагмент."
-              aria-label="Удалить подписку"
-            >
-              <span class="xk-sub-icon-glyph" aria-hidden="true">&#215;</span>
-              <span class="xk-visually-hidden">Удалить</span>
-            </button>
+            <div class="xk-sub-row-actions-inner">
+              <button
+                type="button"
+                class="btn-secondary btn-compact xk-sub-list-action xk-sub-list-action-refresh xk-sub-refresh"
+                data-id="${id}"
+                title="Обновить"
+                data-tooltip="Скачать подписку сейчас и перегенерировать outbounds-фрагмент."
+                aria-label="Обновить подписку"
+              >
+                <span class="xk-sub-icon-glyph" aria-hidden="true">&#8635;</span>
+                <span class="xk-visually-hidden">Обновить</span>
+              </button>
+              <button
+                type="button"
+                class="btn-secondary btn-compact xk-sub-list-action xk-sub-list-action-duplicate xk-sub-duplicate"
+                data-id="${id}"
+                title="Дублировать"
+                data-tooltip="Создать новый черновик с тем же URL и фильтрами, но с отдельным tag prefix."
+                aria-label="Дублировать подписку"
+              >
+                <span class="xk-sub-icon-glyph" aria-hidden="true">&#10697;</span>
+                <span class="xk-visually-hidden">Дублировать</span>
+              </button>
+              <button
+                type="button"
+                class="btn-danger btn-compact xk-sub-list-action xk-sub-list-action-delete xk-sub-delete"
+                data-id="${id}"
+                title="Удалить"
+                data-tooltip="Удалить подписку и generated-фрагмент."
+                aria-label="Удалить подписку"
+              >
+                <span class="xk-sub-icon-glyph" aria-hidden="true">&#215;</span>
+                <span class="xk-visually-hidden">Удалить</span>
+              </button>
+            </div>
           </td>
         `;
         tbody.appendChild(tr);

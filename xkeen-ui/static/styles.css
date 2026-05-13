@@ -9110,9 +9110,21 @@ html[data-theme="light"] .xk-sub-draft-badge {
   table-layout: fixed;
 }
 
+.xk-sub-col-tag {
+  width: 34%;
+}
+
+.xk-sub-col-status {
+  width: 22%;
+}
+
+.xk-sub-col-actions {
+  width: 116px;
+}
+
 .xk-sub-table th:nth-child(1),
 .xk-sub-table td:nth-child(1) {
-  width: 35%;
+  width: 34%;
 }
 
 .xk-sub-table th:nth-child(2),
@@ -9122,12 +9134,12 @@ html[data-theme="light"] .xk-sub-draft-badge {
 
 .xk-sub-table th:nth-child(3),
 .xk-sub-table td:nth-child(3) {
-  width: 26%;
+  width: auto;
 }
 
 .xk-sub-table th:nth-child(4),
 .xk-sub-table td:nth-child(4) {
-  width: 88px;
+  width: 116px;
 }
 
 .xk-sub-table thead th {
@@ -9213,6 +9225,16 @@ html[data-theme="light"] .xk-sub-draft-badge {
 }
 
 .xk-sub-row-actions {
+  text-align: right;
+  vertical-align: top;
+}
+
+.xk-sub-table td.xk-sub-row-actions {
+  padding-left: 4px;
+  padding-right: 8px;
+}
+
+.xk-sub-row-actions-inner {
   display: inline-flex;
   width: 100%;
   align-items: center;
@@ -10487,7 +10509,7 @@ html[data-theme="light"] .xk-sub-draft-badge {
   .xk-sub-panelhead,
   .xk-sub-toolbar,
   .xk-sub-actions,
-  .xk-sub-row-actions {
+  .xk-sub-row-actions-inner {
     align-items: stretch;
     justify-content: flex-start;
     flex-wrap: wrap;
