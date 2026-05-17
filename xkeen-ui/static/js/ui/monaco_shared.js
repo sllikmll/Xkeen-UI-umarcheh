@@ -35,10 +35,6 @@ import {
     customContextMenuCtx: null,
     customContextMenuCleanupByEditor: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
     customContextMenuClipboardShadow: '',
-    customContextMenuClipboardShadowReady: false,
-    customContextMenuGlobalActionBridgeInstalled: false,
-    customContextMenuLastActionAt: 0,
-    customContextMenuLastActionKey: '',
     yamlAssistByModel: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
     snippetProvidersByModel: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
     quickFixProvidersByModel: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
@@ -1222,40 +1218,12 @@ import {
     try { menu.style.removeProperty('top'); } catch (e) {}
   }
 
-  function _getCustomContextMenuActionButton(ev) {
-    try {
-      const target = ev ? ev.target : null;
-      if (target && typeof target.closest === 'function') {
-        const btn = target.closest('.xk-routing-monaco-menu button[data-action], .xk-routing-monaco-menu [data-action]');
-        if (btn) return btn;
-      }
-    } catch (e) {}
-    try {
-      const path = ev && typeof ev.composedPath === 'function' ? ev.composedPath() : null;
-      if (Array.isArray(path)) {
-        for (const node of path) {
-          if (!node || typeof node.matches !== 'function') continue;
-          if (node.matches('.xk-routing-monaco-menu button[data-action], .xk-routing-monaco-menu [data-action]')) return node;
-        }
-      }
-    } catch (e) {}
-    return null;
-  }
-
   async function _handleCustomContextMenuAction(ev) {
-    const btn = _getCustomContextMenuActionButton(ev);
+    const btn = ev.target && ev.target.closest ? ev.target.closest('button[data-action]') : null;
     if (!btn || btn.disabled) return;
     try { ev.preventDefault(); } catch (e) {}
     try { ev.stopPropagation(); } catch (e) {}
-    try { ev.stopImmediatePropagation(); } catch (e) {}
     const action = String(btn.dataset.action || '');
-    const stamp = (() => {
-      try { return Date.now(); } catch (e) { return 0; }
-    })();
-    const lastAt = Number(_state.customContextMenuLastActionAt || 0);
-    if (_state.customContextMenuLastActionKey === action && stamp && lastAt && stamp - lastAt < 500) return;
-    _state.customContextMenuLastActionAt = stamp;
-    _state.customContextMenuLastActionKey = action;
     const ctx = _state.customContextMenuCtx;
     hideCustomContextMenu();
     if (!ctx || !ctx.editor) return;
@@ -1264,27 +1232,7 @@ import {
     } catch (e) {}
   }
 
-  function installCustomContextMenuGlobalActionBridge() {
-    if (_state.customContextMenuGlobalActionBridgeInstalled) return;
-    _state.customContextMenuGlobalActionBridgeInstalled = true;
-    const onGlobalMenuAction = (ev) => {
-      const btn = _getCustomContextMenuActionButton(ev);
-      if (!btn) return;
-      try {
-        if ((ev.type === 'pointerup' || ev.type === 'mouseup') && typeof ev.button === 'number' && ev.button !== 0) return;
-      } catch (e) {}
-      try {
-        if (ev.type === 'mouseup' && typeof window.PointerEvent !== 'undefined') return;
-      } catch (e) {}
-      _handleCustomContextMenuAction(ev);
-    };
-    try { document.addEventListener('pointerup', onGlobalMenuAction, true); } catch (e) {}
-    try { document.addEventListener('mouseup', onGlobalMenuAction, true); } catch (e) {}
-    try { document.addEventListener('click', onGlobalMenuAction, true); } catch (e) {}
-  }
-
   function ensureCustomContextMenuDom(cfg) {
-    installCustomContextMenuGlobalActionBridge();
     let menu = _state.customContextMenuEl;
     if (!menu || !menu.isConnected) {
       menu = document.createElement('div');
@@ -1293,35 +1241,19 @@ import {
       menu.addEventListener('pointerdown', (ev) => {
         const btn = ev.target && ev.target.closest ? ev.target.closest('button[data-action]') : null;
         if (btn) {
-          try { ev.stopPropagation(); } catch (e) {}
+          _handleCustomContextMenuAction(ev);
           return;
         }
         try { ev.stopPropagation(); } catch (e) {}
       });
-      menu.addEventListener('pointerup', (ev) => {
-        const btn = ev.target && ev.target.closest ? ev.target.closest('button[data-action]') : null;
-        if (!btn) return;
-        try {
-          if (typeof ev.button === 'number' && ev.button !== 0) return;
-        } catch (e) {}
-        _handleCustomContextMenuAction(ev);
-      });
       menu.addEventListener('mousedown', (ev) => {
         try { ev.stopPropagation(); } catch (e) {}
-      });
-      menu.addEventListener('mouseup', (ev) => {
-        const btn = ev.target && ev.target.closest ? ev.target.closest('button[data-action]') : null;
-        if (!btn) return;
-        try {
-          if (typeof window.PointerEvent !== 'undefined') return;
-          if (typeof ev.button === 'number' && ev.button !== 0) return;
-        } catch (e) {}
-        _handleCustomContextMenuAction(ev);
       });
       menu.addEventListener('click', (ev) => {
         const btn = ev.target && ev.target.closest ? ev.target.closest('button[data-action]') : null;
         if (!btn) return;
-        _handleCustomContextMenuAction(ev);
+        try { ev.preventDefault(); } catch (e) {}
+        try { ev.stopPropagation(); } catch (e) {}
       });
       menu.addEventListener('contextmenu', (ev) => {
         try { ev.preventDefault(); } catch (e) {}
@@ -1437,8 +1369,6 @@ import {
   async function _writeCustomContextMenuClipboardText(text) {
     const value = String(text ?? '');
     _state.customContextMenuClipboardShadow = value;
-    _state.customContextMenuClipboardShadowReady = true;
-    try { window.__xkLastClipboardText = value; } catch (e) {}
     try {
       if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
         await navigator.clipboard.writeText(value);
@@ -1472,27 +1402,11 @@ import {
         const value = await navigator.clipboard.readText();
         if (typeof value === 'string') {
           _state.customContextMenuClipboardShadow = value;
-          _state.customContextMenuClipboardShadowReady = true;
-          try { window.__xkLastClipboardText = value; } catch (e) {}
           return value;
         }
       }
     } catch (e) {}
-    try {
-      if (typeof window.__xkLastClipboardText === 'string') {
-        _state.customContextMenuClipboardShadow = window.__xkLastClipboardText;
-        _state.customContextMenuClipboardShadowReady = true;
-        return window.__xkLastClipboardText;
-      }
-    } catch (e) {}
-    return _state.customContextMenuClipboardShadowReady ? String(_state.customContextMenuClipboardShadow || '') : null;
-  }
-
-  function _rememberCustomContextMenuClipboardText(text) {
-    if (typeof text !== 'string') return;
-    _state.customContextMenuClipboardShadow = text;
-    _state.customContextMenuClipboardShadowReady = true;
-    try { window.__xkLastClipboardText = text; } catch (e) {}
+    return String(_state.customContextMenuClipboardShadow || '');
   }
 
   async function runCustomContextMenuAction(editor, action, cfg) {
@@ -1647,25 +1561,8 @@ import {
     const onKeyDown = (ev) => {
       if (ev && (ev.key === 'Escape' || ev.key === 'Esc')) hide();
     };
-    const onCopyOrCut = () => {
-      try {
-        const value = _getCustomContextMenuSelectionText(editor);
-        if (value) _rememberCustomContextMenuClipboardText(value);
-      } catch (e) {}
-    };
-    const onPaste = (ev) => {
-      try {
-        const data = ev && ev.clipboardData;
-        if (!data || typeof data.getData !== 'function') return;
-        const value = data.getData('text/plain') || data.getData('text');
-        if (typeof value === 'string') _rememberCustomContextMenuClipboardText(value);
-      } catch (e) {}
-    };
     const cleanup = () => {
       try { host.removeEventListener('contextmenu', onContextMenu, true); } catch (e) {}
-      try { host.removeEventListener('copy', onCopyOrCut, true); } catch (e) {}
-      try { host.removeEventListener('cut', onCopyOrCut, true); } catch (e) {}
-      try { host.removeEventListener('paste', onPaste, true); } catch (e) {}
       try { document.removeEventListener('mousedown', onDocumentMouseDown, true); } catch (e) {}
       try { document.removeEventListener('scroll', hide, true); } catch (e) {}
       try { window.removeEventListener('resize', hide, true); } catch (e) {}
@@ -1674,9 +1571,6 @@ import {
     };
 
     host.addEventListener('contextmenu', onContextMenu, true);
-    host.addEventListener('copy', onCopyOrCut, true);
-    host.addEventListener('cut', onCopyOrCut, true);
-    host.addEventListener('paste', onPaste, true);
     document.addEventListener('mousedown', onDocumentMouseDown, true);
     document.addEventListener('scroll', hide, true);
     window.addEventListener('resize', hide, true);
