@@ -210,6 +210,16 @@ def _is_arm_platform() -> bool:
         return False
 
 
+def _xray_test_timeout_seconds() -> int:
+    default_timeout = 30 if _is_arm_platform() else 15
+    raw = os.environ.get('XKEEN_XRAY_TEST_TIMEOUT', str(default_timeout))
+    try:
+        value = int(float(str(raw).strip() or str(default_timeout)))
+    except Exception:
+        value = default_timeout
+    return max(5, value)
+
+
 def _detect_oom_in_output(stderr: str, stdout: str) -> bool:
     """Check if Xray crashed with out-of-memory."""
     combined = (stderr or '') + (stdout or '')
@@ -220,8 +230,7 @@ def _run_xray_preflight(*, xray_configs_dir_real: str, sel_main: str, obj: Any) 
     """Validate Xray configs with edited fragment injected into a temp confdir."""
     xray_bin = '/opt/sbin/xray' if os.path.exists('/opt/sbin/xray') else 'xray'
     confdir = xray_configs_dir_real or os.environ.get('XRAY_CONFDIR') or '/opt/etc/xray/configs'
-    default_timeout = 30 if _is_arm_platform() else 15
-    test_timeout = max(5, int(os.environ.get('XKEEN_XRAY_TEST_TIMEOUT', str(default_timeout)) or str(default_timeout)))
+    test_timeout = _xray_test_timeout_seconds()
     base_cmd = f'{xray_bin} -test -confdir {confdir}'
 
     if not os.path.isdir(confdir):
@@ -289,7 +298,7 @@ def _run_xray_preflight(*, xray_configs_dir_real: str, sel_main: str, obj: Any) 
                     hint = (
                         'Xray не хватило памяти при загрузке GeoSite/GeoIP. '
                         'Попробуйте уменьшить количество доменов в routing rules, '
-                        'отключить observatory или увеличить таймаут через '
+                        'отключить observatory или увеличить таймаут в DevTools → ENV через '
                         'XKEEN_XRAY_TEST_TIMEOUT.'
                     )
                     error = 'xray out of memory'
@@ -297,7 +306,7 @@ def _run_xray_preflight(*, xray_configs_dir_real: str, sel_main: str, obj: Any) 
                     hint = (
                         'Таймаут проверки конфигурации Xray. '
                         'На слабых роутерах загрузка GeoSite-списков может занимать больше времени. '
-                        'Попробуйте увеличить таймаут через XKEEN_XRAY_TEST_TIMEOUT.'
+                        'Попробуйте увеличить таймаут в DevTools → ENV через XKEEN_XRAY_TEST_TIMEOUT.'
                     )
                     error = 'xray test timeout'
                 return {
@@ -677,53 +686,73 @@ def register_config_routes(
                 }
             ), 400
 
-        preflight = _run_xray_preflight(
-            xray_configs_dir_real=xray_configs_dir_real,
-            sel_main=sel_main,
-            obj=obj,
-        )
-        if not preflight.get("ok"):
-            preflight_ref = "pf-" + uuid.uuid4().hex[:12]
-            preflight_summary = str(
-                preflight.get("summary")
-                or preflight.get("hint")
-                or preflight.get("error")
-                or "xray preflight failed"
-            )
-            _append_operation_log(
-                False,
-                source="xray-preflight",
-                phase=preflight.get("phase") or "xray_test",
-                file=os.path.basename(str(sel_main or "")),
-                returncode=preflight.get("returncode"),
-                timeout_s=preflight.get("timeout_s"),
-                timed_out=bool(preflight.get("timed_out")),
-                preflight_ref=preflight_ref,
-                summary=preflight_summary,
-            )
-            preflight_payload = {
-                "ok": False,
-                "error": preflight.get("error") or "xray preflight failed",
-                "phase": preflight.get("phase"),
-                "cmd": preflight.get("cmd"),
-                "returncode": preflight.get("returncode"),
-                "timeout_s": preflight.get("timeout_s"),
-                "timed_out": preflight.get("timed_out"),
-                "stdout": preflight.get("stdout"),
-                "stderr": preflight.get("stderr"),
-                "hint": preflight.get("hint"),
-                "summary": preflight.get("summary"),
-                "preflight_ref": preflight_ref,
-            }
-            _save_operation_diagnostic(preflight_ref, preflight_payload, kind="xray-preflight")
+        skip_preflight_arg = str(
+            request.args.get("skip_preflight")
+            or request.args.get("skip_xray_preflight")
+            or ""
+        ).strip().lower()
+        skip_preflight = skip_preflight_arg in ("1", "true", "yes", "on", "y")
+
+        if skip_preflight:
             _core_log(
                 "warning",
-                "routing.save.preflight_failed",
+                "routing.save.preflight_skipped",
                 file=os.path.basename(str(sel_main or "")),
-                returncode=preflight.get("returncode"),
-                error=str(preflight.get("error") or ""),
+                remote_addr=str(request.remote_addr or ""),
             )
-            return jsonify(preflight_payload), 400
+        else:
+            preflight = _run_xray_preflight(
+                xray_configs_dir_real=xray_configs_dir_real,
+                sel_main=sel_main,
+                obj=obj,
+            )
+            if not preflight.get("ok"):
+                preflight_ref = "pf-" + uuid.uuid4().hex[:12]
+                preflight_summary = str(
+                    preflight.get("summary")
+                    or preflight.get("hint")
+                    or preflight.get("error")
+                    or "xray preflight failed"
+                )
+                _append_operation_log(
+                    False,
+                    source="xray-preflight",
+                    phase=preflight.get("phase") or "xray_test",
+                    file=os.path.basename(str(sel_main or "")),
+                    returncode=preflight.get("returncode"),
+                    timeout_s=preflight.get("timeout_s"),
+                    timed_out=bool(preflight.get("timed_out")),
+                    preflight_ref=preflight_ref,
+                    summary=preflight_summary,
+                )
+                can_skip_preflight = (
+                    str(preflight.get("phase") or "") == "xray_test"
+                    and bool(preflight.get("timed_out"))
+                )
+                preflight_payload = {
+                    "ok": False,
+                    "error": preflight.get("error") or "xray preflight failed",
+                    "phase": preflight.get("phase"),
+                    "cmd": preflight.get("cmd"),
+                    "returncode": preflight.get("returncode"),
+                    "timeout_s": preflight.get("timeout_s"),
+                    "timed_out": preflight.get("timed_out"),
+                    "can_skip_preflight": can_skip_preflight,
+                    "stdout": preflight.get("stdout"),
+                    "stderr": preflight.get("stderr"),
+                    "hint": preflight.get("hint"),
+                    "summary": preflight.get("summary"),
+                    "preflight_ref": preflight_ref,
+                }
+                _save_operation_diagnostic(preflight_ref, preflight_payload, kind="xray-preflight")
+                _core_log(
+                    "warning",
+                    "routing.save.preflight_failed",
+                    file=os.path.basename(str(sel_main or "")),
+                    returncode=preflight.get("returncode"),
+                    error=str(preflight.get("error") or ""),
+                )
+                return jsonify(preflight_payload), 400
 
         try:
             if _snapshot_before_overwrite and backup_dir and backup_dir_real:
@@ -815,6 +844,7 @@ def register_config_routes(
                             "restarted": False,
                             "restart_queued": True,
                             "restart_job_id": job.id,
+                            "preflight_skipped": skip_preflight,
                         }
                     ),
                     202,
@@ -840,4 +870,4 @@ def register_config_routes(
             remote_addr=str(request.remote_addr or ""),
         )
 
-        return jsonify({"ok": True, "restarted": restarted}), 200
+        return jsonify({"ok": True, "restarted": restarted, "preflight_skipped": skip_preflight}), 200

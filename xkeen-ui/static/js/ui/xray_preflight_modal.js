@@ -316,7 +316,7 @@
         id: 'timeout',
         summary: 'Проверка конфигурации Xray не успела завершиться.',
         where: 'На роутерах с ограниченной памятью загрузка больших GeoSite-списков может занимать десятки секунд.',
-        action: 'Попробуйте увеличить таймаут (XKEEN_XRAY_TEST_TIMEOUT), уменьшить GeoSite-списки или отключить observatory.',
+        action: 'Увеличьте таймаут в DevTools -> ENV (XKEEN_XRAY_TEST_TIMEOUT), уменьшите GeoSite-списки или отключите observatory.',
         rootCause: 'xray test timeout',
       };
     }
@@ -849,6 +849,7 @@
       '        <p class="modal-description"><span data-xk-preflight-description>Конфиг не был сохранён. Исправьте ошибку и попробуйте снова.</span></p>' +
       '      </div>' +
       '      <div class="xk-preflight-chip" data-xk-preflight-mode>Xray preflight</div>' +
+      '      <button type="button" class="xk-preflight-chip xk-preflight-action-chip" data-xk-preflight-retry-skip style="display:none;">Повторить без проверки</button>' +
       '    </section>' +
       '    <div class="xk-preflight-grid">' +
       '      <section class="xk-preflight-panel">' +
@@ -903,8 +904,10 @@
     const closeBtn = modal.querySelector('.modal-close');
     const okBtn = modal.querySelector('[data-xk-preflight-close]');
     const copyBtn = modal.querySelector('[data-xk-preflight-copy]');
+    const retrySkipBtn = modal.querySelector('[data-xk-preflight-retry-skip]');
     const codeTrigger = modal.querySelector('[data-xk-preflight-code-trigger]');
     if (copyBtn) copyBtn.dataset.defaultLabel = 'Скопировать детали';
+    if (retrySkipBtn) retrySkipBtn.dataset.defaultLabel = 'Повторить без проверки';
 
     const close = () => {
       try {
@@ -971,6 +974,28 @@
       e.preventDefault();
       close();
     });
+    if (retrySkipBtn) {
+      retrySkipBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const action = retrySkipBtn.__xkRetryWithoutPreflight;
+        if (typeof action !== 'function') return;
+        try {
+          retrySkipBtn.disabled = true;
+          retrySkipBtn.textContent = 'Повторяю...';
+        } catch (e2) {}
+        close();
+        try {
+          await Promise.resolve(action());
+        } catch (err) {
+          if (typeof window.toast === 'function') window.toast('Не удалось повторить сохранение без проверки.', true);
+        } finally {
+          try {
+            retrySkipBtn.disabled = false;
+            retrySkipBtn.textContent = retrySkipBtn.dataset.defaultLabel || 'Повторить без проверки';
+          } catch (e3) {}
+        }
+      });
+    }
     if (codeTrigger) {
       codeTrigger.addEventListener('click', (e) => {
         e.preventDefault();
@@ -1038,6 +1063,7 @@
       leadTitle: modal.querySelector('[data-xk-preflight-lead-title]'),
       icon: modal.querySelector('[data-xk-preflight-icon]'),
       mode: modal.querySelector('[data-xk-preflight-mode]'),
+      retrySkipBtn,
       description: modal.querySelector('[data-xk-preflight-description]'),
       summaryWrap: modal.querySelector('[data-xk-preflight-summary-wrap]'),
       summary: modal.querySelector('[data-xk-preflight-summary]'),
@@ -1070,6 +1096,26 @@
     modalEl.classList.remove('is-json');
     modalEl.classList.remove('is-xray');
     modalEl.classList.add(phase === 'json_parse' ? 'is-json' : 'is-xray');
+  }
+
+  function getRetryWithoutPreflightAction(payload) {
+    if (payload && typeof payload.onRetryWithoutPreflight === 'function') return payload.onRetryWithoutPreflight;
+    try {
+      if (
+        window.XKeen &&
+        XKeen.routing &&
+        typeof XKeen.routing.retrySaveWithoutPreflight === 'function'
+      ) {
+        return XKeen.routing.retrySaveWithoutPreflight;
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  function boolLike(value) {
+    if (value === true || value === 1) return true;
+    const s = String(value == null ? '' : value).trim().toLowerCase();
+    return s === '1' || s === 'true' || s === 'yes' || s === 'on' || s === 'y';
   }
 
   XKeen.ui.showXrayPreflightError = function showXrayPreflightError(payload = {}) {
@@ -1109,6 +1155,15 @@
     });
     const showHint = shouldShowHint(hint, summary, ui.description, ui.defaultSummary) && explanationItems.length === 0;
     const codeHelp = diagnosis.codeHelp;
+    const retryAction = getRetryWithoutPreflightAction(payload);
+    const hasSkipFlag = Object.prototype.hasOwnProperty.call(payload || {}, 'can_skip_preflight');
+    const canRetryWithoutPreflight =
+      phase === 'xray_test' &&
+      !!retryAction &&
+      (
+        boolLike(payload.can_skip_preflight) ||
+        (!hasSkipFlag && boolLike(payload.timed_out))
+      );
 
     applyModeClass(els.modal, phase);
 
@@ -1116,6 +1171,13 @@
     if (els.leadTitle) els.leadTitle.textContent = ui.title;
     if (els.description) els.description.textContent = ui.description;
     if (els.mode) els.mode.textContent = ui.modeLabel;
+    if (els.retrySkipBtn) {
+      els.retrySkipBtn.__xkRetryWithoutPreflight = canRetryWithoutPreflight ? retryAction : null;
+      els.retrySkipBtn.disabled = false;
+      els.retrySkipBtn.textContent = els.retrySkipBtn.dataset.defaultLabel || 'Повторить без проверки';
+      els.retrySkipBtn.title = 'Сохранить этот же текст без xray -test. Используйте только если уверены, что проблема в таймауте проверки.';
+      setVisible(els.retrySkipBtn, canRetryWithoutPreflight);
+    }
     if (els.icon) els.icon.textContent = ui.iconText;
 
     if (els.summary) els.summary.textContent = summary;

@@ -207,6 +207,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   ENV_HELP.XKEEN_ROUTING_SAVE_MAX_BYTES = 'Максимальный размер тела для сохранения JSON/JSONC роутинга Xray, в байтах. По умолчанию 1048576.';
   ENV_HELP.XKEEN_CONFIG_EXCHANGE_MAX_BYTES = 'Максимальный размер входящего тела для config exchange import/export API, в байтах. По умолчанию 4194304.';
   ENV_HELP.XKEEN_MIHOMO_HWID = 'HWID для premium/HWID-подписок Mihomo. Вставьте сюда HWID, который выдал провайдер, если подписка должна быть привязана строго к роутеру. Применяется при следующей проверке/генерации HWID-подписки без Restart UI.';
+  ENV_HELP.XKEEN_XRAY_TEST_TIMEOUT = 'Таймаут preflight-проверки Xray (`xray -test`) в секундах. По умолчанию 30 на ARM/роутерах и 15 на остальных системах, минимум 5. Можно увеличить для слабого роутера или медленной USB-флешки; применяется при следующем сохранении без Restart UI.';
   ENV_HELP.XKEEN_DAT_ALLOW_HOSTS = 'Доверенные хосты для обновления DAT по URL. Формат: через запятую. По умолчанию: GitHub/release/raw хосты.';
   ENV_HELP.XKEEN_DAT_ALLOW_HTTP = 'Разрешить plain HTTP для DAT update. По умолчанию 0 (только HTTPS).';
   ENV_HELP.XKEEN_DAT_ALLOW_CUSTOM_URLS = 'Разрешить DAT update с произвольных public URL вне allow-list. По умолчанию 0. Включайте только осознанно.';
@@ -342,6 +343,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   ENV_NO_RESTART_KEYS.add('XKEEN_GEODAT_ALLOW_CUSTOM_URLS');
   ENV_NO_RESTART_KEYS.add('XKEEN_GEODAT_ALLOW_PRIVATE_HOSTS');
   ENV_NO_RESTART_KEYS.add('XKEEN_MIHOMO_HWID');
+  ENV_NO_RESTART_KEYS.add('XKEEN_XRAY_TEST_TIMEOUT');
   ENV_RESTART_KEYS.delete('XKEEN_ALLOW_SHELL');
   ENV_RESTART_KEYS.delete('XKEEN_AUTH_LOGIN_WINDOW_SECONDS');
   ENV_RESTART_KEYS.delete('XKEEN_AUTH_LOGIN_MAX_ATTEMPTS');
@@ -362,6 +364,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   ENV_RESTART_KEYS.delete('XKEEN_GEODAT_ALLOW_CUSTOM_URLS');
   ENV_RESTART_KEYS.delete('XKEEN_GEODAT_ALLOW_PRIVATE_HOSTS');
   ENV_RESTART_KEYS.delete('XKEEN_MIHOMO_HWID');
+  ENV_RESTART_KEYS.delete('XKEEN_XRAY_TEST_TIMEOUT');
   ENV_RESTART_KEYS.add('XKEEN_INIT_SCRIPT');
 
   let _envSnapshot = { items: [], envFile: '' };
@@ -486,8 +489,8 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     {
       id: 'xray',
       title: 'Xray и списки XKeen',
-      desc: 'Пути фрагментов Xray и файлы списков портов/IP.',
-      keys: ['XKEEN_CONFIG_FILE'],
+      desc: 'Пути фрагментов Xray, preflight-таймаут и файлы списков портов/IP.',
+      keys: ['XKEEN_XRAY_TEST_TIMEOUT', 'XKEEN_CONFIG_FILE'],
       prefixes: ['XKEEN_XRAY_', 'XKEEN_PORT_', 'XKEEN_IP_'],
     },
     {

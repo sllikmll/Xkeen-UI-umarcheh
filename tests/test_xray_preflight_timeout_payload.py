@@ -225,6 +225,7 @@ def test_routing_save_logs_failed_xray_preflight_with_modal_ref(tmp_path, monkey
     assert response.status_code == 400
     payload = response.get_json()
     assert payload["preflight_ref"].startswith("pf-")
+    assert payload["can_skip_preflight"] is False
     assert seen
     ok, source, meta = seen[-1]
     assert ok is False
@@ -238,6 +239,95 @@ def test_routing_save_logs_failed_xray_preflight_with_modal_ref(tmp_path, monkey
     assert saved_kind == "xray-preflight"
     assert saved_payload["preflight_ref"] == payload["preflight_ref"]
     assert saved_payload["stderr"] == "missing outboundTag proxy"
+    assert saved_payload["can_skip_preflight"] is False
+
+
+def test_routing_save_marks_timed_out_xray_preflight_as_skippable(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        routing_config,
+        "_run_xray_preflight",
+        lambda **_kwargs: {
+            "ok": False,
+            "error": "xray test timeout",
+            "phase": "xray_test",
+            "cmd": "xray -test -confdir /tmp/xray",
+            "timeout_s": 30,
+            "timed_out": True,
+            "stderr": "loading geosite",
+            "summary": "Проверка не завершилась за отведённое время.",
+            "hint": "Увеличьте таймаут проверки Xray.",
+        },
+    )
+
+    bp = Blueprint("routing_preflight_skip_hint_test", __name__)
+    routing_config.register_config_routes(
+        bp,
+        routing_file=str(tmp_path / "05_routing.json"),
+        routing_file_raw=str(tmp_path / "jsonc" / "05_routing.jsonc"),
+        xray_configs_dir=str(tmp_path),
+        xray_configs_dir_real=str(tmp_path),
+        backup_dir=str(tmp_path / "backups"),
+        backup_dir_real=str(tmp_path / "backups"),
+        load_json=lambda path, default=None: default,
+        strip_json_comments_text=lambda text: text,
+        restart_xkeen=lambda source="routing": True,
+    )
+    app = Flask("routing-preflight-skip-hint-test")
+    app.register_blueprint(bp)
+
+    response = app.test_client().post(
+        "/api/routing",
+        data=json.dumps({"routing": {"rules": []}}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert payload["timed_out"] is True
+    assert payload["can_skip_preflight"] is True
+
+
+def test_routing_save_can_skip_xray_preflight_when_requested(tmp_path, monkeypatch):
+    calls = []
+
+    def fail_if_called(**_kwargs):
+        calls.append(_kwargs)
+        return {"ok": False, "error": "should not run"}
+
+    monkeypatch.setattr(routing_config, "_run_xray_preflight", fail_if_called)
+
+    bp = Blueprint("routing_preflight_skip_test", __name__)
+    main_file = tmp_path / "05_routing.json"
+    raw_file = tmp_path / "jsonc" / "05_routing.jsonc"
+    monkeypatch.setenv("XKEEN_XRAY_ROUTING_FILE_RAW", str(raw_file))
+    routing_config.register_config_routes(
+        bp,
+        routing_file=str(main_file),
+        routing_file_raw=str(raw_file),
+        xray_configs_dir=str(tmp_path),
+        xray_configs_dir_real=str(tmp_path),
+        backup_dir=str(tmp_path / "backups"),
+        backup_dir_real=str(tmp_path / "backups"),
+        load_json=lambda path, default=None: default,
+        strip_json_comments_text=lambda text: text,
+        restart_xkeen=lambda source="routing": True,
+    )
+    app = Flask("routing-preflight-skip-test")
+    app.register_blueprint(bp)
+
+    response = app.test_client().post(
+        "/api/routing?restart=0&skip_preflight=1",
+        data=json.dumps({"routing": {"rules": []}}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["preflight_skipped"] is True
+    assert calls == []
+    assert json.loads(main_file.read_text(encoding="utf-8")) == {"routing": {"rules": []}}
+    assert raw_file.read_text(encoding="utf-8") == json.dumps({"routing": {"rules": []}})
 
 
 def test_run_xray_preflight_refreshes_xray_dat_assets_before_check(tmp_path, monkeypatch):

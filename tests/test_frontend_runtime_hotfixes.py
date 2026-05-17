@@ -1341,18 +1341,24 @@ def test_xray_preflight_modal_exposes_explainer_block_and_problem_line_rendering
     modal_text = Path('xkeen-ui/static/js/ui/xray_preflight_modal.js').read_text(encoding='utf-8')
     css_text = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
     spinner_text = Path('xkeen-ui/static/js/ui/spinner_fetch.js').read_text(encoding='utf-8')
+    routing_text = Path('xkeen-ui/static/js/features/routing.js').read_text(encoding='utf-8')
 
     assert "data-xk-preflight-explainer-wrap" in modal_text
     assert "data-xk-preflight-explainer" in modal_text
     assert "data-xk-preflight-code-trigger" in modal_text
     assert "data-xk-preflight-code-help-wrap" in modal_text
     assert "data-xk-preflight-code-help" in modal_text
+    assert "data-xk-preflight-retry-skip" in modal_text
+    assert "Повторить без проверки" in modal_text
     assert 'function classifyTerminalLine(line) {' in modal_text
     assert 'function buildHumanDiagnosis(payload, details) {' in modal_text
     assert 'function buildReturnCodeHelp(payload, code) {' in modal_text
     assert 'function buildExplanationItems(payload, details) {' in modal_text
     assert 'function renderExplanationItems(container, items) {' in modal_text
     assert 'function renderTerminalOutput(el, text, emptyLabel) {' in modal_text
+    assert 'function getRetryWithoutPreflightAction(payload) {' in modal_text
+    assert "XKeen.routing.retrySaveWithoutPreflight" in modal_text
+    assert "boolLike(payload.can_skip_preflight)" in modal_text
     assert 'function extractBalancerReference(text) {' in modal_text
     assert 'function extractOutboundReference(text) {' in modal_text
     assert 'function scoreDiagnosticText(text) {' in modal_text
@@ -1373,6 +1379,7 @@ def test_xray_preflight_modal_exposes_explainer_block_and_problem_line_rendering
     assert "Код 23 здесь означает только то, что `xray -test` завершился с ошибкой" in modal_text
     assert '.xk-preflight-block--explainer {' in css_text
     assert '.xk-preflight-code-trigger {' in css_text
+    assert '.xk-preflight-action-chip {' in css_text
     assert '.xk-preflight-block--code-help {' in css_text
     assert '.xk-preflight-explainer-item {' in css_text
     assert '.xk-preflight-terminal-line.is-problem {' in css_text
@@ -1383,6 +1390,8 @@ def test_xray_preflight_modal_exposes_explainer_block_and_problem_line_rendering
     assert "errorCode === 'xray preflight failed' ||" in spinner_text
     assert "errorCode === 'routing semantic validation failed';" in spinner_text
     assert "if (!isRoutingValidationFailure) return;" in spinner_text
+    assert "XKeen.routing.retrySaveWithoutPreflight = () => save({ skipPreflight: true });" in routing_text
+    assert "(skipPreflight ? '&skip_preflight=1' : '')" in routing_text
 
 
 def test_devtools_light_theme_has_readable_update_pills_and_layout_tab_list():

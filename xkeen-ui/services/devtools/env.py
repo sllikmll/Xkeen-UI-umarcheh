@@ -32,6 +32,7 @@ ENV_WHITELIST: Tuple[str, ...] = (
     "XKEEN_ROUTING_SAVE_MAX_BYTES",
     "XKEEN_CONFIG_EXCHANGE_MAX_BYTES",
     "XKEEN_MIHOMO_HWID",
+    "XKEEN_XRAY_TEST_TIMEOUT",
     "XKEEN_DAT_ALLOW_HOSTS",
     "XKEEN_DAT_ALLOW_HTTP",
     "XKEEN_DAT_ALLOW_CUSTOM_URLS",
@@ -146,6 +147,14 @@ class EnvItem:
     effective: Optional[str]
     is_sensitive: bool = False
     readonly: bool = False
+
+
+def _is_arm_like_platform() -> bool:
+    try:
+        machine = os.uname().machine.lower()
+        return "aarch64" in machine or "arm" in machine
+    except Exception:
+        return False
 
 
 def _default_effective_value(
@@ -444,6 +453,8 @@ def _default_effective_value(
     # Xray/Mihomo log timezone offset default (+3, see app.py).
     if k == "XKEEN_XRAY_LOG_TZ_OFFSET":
         return "3"
+    if k == "XKEEN_XRAY_TEST_TIMEOUT":
+        return "30" if _is_arm_like_platform() else "15"
 
     # Xray fragment/config paths (keep in sync with app.py).
     if k == "XKEEN_XRAY_CONFIGS_DIR":

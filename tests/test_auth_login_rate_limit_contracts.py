@@ -34,10 +34,15 @@ def test_devtools_env_exposes_mihomo_hwid_and_searchable_groups():
     template = (ROOT / "xkeen-ui" / "templates" / "devtools.html").read_text(encoding="utf-8")
 
     assert '"XKEEN_MIHOMO_HWID"' in env_py
+    assert '"XKEEN_XRAY_TEST_TIMEOUT"' in env_py
     assert 'if k == "XKEEN_MIHOMO_HWID":' in env_py
+    assert 'if k == "XKEEN_XRAY_TEST_TIMEOUT":' in env_py
     assert "ENV_HELP.XKEEN_MIHOMO_HWID" in env_js
+    assert "ENV_HELP.XKEEN_XRAY_TEST_TIMEOUT" in env_js
     assert "ENV_NO_RESTART_KEYS.add('XKEEN_MIHOMO_HWID')" in env_js
+    assert "ENV_NO_RESTART_KEYS.add('XKEEN_XRAY_TEST_TIMEOUT')" in env_js
     assert "title: 'Mihomo и HWID'" in env_js
+    assert "'XKEEN_XRAY_TEST_TIMEOUT', 'XKEEN_CONFIG_FILE'" in env_js
     assert "title: 'Файловый менеджер'" in env_js
     assert "xkeen.devtools.env.expandedGroups.v1" in env_js
     assert "!_envExpandedGroups.has(group.id)" in env_js

@@ -3441,8 +3441,15 @@ function closeHelp() {
       return false;
     }
   }
-  async function save() {
+  async function save(options) {
+    const opts = options && typeof options === 'object' ? options : {};
+    const skipPreflight = !!opts.skipPreflight;
     const statusEl = $(IDS.status);
+    try {
+      window.XKeen = window.XKeen || {};
+      window.XKeen.routing = window.XKeen.routing || {};
+      window.XKeen.routing.retrySaveWithoutPreflight = () => save({ skipPreflight: true });
+    } catch (e) {}
     const rawText = getEditorText();
     const analysis = getJsoncAnalysis(rawText, { preciseLocation: true });
     if (analysis.ok) {
@@ -3553,9 +3560,11 @@ function closeHelp() {
       const url =
         '/api/routing?restart=' + (restart ? '1' : '0') +
         (restart ? '&async=1' : '') +
+        (skipPreflight ? '&skip_preflight=1' : '') +
         (file ? ('&file=' + encodeURIComponent(file)) : '');
 
       setBtnBusy(true);
+      if (skipPreflight && statusEl) statusEl.textContent = 'Сохранение без preflight-проверки…';
 
       // Save request (fast). Restart is handled as a background job when async=1.
       const res = await fetch(url, _withCSRF({
@@ -3580,6 +3589,9 @@ function closeHelp() {
         try { saveCurrentViewState(); } catch (e) {}
 
         let msg = (_routingMode === 'routing') ? 'Routing сохранён.' : 'Файл сохранён.';
+        if (skipPreflight || (data && data.preflight_skipped)) {
+          msg = (_routingMode === 'routing') ? 'Routing сохранён без preflight-проверки.' : 'Файл сохранён без preflight-проверки.';
+        }
 
         // Update activity bookkeeping
         try {
