@@ -1539,7 +1539,7 @@
                 { "type": "array", "items": { "type": "string" } }
               ],
               "description": "User-Agent, который будет отправляться при загрузке подписки.",
-              "examples": ["mihomo/v26.2"]
+              "examples": ["ClashMeta/1.19.24; mihomo/1.19.24"]
             }
           }
         },

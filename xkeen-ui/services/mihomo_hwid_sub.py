@@ -34,6 +34,7 @@ from services.url_policy import URLPolicy, env_flag, is_url_allowed
 
 _B64_RE = re.compile(r"^[A-Za-z0-9+/=]+$")
 _NAME_SAFE_RE = re.compile(r"[^A-Za-z0-9._-]+")
+_MIHOMO_HWID_UA_FALLBACK_VERSION = "1.19.24"
 
 
 def _read_text(path: str, *, max_bytes: int = 64 * 1024) -> str | None:
@@ -341,29 +342,56 @@ def _detect_device_model() -> str:
 
 
 def _detect_mihomo_version() -> str | None:
-    for args in (("mihomo", "-v"), ("mihomo", "-V")):
-        try:
-            p = subprocess.run(
-                list(args),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                timeout=2.5,
-            )
-            out = (p.stdout or "").strip()
-            if not out:
+    binaries = ("mihomo", "/opt/sbin/mihomo", "/opt/bin/mihomo")
+    flags = ("-v", "-V")
+    seen: set[tuple[str, str]] = set()
+    for binary in binaries:
+        if os.path.isabs(binary) and not os.path.exists(binary):
+            continue
+        for flag in flags:
+            args = (binary, flag)
+            if args in seen:
                 continue
-            # Prefer vX.Y(.Z) (matches upstream install.sh)
-            m = re.search(r"\b(v[0-9]+\.[0-9]+(?:\.[0-9]+)?)\b", out)
+            seen.add(args)
+            try:
+                p = subprocess.run(
+                    list(args),
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    timeout=2.5,
+                )
+                out = (p.stdout or "").strip()
+                if not out:
+                    continue
+                # Prefer vX.Y(.Z) (matches upstream install.sh)
+                m = re.search(r"\b(v[0-9]+\.[0-9]+(?:\.[0-9]+)?)\b", out)
+                if m:
+                    return m.group(1)
+                m2 = re.search(r"\b([0-9]+\.[0-9]+(?:\.[0-9]+)?)\b", out)
+                if m2:
+                    return "v" + m2.group(1)
+                return out.splitlines()[0][:64]
+            except Exception:
+                continue
+    return None
+
+
+def _normalize_mihomo_version_for_ua(version: str | None) -> str:
+    s = (version or "").strip()
+    if s:
+        try:
+            m = re.search(r"\b[vV]?([0-9]+\.[0-9]+(?:\.[0-9]+)?)\b", s)
             if m:
                 return m.group(1)
-            m2 = re.search(r"\b([0-9]+\.[0-9]+(?:\.[0-9]+)?)\b", out)
-            if m2:
-                return "v" + m2.group(1)
-            return out.splitlines()[0][:64]
         except Exception:
-            continue
-    return None
+            pass
+    return _MIHOMO_HWID_UA_FALLBACK_VERSION
+
+
+def _mihomo_hwid_user_agent(version: str | None = None) -> str:
+    ua_ver = _normalize_mihomo_version_for_ua(version)
+    return f"ClashMeta/{ua_ver}; mihomo/{ua_ver}"
 
 
 def get_device_info() -> Dict[str, Any]:
@@ -401,8 +429,9 @@ def get_device_info() -> Dict[str, Any]:
 
     # For headers we use sanitized model (to match upstream install.sh).
     device_model = model_hdr or _detect_device_model()
-    mh_ver = _detect_mihomo_version() or "v1.0.0"
-    ua = f"mihomo/{mh_ver}" if mh_ver else "mihomo"
+    mh_ver_raw = _detect_mihomo_version()
+    mh_ver = _normalize_mihomo_version_for_ua(mh_ver_raw)
+    ua = _mihomo_hwid_user_agent(mh_ver_raw)
 
     headers: Dict[str, str] = {
         # Upstream expects HWID without separators and in uppercase.
@@ -432,6 +461,7 @@ def get_device_info() -> Dict[str, Any]:
         "os_release": os_release,
         "kernel_release": kernel_release,
         "mihomo_version": mh_ver,
+        "mihomo_version_raw": mh_ver_raw,
         "user_agent": ua,
         "headers": headers,
         "hwid_warning": (

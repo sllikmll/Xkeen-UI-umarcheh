@@ -128,7 +128,8 @@ def test_hwid_device_info_uses_stored_generated_fallback_when_mac_missing(monkey
     assert info["hwid"] == "12DDB1C0BADF"
     assert info["hwid_source"] == "generated_state"
     assert info["headers"]["x-hwid"] == "12DDB1C0BADF"
-    assert info["headers"]["User-Agent"] == "mihomo/v1.19.25"
+    assert info["mihomo_version"] == "1.19.25"
+    assert info["headers"]["User-Agent"] == "ClashMeta/1.19.25; mihomo/1.19.25"
     assert "Обычно этого достаточно" in info["hwid_warning"]
     assert "не новый random при каждом клике" in info["hwid_warning"]
     assert "DevTools → ENV" in info["hwid_warning"]
@@ -149,7 +150,7 @@ def test_hwid_provider_entry_uses_mihomo_provider_defaults():
             "x-device-os": "Keenetic OS",
             "x-ver-os": "4.2.6",
             "x-device-model": "Keenetic",
-            "User-Agent": "mihomo/v1.19.25",
+            "User-Agent": "ClashMeta/1.19.25; mihomo/1.19.25",
         },
     )
 
@@ -158,13 +159,28 @@ def test_hwid_provider_entry_uses_mihomo_provider_defaults():
     assert "      interval: 300" in entry
     assert "      expected-status: 204" in entry
     assert "      User-Agent:" in entry
-    assert '      - "mihomo/v1.19.25"' in entry
+    assert '      - "ClashMeta/1.19.25; mihomo/1.19.25"' in entry
     assert "      x-hwid:" in entry
     assert '      - "6488FA3B0CF4"' in entry
     assert "      x-device-os:" not in entry
     assert "    override:" in entry
     assert "      udp: true" in entry
     assert "      tfo: true" in entry
+
+
+def test_hwid_user_agent_strips_v_prefix_and_uses_clashmeta_compatibility():
+    assert (
+        hwid._mihomo_hwid_user_agent("v1.19.25")
+        == "ClashMeta/1.19.25; mihomo/1.19.25"
+    )
+    assert (
+        hwid._mihomo_hwid_user_agent("mihomo v1.20.0 linux arm64")
+        == "ClashMeta/1.20.0; mihomo/1.20.0"
+    )
+
+
+def test_hwid_user_agent_uses_stable_fallback_when_version_missing():
+    assert hwid._mihomo_hwid_user_agent(None) == "ClashMeta/1.19.24; mihomo/1.19.24"
 
 
 def test_hwid_probe_reports_tls_handshake_timeout(monkeypatch):
