@@ -5,6 +5,7 @@ import {
   confirmXkeenAction,
   getXkeenConfigDirtyApi,
   getXkeenFilePath,
+  getXkeenSettingsApi,
   getXkeenUiConfigShellApi,
   openXkeenJsonEditor,
   syncXkeenBodyScrollLock,
@@ -38,10 +39,14 @@ let outboundsModuleApi = null;
     let _outboundsNodes = [];
     let _outboundsNodeLatency = Object.create(null);
     let _outboundsNodePingState = Object.create(null);
+    let _outboundsActiveRuntime = null;
+    let _outboundsActivePollTimer = null;
+    let _outboundsSettingsUnsubscribe = null;
     let _outboundsPingAllBusy = false;
     let _outboundsNodeLayoutSeq = 0;
     let _outboundsLoadSeq = 0;
     let _outboundsNodesLoadSeq = 0;
+    let _outboundsActiveLoadSeq = 0;
 
     const IDS = {
       fragmentSelect: 'outbounds-fragment-select',
@@ -52,6 +57,7 @@ let outboundsModuleApi = null;
     const OUTBOUND_NODE_IDS = {
       panel: 'outbounds-nodes-panel',
       caption: 'outbounds-nodes-caption',
+      activeStatus: 'outbounds-active-node-status',
       summary: 'outbounds-nodes-summary',
       pingAll: 'outbounds-nodes-pingall',
       list: 'outbounds-nodes-list',
@@ -501,6 +507,13 @@ let outboundsModuleApi = null;
       return url;
     }
 
+    function outboundsActiveApiUrl(fragment) {
+      let url = '/api/xray/outbounds/active';
+      const f = (fragment != null) ? fragment : getActiveFragment();
+      if (f) url += '?file=' + encodeURIComponent(String(f));
+      return url;
+    }
+
     function outboundsNodePingStateKey(nodeKey) {
       return [String(getActiveFragment() || ''), String(nodeKey || '')].join('::');
     }
@@ -518,6 +531,188 @@ let outboundsModuleApi = null;
       outboundsRenderNodeList();
     }
 
+    function outboundsActiveDisplayEnabled(settingsSnapshot) {
+      try {
+        let snapshot = settingsSnapshot;
+        if (!snapshot) {
+          const api = getXkeenSettingsApi();
+          snapshot = api && typeof api.get === 'function' ? api.get() : null;
+        }
+        return !!(snapshot && snapshot.routing && snapshot.routing.showActiveOutbound === true);
+      } catch (e) {}
+      return false;
+    }
+
+    function outboundsApplyActiveDisplaySetting(settingsSnapshot, opts) {
+      const enabled = outboundsActiveDisplayEnabled(settingsSnapshot);
+      const statusEl = $(OUTBOUND_NODE_IDS.activeStatus);
+      if (statusEl) {
+        statusEl.classList.toggle('hidden', !enabled);
+        if (!enabled) {
+          statusEl.textContent = '';
+          statusEl.classList.remove('is-active');
+          statusEl.classList.add('is-unknown');
+        }
+      }
+      if (!enabled) {
+        _outboundsActiveLoadSeq += 1;
+        _outboundsActiveRuntime = null;
+        outboundsClearActivePoll();
+        if (!(opts && opts.render === false)) {
+          try { outboundsRenderNodeList(); } catch (e) {}
+        }
+      } else {
+        outboundsRenderActiveStatus();
+      }
+      return enabled;
+    }
+
+    async function outboundsEnsureSettingsLoaded() {
+      const api = getXkeenSettingsApi();
+      if (!api || typeof api.fetchOnce !== 'function') {
+        outboundsApplyActiveDisplaySetting(null, { render: false });
+        return null;
+      }
+      try {
+        const snapshot = await api.fetchOnce();
+        outboundsApplyActiveDisplaySetting(snapshot);
+        return snapshot;
+      } catch (e) {
+        outboundsApplyActiveDisplaySetting(null, { render: false });
+        return null;
+      }
+    }
+
+    function wireOutboundsSettings() {
+      if (_outboundsSettingsUnsubscribe) return _outboundsSettingsUnsubscribe;
+      const api = getXkeenSettingsApi();
+      if (api && typeof api.subscribe === 'function') {
+        _outboundsSettingsUnsubscribe = api.subscribe((snapshot, prevSnapshot) => {
+          const wasEnabled = outboundsActiveDisplayEnabled(prevSnapshot);
+          const enabled = outboundsApplyActiveDisplaySetting(snapshot);
+          if (enabled && !wasEnabled && Array.isArray(_outboundsNodes) && _outboundsNodes.length && outboundsBodyIsVisible()) {
+            try { refreshOutboundsActive(true, { fragment: getActiveFragment() || '' }); } catch (e) {}
+          }
+        }, { immediate: false });
+        return _outboundsSettingsUnsubscribe;
+      }
+      const onChanged = (event) => {
+        const snapshot = event && event.detail && event.detail.settings ? event.detail.settings : null;
+        const enabled = outboundsApplyActiveDisplaySetting(snapshot);
+        if (enabled && Array.isArray(_outboundsNodes) && _outboundsNodes.length && outboundsBodyIsVisible()) {
+          try { refreshOutboundsActive(true, { fragment: getActiveFragment() || '' }); } catch (e) {}
+        }
+      };
+      try { document.addEventListener('xkeen:ui-settings-changed', onChanged); } catch (e) {}
+      _outboundsSettingsUnsubscribe = () => {
+        try { document.removeEventListener('xkeen:ui-settings-changed', onChanged); } catch (e) {}
+      };
+      return _outboundsSettingsUnsubscribe;
+    }
+
+    function outboundsActiveNodeKey() {
+      const active = _outboundsActiveRuntime && typeof _outboundsActiveRuntime === 'object'
+        ? _outboundsActiveRuntime.active
+        : null;
+      return active && typeof active === 'object' ? String(active.key || '').trim() : '';
+    }
+
+    function outboundsActiveNodeTag() {
+      const active = _outboundsActiveRuntime && typeof _outboundsActiveRuntime === 'object'
+        ? _outboundsActiveRuntime.active
+        : null;
+      return active && typeof active === 'object' ? String(active.tag || '').trim() : '';
+    }
+
+    function outboundsNodeIsActive(node) {
+      if (!node || typeof node !== 'object') return false;
+      if (!outboundsActiveDisplayEnabled()) return false;
+      const activeKey = outboundsActiveNodeKey();
+      const activeTag = outboundsActiveNodeTag();
+      const nodeKey = String(node.key || '').trim();
+      const nodeTag = String(node.tag || '').trim();
+      return !!((activeKey && nodeKey && activeKey === nodeKey) || (activeTag && nodeTag && activeTag === nodeTag));
+    }
+
+    function outboundsSetActiveRuntime(runtime, opts) {
+      _outboundsActiveRuntime = (runtime && typeof runtime === 'object') ? runtime : null;
+      outboundsRenderActiveStatus();
+      if (!(opts && opts.render === false)) outboundsRenderNodeList();
+    }
+
+    function outboundsClearActivePoll() {
+      if (!_outboundsActivePollTimer) return;
+      try { clearTimeout(_outboundsActivePollTimer); } catch (e) {}
+      _outboundsActivePollTimer = null;
+    }
+
+    function outboundsBodyIsVisible() {
+      const body = $('outbounds-body');
+      if (!body) return false;
+      try {
+        if (body.style && body.style.display === 'none') return false;
+      } catch (e) {}
+      try {
+        const bodyStyle = (typeof window !== 'undefined' && typeof window.getComputedStyle === 'function')
+          ? window.getComputedStyle(body)
+          : null;
+        if (bodyStyle && bodyStyle.display === 'none') return false;
+      } catch (e2) {}
+      return true;
+    }
+
+    function outboundsScheduleActivePoll(fragment) {
+      outboundsClearActivePoll();
+      if (!outboundsActiveDisplayEnabled()) return;
+      const nodes = Array.isArray(_outboundsNodes) ? _outboundsNodes : [];
+      if (!nodes.length || !outboundsBodyIsVisible()) return;
+      const targetFragment = String(fragment != null ? fragment : getActiveFragment() || '').trim();
+      _outboundsActivePollTimer = setTimeout(() => {
+        _outboundsActivePollTimer = null;
+        try { refreshOutboundsActive(true, { fragment: targetFragment, poll: true }); } catch (e) {}
+      }, 12000);
+    }
+
+    function outboundsActiveRuntimeText() {
+      const runtime = _outboundsActiveRuntime && typeof _outboundsActiveRuntime === 'object' ? _outboundsActiveRuntime : {};
+      const active = runtime.active && typeof runtime.active === 'object' ? runtime.active : null;
+      if (active && (active.name || active.tag)) {
+        const label = String(active.name || active.tag || '').trim();
+        const tag = String(active.tag || '').trim();
+        const lastSeen = String(active.last_seen || '').trim();
+        const source = String(active.source || '').trim();
+        const tail = [
+          lastSeen ? `лог ${lastSeen}` : '',
+          source ? source : '',
+        ].filter(Boolean).join(' · ');
+        return `Сейчас/последний выбор: ${label}${tag && tag !== label ? ` (${tag})` : ''}${tail ? ` · ${tail}` : ''}`;
+      }
+      const reason = String(runtime.reason || '').trim();
+      if (reason === 'logs_unavailable') return 'Активный узел: логи Xray недоступны.';
+      if (reason === 'no_match') return 'Активный узел: пока не найден в последних логах.';
+      if (reason === 'no_nodes') return 'Активный узел: в фрагменте нет proxy-узлов.';
+      if (reason === 'runtime_error') return 'Активный узел: не удалось прочитать runtime-статус.';
+      return 'Активный узел: ожидаю данных Xray.';
+    }
+
+    function outboundsRenderActiveStatus() {
+      const el = $(OUTBOUND_NODE_IDS.activeStatus);
+      if (!el) return;
+      if (!outboundsActiveDisplayEnabled()) {
+        el.textContent = '';
+        el.classList.add('hidden');
+        el.classList.remove('is-active');
+        el.classList.add('is-unknown');
+        return;
+      }
+      const runtime = _outboundsActiveRuntime && typeof _outboundsActiveRuntime === 'object' ? _outboundsActiveRuntime : {};
+      const hasActive = !!(runtime.active && typeof runtime.active === 'object');
+      el.textContent = outboundsActiveRuntimeText();
+      el.classList.remove('hidden');
+      el.classList.toggle('is-active', hasActive);
+      el.classList.toggle('is-unknown', !hasActive);
+    }
+
     function outboundsSetNodesVisible(visible) {
       const panel = $(OUTBOUND_NODE_IDS.panel);
       if (!panel) return;
@@ -527,7 +722,9 @@ let outboundsModuleApi = null;
     function isCurrentOutboundsFragmentRequest(fragment, seq, kind) {
       const active = String(getActiveFragment() || '').trim();
       const expected = String(fragment || '').trim();
-      const currentSeq = kind === 'nodes' ? _outboundsNodesLoadSeq : _outboundsLoadSeq;
+      const currentSeq = kind === 'active'
+        ? _outboundsActiveLoadSeq
+        : (kind === 'nodes' ? _outboundsNodesLoadSeq : _outboundsLoadSeq);
       return seq === currentSeq && active === expected;
     }
 
@@ -586,6 +783,7 @@ let outboundsModuleApi = null;
           if (!body || body.style.display === 'none') return;
         } catch (e) {}
         try { scheduleOutboundsNodeListLayout(); } catch (e2) {}
+        try { refreshOutboundsActive(true, { fragment: getActiveFragment() || '' }); } catch (e3) {}
       };
 
       try {
@@ -620,12 +818,61 @@ let outboundsModuleApi = null;
         );
         const hasNodes = Array.isArray(data.nodes) && data.nodes.length > 0;
         outboundsSetNodesVisible(visible !== false && hasNodes);
-        if (visible !== false && hasNodes) scheduleOutboundsNodeListLayout();
+        if (visible !== false && hasNodes) {
+          scheduleOutboundsNodeListLayout();
+          try { refreshOutboundsActive(true, { fragment: requestFragment }); } catch (e) {}
+        } else {
+          outboundsSetActiveRuntime({ available: false, active: null, reason: hasNodes ? 'hidden' : 'no_nodes' }, { render: false });
+          outboundsClearActivePoll();
+        }
         return hasNodes;
       } catch (e) {
         if (!isCurrentOutboundsFragmentRequest(requestFragment, requestSeq, 'nodes')) return false;
         outboundsSetNodes([], {});
+        outboundsSetActiveRuntime({ available: false, active: null, reason: 'no_nodes' });
         outboundsSetNodesVisible(false);
+        outboundsClearActivePoll();
+        return false;
+      }
+    }
+
+    async function refreshOutboundsActive(visible, opts) {
+      const requestSeq = ++_outboundsActiveLoadSeq;
+      const requestFragment = String((opts && opts.fragment) != null ? opts.fragment : getActiveFragment() || '').trim();
+      const shouldPoll = !(opts && opts.poll === false);
+      try {
+        if (!outboundsActiveDisplayEnabled()) {
+          _outboundsActiveRuntime = null;
+          outboundsRenderActiveStatus();
+          outboundsClearActivePoll();
+          if (visible !== false) {
+            try { outboundsRenderNodeList(); } catch (e) {}
+          }
+          return false;
+        }
+        const nodes = Array.isArray(_outboundsNodes) ? _outboundsNodes : [];
+        if (visible === false || !nodes.length) {
+          outboundsSetActiveRuntime(
+            { available: false, active: null, reason: nodes.length ? 'hidden' : 'no_nodes' },
+            { render: visible !== false },
+          );
+          outboundsClearActivePoll();
+          return false;
+        }
+        const res = await fetch(outboundsActiveApiUrl(requestFragment), { cache: 'no-store' });
+        const data = await res.json().catch(() => ({}));
+        if (!isCurrentOutboundsFragmentRequest(requestFragment, requestSeq, 'active')) return false;
+        if (!res.ok || !data || data.ok === false) {
+          outboundsSetActiveRuntime({ available: false, active: null, reason: 'runtime_error' });
+          return false;
+        }
+        outboundsSetActiveRuntime(data);
+        if (shouldPoll) outboundsScheduleActivePoll(requestFragment);
+        return !!(data && data.active);
+      } catch (e) {
+        if (!isCurrentOutboundsFragmentRequest(requestFragment, requestSeq, 'active')) return false;
+        outboundsSetActiveRuntime({ available: false, active: null, reason: 'runtime_error' });
+        if (shouldPoll) outboundsScheduleActivePoll(requestFragment);
         return false;
       }
     }
@@ -683,21 +930,27 @@ let outboundsModuleApi = null;
         const latencyLabel = escapeHtml(subsNodeLatencyLabel(latencyEntry, pingBusy, canPing));
         const latencyTooltip = escapeHtml(subsNodeLatencyTooltip(latencyEntry, pingBusy, canPing));
         const latencyClass = subsNodeLatencyTone(latencyEntry, pingBusy, canPing);
+        const isActiveRoute = outboundsNodeIsActive(node);
+        const activePill = isActiveRoute
+          ? '<span class="xk-sub-node-pill xk-sub-node-pill-active-route">активен</span>'
+          : '';
+        const finalStateLabel = isActiveRoute ? 'сейчас' : stateLabel;
         rows.push(`
-          <div class="xk-sub-node-item xk-outbounds-node-item is-enabled" data-node-key="${key}">
+          <div class="xk-sub-node-item xk-outbounds-node-item is-enabled ${isActiveRoute ? 'is-active-route' : ''}" data-node-key="${key}">
             <div class="xk-sub-node-main">
               <div class="xk-sub-node-name">${name}</div>
               <div class="xk-sub-node-meta">
                 ${protocol ? `<span class="xk-sub-node-pill">${protocol}</span>` : ''}
                 ${transport ? `<span class="xk-sub-node-pill xk-sub-node-pill-transport">${transport}</span>` : ''}
                 ${security ? `<span class="xk-sub-node-pill xk-sub-node-pill-security">${security}</span>` : ''}
+                ${activePill}
                 ${endpoint ? `<span class="xk-sub-node-endpoint">${endpoint}</span>` : ''}
               </div>
               ${detail ? `<div class="xk-sub-node-detail">${detail}</div>` : ''}
             </div>
             <div class="xk-sub-node-side">
               <div class="xk-sub-node-latency ${latencyClass}" data-tooltip="${latencyTooltip}">${latencyLabel}</div>
-              <div class="xk-sub-node-state is-enabled">${stateLabel}</div>
+              <div class="xk-sub-node-state is-enabled ${isActiveRoute ? 'is-active-route' : ''}">${finalStateLabel}</div>
               <div class="xk-sub-node-actions">
                 <button type="button" class="btn-secondary btn-compact xk-sub-node-ping xk-outbounds-node-ping ${pingBusy ? 'is-busy' : ''}" data-node-key="${key}" title="Проверить задержку" data-tooltip="${escapeHtml(canPing ? 'Проверить задержку этого proxy-узла.' : 'Узел нельзя проверить: не найден tag.')}" aria-label="Проверить задержку" ${canPing ? '' : 'disabled'}>
                   <span class="xk-sub-icon-glyph" aria-hidden="true">⏱</span>
@@ -1942,7 +2195,12 @@ let outboundsModuleApi = null;
 
       const willOpen = body.style.display === 'none';
       body.style.display = willOpen ? 'block' : 'none';
-      if (willOpen) scheduleOutboundsNodeListLayout();
+      if (willOpen) {
+        scheduleOutboundsNodeListLayout();
+        try { refreshOutboundsActive(true, { fragment: getActiveFragment() || '' }); } catch (e) {}
+      } else {
+        outboundsClearActivePoll();
+      }
       arrow.textContent = willOpen ? '▲' : '▼';
 
       try {
@@ -6868,11 +7126,15 @@ let outboundsModuleApi = null;
         }, 'outbounds-init');
       } catch (e) {}
 
+      wireOutboundsSettings();
+      outboundsApplyActiveDisplaySetting(null, { render: false });
+      void outboundsEnsureSettingsLoaded();
+
       setCollapsedFromStorage();
       wireHeader('outbounds-header', toggleCard);
 
       // Fragment selector
-      refreshFragmentsList();
+      const initialFragmentsReady = refreshFragmentsList();
 
       // Buttons
       bindConfigAction('outbounds-save-btn', save);
@@ -6906,7 +7168,9 @@ let outboundsModuleApi = null;
       wireButton(OUTBOUND_NODE_IDS.pingAll, () => {
         outboundsProbeAllNodes();
       });
-      load();
+      Promise.resolve(initialFragmentsReady)
+        .catch(() => null)
+        .then(() => load());
     }
 
     return {

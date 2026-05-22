@@ -59,6 +59,10 @@ from services.xray_subscriptions import (
     probe_xray_outbounds_node_latency,
     probe_xray_outbounds_nodes_latency,
 )
+from services.xray_outbounds_runtime import (
+    infer_active_xray_outbound,
+    read_xray_outbound_runtime_log_sources,
+)
 
 
 from routes.common.errors import error_response, exception_response
@@ -869,6 +873,34 @@ def create_xray_configs_blueprint(
                     "path": selection.get("path"),
                     "nodes": nodes,
                     "node_latency": latency,
+                }
+            ),
+            200,
+        )
+
+    @bp.get("/api/xray/outbounds/active")
+    def api_xray_outbounds_active():
+        file_arg = request.args.get("file", "")
+        selection = _load_outbounds_selection(file_arg)
+        nodes = build_xray_outbounds_nodes(selection.get("config"))
+        try:
+            log_sources = read_xray_outbound_runtime_log_sources(max_lines=1200)
+            runtime = infer_active_xray_outbound(nodes, log_sources)
+        except Exception as exc:
+            runtime = {
+                "available": False,
+                "active": None,
+                "reason": "runtime_error",
+                "message": f"Не удалось определить выбранный Xray outbound: {exc}",
+            }
+        return (
+            jsonify(
+                {
+                    "ok": True,
+                    "file": os.path.basename(str(selection.get("path") or "")),
+                    "path": selection.get("path"),
+                    "nodes_count": len(nodes),
+                    **runtime,
                 }
             ),
             200,

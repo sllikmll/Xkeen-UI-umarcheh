@@ -41,6 +41,7 @@
     routing: {
       guiEnabled: false,
       autoApply: false,
+      showActiveOutbound: false,
     },
   };
 

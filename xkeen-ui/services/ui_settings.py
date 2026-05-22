@@ -87,6 +87,9 @@ DEFAULTS: Dict[str, Any] = {
         # Auto-apply routing card edits back into the JSON editor.
         # Default OFF: let users opt in to the extra sync work explicitly.
         "autoApply": False,
+        # Show runtime-selected outbound in the 04_outbounds proxy card.
+        # Default OFF: it depends on Xray logs and adds polling while the card is open.
+        "showActiveOutbound": False,
     },
 }
 
@@ -155,6 +158,7 @@ def _canonical_empty() -> Dict[str, Any]:
         "routing": {
             "guiEnabled": bool(DEFAULTS["routing"]["guiEnabled"]),
             "autoApply": bool(DEFAULTS["routing"]["autoApply"]),
+            "showActiveOutbound": bool(DEFAULTS["routing"]["showActiveOutbound"]),
         },
     }
 
@@ -434,8 +438,16 @@ def _sanitize_full(raw: Any) -> Tuple[Dict[str, Any], SettingsReport]:
                 rep.warnings.append({"path": "routing.autoApply", "warning": "invalid type; ignored"})
                 rep.changed = True
 
+        show_active_outbound = routing_raw.get("showActiveOutbound")
+        if show_active_outbound is not None:
+            if _is_bool(show_active_outbound):
+                out["routing"]["showActiveOutbound"] = bool(show_active_outbound)
+            else:
+                rep.warnings.append({"path": "routing.showActiveOutbound", "warning": "invalid type; ignored"})
+                rep.changed = True
+
         for k in routing_raw.keys():
-            if k not in ("guiEnabled", "autoApply"):
+            if k not in ("guiEnabled", "autoApply", "showActiveOutbound"):
                 rep.warnings.append({"path": f"routing.{k}", "warning": "unknown key dropped"})
                 rep.changed = True
 
@@ -630,8 +642,15 @@ def _sanitize_patch(patch: Any) -> Tuple[Dict[str, Any], SettingsReport]:
                 else:
                     rep.errors.append({"path": "routing.autoApply", "error": "must be boolean"})
 
+            if "showActiveOutbound" in routing_patch:
+                v = routing_patch.get("showActiveOutbound")
+                if _is_bool(v):
+                    p["showActiveOutbound"] = bool(v)
+                else:
+                    rep.errors.append({"path": "routing.showActiveOutbound", "error": "must be boolean"})
+
             for k in routing_patch.keys():
-                if k not in ("guiEnabled", "autoApply"):
+                if k not in ("guiEnabled", "autoApply", "showActiveOutbound"):
                     rep.warnings.append({"path": f"routing.{k}", "warning": "unknown key dropped"})
 
             if p:

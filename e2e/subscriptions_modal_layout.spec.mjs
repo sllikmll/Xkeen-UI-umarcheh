@@ -100,6 +100,62 @@ test('main outbounds card keeps proxy nodes inside scrollable panel', async ({ p
   const nodes = buildDemoNodes();
   const nodeLatency = buildNodeLatency(nodes);
 
+  await page.addInitScript(() => {
+    localStorage.setItem('xkeen.outbounds.fragment', '04_outbounds.json');
+  });
+
+  await page.route('**/api/ui-settings', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        settings: {
+          schemaVersion: 2,
+          editor: {
+            engine: 'codemirror',
+            codemirrorFontScale: 100,
+            monacoFontScale: 100,
+            schemaHoverEnabled: true,
+            beginnerModeEnabled: true,
+            expertModeEnabled: false,
+          },
+          format: { preferPrettier: false, tabWidth: 2, printWidth: 80 },
+          logs: { ansi: false, ws2: false, view: {} },
+          routing: {
+            guiEnabled: false,
+            autoApply: false,
+            showActiveOutbound: true,
+          },
+        },
+      }),
+    });
+  });
+
+  await page.route('**/api/outbounds/fragments', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        dir: '/tmp/xray/configs',
+        current: '04_outbounds.json',
+        items: [{ name: '04_outbounds.json' }],
+      }),
+    });
+  });
+
+  const outboundsPayload = {
+    ok: true,
+    file: '04_outbounds.json',
+    url: 'vless://demo@example.com:443?type=tcp&security=reality#demo',
+    config: {
+      outbounds: [
+        { tag: 'proxy', protocol: 'vless' },
+      ],
+    },
+  };
+
   await page.route('**/api/outbounds', async (route) => {
     if (route.request().method() !== 'GET') {
       await route.fallback();
@@ -108,16 +164,19 @@ test('main outbounds card keeps proxy nodes inside scrollable panel', async ({ p
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({
-        ok: true,
-        file: '04_outbounds.json',
-        url: 'vless://demo@example.com:443?type=tcp&security=reality#demo',
-        config: {
-          outbounds: [
-            { tag: 'proxy', protocol: 'vless' },
-          ],
-        },
-      }),
+      body: JSON.stringify(outboundsPayload),
+    });
+  });
+
+  await page.route('**/api/outbounds?**', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(outboundsPayload),
     });
   });
 
@@ -133,9 +192,31 @@ test('main outbounds card keeps proxy nodes inside scrollable panel', async ({ p
     });
   });
 
+  await page.route('**/api/xray/outbounds/active**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        available: true,
+        reason: 'observed',
+        active: {
+          key: nodes[1].key,
+          tag: nodes[1].tag,
+          name: nodes[1].name,
+          source: 'access',
+          last_seen: '2026/05/22 20:10:05',
+        },
+      }),
+    });
+  });
+
   await openOutboundsPanel(page);
   await expect(page.locator('#outbounds-nodes-panel')).toBeVisible();
   await expect(page.locator('#outbounds-nodes-list .xk-outbounds-node-item')).toHaveCount(nodes.length);
+  await expect(page.locator('#outbounds-active-node-status')).toContainText('Сейчас/последний выбор');
+  await expect(page.locator('#outbounds-nodes-list .xk-outbounds-node-item.is-active-route')).toHaveCount(1);
+  await expect(page.locator('#outbounds-nodes-list .xk-outbounds-node-item.is-active-route')).toContainText(nodes[1].name);
   await page.waitForTimeout(250);
 
   const layout = await page.evaluate(() => {

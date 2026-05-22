@@ -74,6 +74,8 @@ def test_outbounds_card_exposes_current_proxy_nodes_and_ping_controls():
     outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
     styles_src = _read("xkeen-ui/static/styles.css")
     routes_src = _read("xkeen-ui/routes/xray_configs.py")
+    settings_src = _read("xkeen-ui/static/js/ui/settings.js")
+    settings_panel_src = _read("xkeen-ui/static/js/ui/settings_panel.js")
 
     assert 'id="outbounds-nodes-panel"' in template_src
     assert 'id="outbounds-nodes-pingall"' in template_src
@@ -85,6 +87,11 @@ def test_outbounds_card_exposes_current_proxy_nodes_and_ping_controls():
     assert "function refreshOutboundsNodes(visible, opts) {" in outbounds_src
     assert "if (isSubscriptionFragmentMode()) {\n        outboundsSetNodes([], {});" not in outbounds_src
     assert "const isSubscription = isSubscriptionFragmentMode();" in outbounds_src
+    assert "activeStatus: 'outbounds-active-node-status'" in outbounds_src
+    assert "function refreshOutboundsActive(visible, opts) {" in outbounds_src
+    assert "/api/xray/outbounds/active" in outbounds_src
+    assert "xk-sub-node-pill-active-route" in outbounds_src
+    assert "is-active-route" in outbounds_src
     assert "summaryEl.innerHTML = '';" in outbounds_src
     assert "summaryEl.classList.add('hidden');" in outbounds_src
     assert "const stateLabel = isSubscription ? '\\u0432\\u043a\\u043b\\u044e\\u0447\\u0451\\u043d' : (tag || 'proxy');" in outbounds_src
@@ -96,8 +103,18 @@ def test_outbounds_card_exposes_current_proxy_nodes_and_ping_controls():
     assert "if (busy) btn.setAttribute('aria-busy', 'true');" in outbounds_src
     assert "else btn.removeAttribute('aria-busy');" in outbounds_src
     assert "/api/xray/outbounds/nodes" in outbounds_src
+    assert "/api/xray/outbounds/active" in routes_src
     assert "/api/xray/outbounds/nodes/ping" in routes_src
     assert "/api/xray/outbounds/nodes/ping-bulk" in routes_src
+    assert 'id="outbounds-active-node-status"' in template_src
+    assert 'class="xk-outbounds-active-status is-unknown hidden"' in template_src
+    assert "showActiveOutbound: false" in settings_src
+    assert "routing.showActiveOutbound" in settings_panel_src
+    assert "Показывать активный сервер в Прокси" in settings_panel_src
+    assert "function outboundsActiveDisplayEnabled(settingsSnapshot) {" in outbounds_src
+    assert "void outboundsEnsureSettingsLoaded();" in outbounds_src
+    assert ".xk-outbounds-active-status" in styles_src
+    assert ".xk-outbounds-node-item.is-active-route" in styles_src
     assert ".xk-outbounds-node-panel {" in styles_src
     assert ".xk-outbounds-node-list" in styles_src
     assert ".xk-outbounds-node-panel {\n  flex: 1 1 auto;" in styles_src
@@ -120,8 +137,9 @@ def test_outbounds_pool_nodes_relayout_after_card_open_and_async_load():
     assert "try { requestAnimationFrame(run); } catch (e) { setTimeout(run, 0); }" in outbounds_src
     assert "setTimeout(run, 60);" in outbounds_src
     assert "setTimeout(run, 180);" in outbounds_src
-    assert "if (visible !== false && hasNodes) scheduleOutboundsNodeListLayout();" in outbounds_src
-    assert "if (willOpen) scheduleOutboundsNodeListLayout();" in outbounds_src
+    assert "if (visible !== false && hasNodes) {\n          scheduleOutboundsNodeListLayout();" in outbounds_src
+    assert "refreshOutboundsActive(true, { fragment: requestFragment });" in outbounds_src
+    assert "if (willOpen) {\n        scheduleOutboundsNodeListLayout();" in outbounds_src
     assert "setTimeout(rerunLayout, 120);" in outbounds_src
     assert "setTimeout(rerunLayout, 260);" in outbounds_src
     assert "onShow," in outbounds_src

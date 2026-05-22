@@ -318,6 +318,68 @@ def test_xray_inbound_tags_all_includes_loopback_outbound_inboundtag_refs(tmp_pa
     ]
 
 
+def test_xray_outbounds_active_endpoint_marks_last_observed_node(tmp_path, monkeypatch):
+    configs_dir = tmp_path / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    configs_dir.mkdir()
+    jsonc_dir.mkdir()
+
+    outbounds_name = "04_outbounds.demo.json"
+    (configs_dir / outbounds_name).write_text(
+        json.dumps(
+            {
+                "outbounds": [
+                    {
+                        "tag": "demo--A",
+                        "protocol": "vless",
+                        "settings": {"address": "a.example", "port": 443},
+                    },
+                    {
+                        "tag": "demo--B",
+                        "protocol": "vless",
+                        "settings": {"address": "b.example", "port": 443},
+                    },
+                ]
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        xray_configs_mod,
+        "resolve_xray_fragment_file",
+        lambda file_arg, *, kind, default_path: str(configs_dir / (file_arg or outbounds_name)),
+    )
+    monkeypatch.setattr(
+        xray_configs_mod,
+        "jsonc_path_for",
+        lambda main_path: str(jsonc_dir / (Path(main_path).name + "c")),
+    )
+    monkeypatch.setattr(
+        xray_configs_mod,
+        "read_xray_outbound_runtime_log_sources",
+        lambda max_lines=1200: {
+            "access": [
+                "2026/05/22 20:10:01 tcp:10.0.0.2:50000 accepted tcp:example.com:443 [demo--A]\n",
+                "2026/05/22 20:10:05 tcp:10.0.0.2:50001 accepted tcp:example.org:443 [demo--B]\n",
+            ]
+        },
+    )
+
+    app = _make_app()
+    with app.test_client() as client:
+        response = client.get(f"/api/xray/outbounds/active?file={outbounds_name}")
+
+    payload = response.get_json()
+    assert response.status_code == 200
+    assert payload["available"] is True
+    assert payload["active"]["tag"] == "demo--B"
+    assert payload["active"]["last_seen"] == "2026/05/22 20:10:05"
+
+
 def test_api_set_outbounds_matches_single_link_tag_to_current_routing_vless_reality(tmp_path, monkeypatch):
     configs_dir = tmp_path / "configs"
     configs_dir.mkdir()
