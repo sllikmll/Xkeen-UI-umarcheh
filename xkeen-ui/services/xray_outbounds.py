@@ -29,6 +29,105 @@ PROXY_OUTBOUND_TAG = "proxy"
 # Исторический tag из ранних версий панели (использовался в подсветке логов).
 # Мы добавляем его как алиас для совместимости.
 LEGACY_VLESS_TAG = "vless-reality"
+SOCKOPT_MARK_EXCLUDED_PROTOCOLS = {"blackhole", "dns"}
+_MISSING_SOCKOPT_MARK = object()
+
+
+def _clone_json_value(value: Any) -> Any:
+    try:
+        return json.loads(json.dumps(value, ensure_ascii=False))
+    except Exception:
+        return value
+
+
+def _config_outbounds_list(config: Any) -> List[Dict[str, Any]]:
+    raw = config.get("outbounds") if isinstance(config, dict) else config if isinstance(config, list) else []
+    if not isinstance(raw, list):
+        return []
+    return [item for item in raw if isinstance(item, dict)]
+
+
+def _outbound_protocol(outbound: Any) -> str:
+    return str(outbound.get("protocol") or "").strip().lower() if isinstance(outbound, dict) else ""
+
+
+def _outbound_should_carry_sockopt_mark(outbound: Any) -> bool:
+    protocol = _outbound_protocol(outbound)
+    return bool(protocol and protocol not in SOCKOPT_MARK_EXCLUDED_PROTOCOLS)
+
+
+def _outbound_sockopt_mark(outbound: Any) -> Any:
+    if not isinstance(outbound, dict):
+        return _MISSING_SOCKOPT_MARK
+    stream = outbound.get("streamSettings")
+    if not isinstance(stream, dict):
+        return _MISSING_SOCKOPT_MARK
+    sockopt = stream.get("sockopt")
+    if not isinstance(sockopt, dict) or "mark" not in sockopt:
+        return _MISSING_SOCKOPT_MARK
+    return sockopt.get("mark")
+
+
+def collect_sockopt_mark_profile(config: Any) -> Dict[str, Any]:
+    """Collect existing outbound sockopt.mark values for generated configs."""
+    profile: Dict[str, Any] = {"default": _MISSING_SOCKOPT_MARK, "by_protocol": {}, "by_tag": {}}
+    for outbound in _config_outbounds_list(config):
+        if not _outbound_should_carry_sockopt_mark(outbound):
+            continue
+        mark = _outbound_sockopt_mark(outbound)
+        if mark is _MISSING_SOCKOPT_MARK:
+            continue
+        tag = str(outbound.get("tag") or "").strip()
+        protocol = _outbound_protocol(outbound)
+        if tag:
+            profile["by_tag"].setdefault(tag, _clone_json_value(mark))
+        if protocol:
+            profile["by_protocol"].setdefault(protocol, _clone_json_value(mark))
+        if profile["default"] is _MISSING_SOCKOPT_MARK:
+            profile["default"] = _clone_json_value(mark)
+    return profile
+
+
+def _sockopt_mark_for_outbound(outbound: Dict[str, Any], profile: Dict[str, Any]) -> Any:
+    if not isinstance(profile, dict):
+        return _MISSING_SOCKOPT_MARK
+    tag = str(outbound.get("tag") or "").strip()
+    protocol = _outbound_protocol(outbound)
+    by_tag = profile.get("by_tag") if isinstance(profile.get("by_tag"), dict) else {}
+    by_protocol = profile.get("by_protocol") if isinstance(profile.get("by_protocol"), dict) else {}
+    if tag and tag in by_tag:
+        return _clone_json_value(by_tag[tag])
+    if protocol and protocol in by_protocol:
+        return _clone_json_value(by_protocol[protocol])
+    return _clone_json_value(profile.get("default", _MISSING_SOCKOPT_MARK))
+
+
+def apply_sockopt_mark_profile(config: Any, profile: Dict[str, Any]) -> int:
+    """Apply collected sockopt.mark to markable outbounds that lack it.
+
+    Xray traffic proxying for Entware expects the mark on every outbound except
+    blackhole and dns. Existing marks are left intact.
+    """
+    changed = 0
+    for outbound in _config_outbounds_list(config):
+        if not _outbound_should_carry_sockopt_mark(outbound):
+            continue
+        if _outbound_sockopt_mark(outbound) is not _MISSING_SOCKOPT_MARK:
+            continue
+        mark = _sockopt_mark_for_outbound(outbound, profile)
+        if mark is _MISSING_SOCKOPT_MARK:
+            continue
+        stream = outbound.get("streamSettings")
+        if not isinstance(stream, dict):
+            stream = {}
+            outbound["streamSettings"] = stream
+        sockopt = stream.get("sockopt")
+        if not isinstance(sockopt, dict):
+            sockopt = {}
+            stream["sockopt"] = sockopt
+        sockopt["mark"] = mark
+        changed += 1
+    return changed
 
 
 def _normalize_proxy_tags(tags: Any, fallback: str = PROXY_OUTBOUND_TAG) -> List[str]:

@@ -29,7 +29,12 @@ from urllib.parse import parse_qs, unquote, urlparse
 from services.io.atomic import _atomic_write_json, _atomic_write_text
 from services.url_policy import URLPolicy, env_flag, is_url_allowed
 from services.xray_config_files import OUTBOUNDS_FILE, ROUTING_FILE, ensure_xray_jsonc_dir, jsonc_path_for
-from services.xray_outbounds import LEGACY_VLESS_TAG, build_proxy_outbound_from_link
+from services.xray_outbounds import (
+    LEGACY_VLESS_TAG,
+    apply_sockopt_mark_profile,
+    build_proxy_outbound_from_link,
+    collect_sockopt_mark_profile,
+)
 from utils.fs import load_text
 
 
@@ -2640,6 +2645,11 @@ def _load_proxy_outbound_tags(path: str) -> List[str]:
     return tags
 
 
+def _load_outbounds_sockopt_mark_profile(xray_configs_dir: str) -> Dict[str, Any]:
+    path = _config_fragment_path(xray_configs_dir, OUTBOUNDS_FILE)
+    return collect_sockopt_mark_profile(_read_json_file(path, {}))
+
+
 def _preserved_balancer_tags(xray_configs_dir: str) -> List[str]:
     path = _config_fragment_path(xray_configs_dir, OUTBOUNDS_FILE)
     available = set(_load_outbound_tags(path))
@@ -4092,6 +4102,8 @@ def refresh_subscription(
                 if not outbounds:
                     raise RuntimeError("no_valid_outbounds")
 
+        mark_profile = _load_outbounds_sockopt_mark_profile(xray_configs_dir)
+        apply_sockopt_mark_profile(outbounds, mark_profile)
         generated_baselines = _subscription_generated_baselines(outbounds, preview_nodes)
         outbounds, manual_edits_preserved = _apply_subscription_manual_overrides(outbounds, preview_nodes, manual_overrides)
         tags = [str(ob.get("tag") or "").strip() for ob in outbounds if isinstance(ob, dict) and ob.get("tag")]

@@ -330,6 +330,89 @@ def test_refresh_subscription_preserves_manual_outbound_edits_on_update(tmp_path
     assert refreshed["streamSettings"]["realitySettings"]["shortId"] == "new"
 
 
+def test_subscription_refresh_and_delete_preserve_outbounds_sockopt_marks(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+
+    base_outbounds = {
+        "outbounds": [
+            {
+                "tag": "vless-reality",
+                "protocol": "vless",
+                "streamSettings": {
+                    "network": "tcp",
+                    "security": "reality",
+                    "sockopt": {"mark": 255},
+                },
+            },
+            {
+                "tag": "direct",
+                "protocol": "freedom",
+                "streamSettings": {"sockopt": {"mark": 255}},
+            },
+            {
+                "tag": "block",
+                "protocol": "blackhole",
+                "settings": {"response": {"type": "http"}},
+            },
+        ]
+    }
+    base_path = xray_dir / "04_outbounds.json"
+    base_path.write_text(json.dumps(base_outbounds, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+    monkeypatch.setattr(subs, "fetch_subscription_body", lambda _url: (_vless_reality("Alpha"), {}))
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "marked-sub",
+            "name": "Marked Sub",
+            "tag": "demo",
+            "url": "https://example.com/sub",
+            "enabled": True,
+            "ping_enabled": False,
+        },
+    )
+
+    refreshed = subs.refresh_subscription(
+        str(ui_state_dir),
+        "marked-sub",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=lambda **_kwargs: True,
+        restart=False,
+    )
+
+    assert refreshed["ok"] is True
+    sub_path = xray_dir / "04_outbounds.marked-sub.json"
+    sub_config = json.loads(sub_path.read_text(encoding="utf-8"))
+    assert sub_config["outbounds"][0]["streamSettings"]["sockopt"]["mark"] == 255
+
+    deleted = subs.delete_subscription(
+        str(ui_state_dir),
+        "marked-sub",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        remove_file=True,
+        restart_xkeen=lambda **_kwargs: True,
+    )
+
+    assert deleted["deleted"]["id"] == "marked-sub"
+    assert deleted["output_removed"] is True
+    assert not sub_path.exists()
+    restored_base = json.loads(base_path.read_text(encoding="utf-8"))
+    assert restored_base["outbounds"][0]["streamSettings"]["sockopt"]["mark"] == 255
+    assert restored_base["outbounds"][1]["streamSettings"]["sockopt"]["mark"] == 255
+
+
 def test_refresh_subscription_turns_manual_node_deletion_into_saved_exclusion(tmp_path: Path, monkeypatch):
     from services import xray_subscriptions as subs
 

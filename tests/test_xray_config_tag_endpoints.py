@@ -566,3 +566,76 @@ def test_api_set_outbounds_matches_single_link_tag_to_current_routing_proxy(tmp_
 
     saved = json.loads(outbounds_path.read_text(encoding="utf-8"))
     assert [item["tag"] for item in saved["outbounds"]] == ["proxy", "direct", "block"]
+
+
+def test_api_set_outbounds_preserves_existing_sockopt_marks_for_generated_link(tmp_path, monkeypatch):
+    configs_dir = tmp_path / "configs"
+    configs_dir.mkdir()
+    outbounds_path = configs_dir / "04_outbounds.json"
+    routing_path = configs_dir / "05_routing.json"
+    routing_path.write_text(
+        json.dumps(
+            {
+                "routing": {
+                    "rules": [
+                        {"type": "field", "outboundTag": "vless-reality", "network": "tcp,udp"},
+                    ]
+                }
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    outbounds_path.write_text(
+        json.dumps(
+            {
+                "outbounds": [
+                    {
+                        "tag": "vless-reality",
+                        "protocol": "vless",
+                        "streamSettings": {
+                            "network": "tcp",
+                            "security": "reality",
+                            "sockopt": {"mark": 255},
+                        },
+                    },
+                    {
+                        "tag": "direct",
+                        "protocol": "freedom",
+                        "streamSettings": {"sockopt": {"mark": 255}},
+                    },
+                    {
+                        "tag": "block",
+                        "protocol": "blackhole",
+                        "settings": {"response": {"type": "http"}},
+                    },
+                ]
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(xray_configs_mod, "ROUTING_FILE", str(routing_path))
+    monkeypatch.setattr(
+        xray_configs_mod,
+        "resolve_xray_fragment_file",
+        lambda file_arg, *, kind, default_path: str(outbounds_path),
+    )
+
+    app = _make_app()
+    with app.test_client() as client:
+        response = client.post("/api/outbounds", json={"url": _vless_url(), "restart": False})
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+
+    saved = json.loads(outbounds_path.read_text(encoding="utf-8"))
+    assert saved["outbounds"][0]["streamSettings"]["sockopt"]["mark"] == 255
+    assert saved["outbounds"][1]["streamSettings"]["sockopt"]["mark"] == 255
+    assert "streamSettings" not in saved["outbounds"][2]

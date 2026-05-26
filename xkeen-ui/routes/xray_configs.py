@@ -49,9 +49,11 @@ from services.xray_inbounds import (
 )
 from services.xray_outbounds import (
     PROXY_OUTBOUND_TAG,
+    apply_sockopt_mark_profile,
     build_outbounds_config_from_link,
     build_proxy_outbound_from_link,
     build_proxy_url_from_config,
+    collect_sockopt_mark_profile,
 )
 from services.xray_subscriptions import (
     build_xray_outbounds_nodes,
@@ -845,6 +847,8 @@ def create_xray_configs_blueprint(
                     url,
                     proxy_tags=_single_link_outbound_tags_for_current_routing(),
                 )
+                mark_profile = collect_sockopt_mark_profile(load_json(sel_path, default={}))
+                apply_sockopt_mark_profile(cfg, mark_profile)
             except Exception:
                 return _xray_error(
                     "Ссылка прокси имеет некорректный или неподдерживаемый формат.",
