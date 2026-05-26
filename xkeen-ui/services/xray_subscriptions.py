@@ -3005,6 +3005,18 @@ def _choose_insert_index(rules: List[Any]) -> int:
     return len(rules)
 
 
+def _choose_subscription_only_insert_index(rules: List[Any]) -> int:
+    fallback = _choose_insert_index(rules)
+    if not isinstance(rules, list) or not rules:
+        return fallback
+    for idx, rule in enumerate(rules):
+        if idx >= fallback:
+            break
+        if _is_proxy_inbound_catchall_rule(rule):
+            return idx
+    return fallback
+
+
 def _unique_balancer_tag(balancers: List[Any], preferred: str) -> str:
     used = {
         str(item.get("tag") or "").strip()
@@ -3277,7 +3289,12 @@ def _ensure_least_ping_balancer(
     return before != balancer
 
 
-def _ensure_default_balancer_rule(routing: Dict[str, Any], *, balancer_tag: str) -> bool:
+def _ensure_default_balancer_rule(
+    routing: Dict[str, Any],
+    *,
+    balancer_tag: str,
+    subscription_only: bool = False,
+) -> bool:
     rules = routing.get("rules")
     if not isinstance(rules, list):
         rules = []
@@ -3305,7 +3322,7 @@ def _ensure_default_balancer_rule(routing: Dict[str, Any], *, balancer_tag: str)
     rule["balancerTag"] = str(balancer_tag or AUTO_BALANCER_TAG).strip() or AUTO_BALANCER_TAG
     rule["inboundTag"] = ["redirect", "tproxy"]
     rule["ruleTag"] = AUTO_BALANCER_RULE_TAG
-    insert_at = _choose_insert_index(rules)
+    insert_at = _choose_subscription_only_insert_index(rules) if subscription_only else _choose_insert_index(rules)
     rules.insert(insert_at, rule)
     return before_idx != insert_at or before_rule != rule
 
@@ -3373,26 +3390,26 @@ def sync_subscription_routing(
         balancer.get("selector") if isinstance(balancer, dict) and isinstance(balancer.get("selector"), list) else []
     )
 
-    selector: List[str] = []
-    seen: set[str] = set()
-    for tag in current_selector:
-        if tag in remove or tag in seen:
-            continue
-        if subscription_only and tag in subscription_only_excluded_tags:
-            continue
-        seen.add(tag)
-        selector.append(tag)
-    for tag in add:
-        if tag in seen:
-            continue
-        seen.add(tag)
-        selector.append(tag)
-
-    if selector and not subscription_only:
-        for tag in _preserved_balancer_tags(xray_configs_dir):
+    if subscription_only:
+        selector = _clean_tags_list(add)
+    else:
+        selector = []
+        seen: set[str] = set()
+        for tag in current_selector:
+            if tag in remove or tag in seen:
+                continue
+            seen.add(tag)
+            selector.append(tag)
+        for tag in add:
             if tag in seen:
                 continue
             seen.add(tag)
+            selector.append(tag)
+
+    if selector and not subscription_only:
+        for tag in _preserved_balancer_tags(xray_configs_dir):
+            if tag in selector:
+                continue
             selector.append(tag)
 
     changed = bool(normalized_model)
@@ -3411,7 +3428,11 @@ def sync_subscription_routing(
             balancer_tag=balancer_tag,
             selector_tags=selector,
         )
-        rule_changed = _ensure_default_balancer_rule(routing, balancer_tag=balancer_tag)
+        rule_changed = _ensure_default_balancer_rule(
+            routing,
+            balancer_tag=balancer_tag,
+            subscription_only=subscription_only,
+        )
         migrate_stats = _sync_vless_reality_rules_to_balancer(
             routing,
             balancer_tag=balancer_tag,
@@ -3606,6 +3627,7 @@ def sync_subscription_runtime_plan_delta(
         remove_tags=observatory_remove_tags,
         managed_active=next_has_runtime_targets,
         snapshot=snapshot,
+        replace_subjects=next_subscription_only and bool(next_observatory_terms),
     )
 
     selector: List[str] = []
@@ -3625,7 +3647,7 @@ def sync_subscription_runtime_plan_delta(
             + scenario_owned_selector_terms
             + (subscription_only_excluded_tags if next_subscription_only else [])
         )
-        selector = _subtract_selector_terms(current_selector, remove_terms)
+        selector = [] if next_subscription_only else _subtract_selector_terms(current_selector, remove_terms)
         selector = _merge_selector_terms(selector, next_auto_terms)
         if not next_subscription_only:
             selector = _merge_selector_terms(selector, preserved_tags)
@@ -3637,7 +3659,14 @@ def sync_subscription_runtime_plan_delta(
             )
             or changed
         )
-        changed = bool(_ensure_default_balancer_rule(routing, balancer_tag=balancer_tag) or changed)
+        changed = bool(
+            _ensure_default_balancer_rule(
+                routing,
+                balancer_tag=balancer_tag,
+                subscription_only=next_subscription_only,
+            )
+            or changed
+        )
     else:
         changed = bool(_remove_auto_balancer_rule(routing) or changed)
         if isinstance(balancer, dict):
@@ -3761,15 +3790,14 @@ def sync_subscription_routing_plan(
 
     if auto_terms:
         balancer_tag = _choose_auto_balancer_tag(routing)
-        subscription_only_excluded_tags = _subscription_only_excluded_runtime_tags(xray_configs_dir) if subscription_only else []
         balancer = _find_balancer_by_tag(routing.get("balancers", []), balancer_tag)
         current_selector = _clean_tags_list(
             balancer.get("selector") if isinstance(balancer, dict) and isinstance(balancer.get("selector"), list) else []
         )
-        selector = _merge_selector_terms(current_selector, auto_terms)
         if subscription_only:
-            selector = [tag for tag in selector if tag not in subscription_only_excluded_tags]
+            selector = _merge_selector_terms([], auto_terms)
         else:
+            selector = _merge_selector_terms(current_selector, auto_terms)
             for tag in _preserved_balancer_tags(xray_configs_dir):
                 if tag not in selector:
                     selector.append(tag)
@@ -3781,7 +3809,14 @@ def sync_subscription_routing_plan(
             )
             or changed
         )
-        changed = bool(_ensure_default_balancer_rule(routing, balancer_tag=balancer_tag) or changed)
+        changed = bool(
+            _ensure_default_balancer_rule(
+                routing,
+                balancer_tag=balancer_tag,
+                subscription_only=subscription_only,
+            )
+            or changed
+        )
         strict_enabled = (
             _routing_mode_migrates_vless(mode)
             and any(tag not in AUTO_BALANCER_PRESERVE_TAGS for tag in selector)
@@ -3871,10 +3906,11 @@ def sync_observatory_subjects(
     remove_tags: Iterable[str] | None = None,
     managed_active: bool | None = None,
     snapshot: SnapshotCallback | None = None,
+    replace_subjects: bool = False,
 ) -> bool:
     add = [str(t or "").strip() for t in add_tags if str(t or "").strip()]
     remove = {str(t or "").strip() for t in (remove_tags or []) if str(t or "").strip()}
-    if not add and not remove:
+    if not add and not remove and not replace_subjects:
         return False
 
     dst_json = os.path.join(str(xray_configs_dir or ""), "07_observatory.json")
@@ -3887,7 +3923,7 @@ def sync_observatory_subjects(
     current = obs.get("subjectSelector")
     subjects: List[str] = []
     seen: set[str] = set()
-    if isinstance(current, list):
+    if isinstance(current, list) and not replace_subjects:
         for item in current:
             tag = str(item or "").strip()
             if not tag or tag in remove or tag in seen:

@@ -2089,6 +2089,160 @@ def test_refresh_subscription_preserves_ru_direct_rules_with_shadowed_auto_pool(
     assert rules[2]["ip"] == ["ext:geoip_zkeenip.dat:ru"]
 
 
+def test_refresh_subscription_only_mode_replaces_manual_runtime_and_bypasses_shadowed_pool(
+    tmp_path: Path,
+    monkeypatch,
+):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+    monkeypatch.setattr(
+        subs,
+        "fetch_subscription_body",
+        lambda _url: (
+            _vless_transport(
+                "VLESS-REALITY-NL-Keenetic-Dnepr-16k3",
+                "tcp",
+                host="cp.landing-nl.rfid-technologies.org",
+            ),
+            {},
+        ),
+    )
+
+    (xray_dir / "04_outbounds.json").write_text(
+        json.dumps(
+            {
+                "outbounds": [
+                    {"tag": "manual-vless", "protocol": "vless"},
+                    {"tag": "direct", "protocol": "freedom"},
+                    {"tag": "block", "protocol": "blackhole"},
+                ]
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (xray_dir / "04_outbounds_All.json").write_text(
+        json.dumps(
+            {
+                "outbounds": [
+                    {"tag": "VPS_legacy_pool", "protocol": "vless"},
+                    {"tag": "direct", "protocol": "freedom"},
+                    {"tag": "block", "protocol": "blackhole"},
+                ]
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (xray_dir / "05_routing.json").write_text(
+        json.dumps(
+            {
+                "routing": {
+                    "balancers": [
+                        {
+                            "tag": "fast_web_balancer",
+                            "selector": ["VPS_"],
+                            "strategy": {"type": "leastPing"},
+                            "fallbackTag": "direct",
+                        }
+                    ],
+                    "rules": [
+                        {
+                            "type": "field",
+                            "ruleTag": "log_05_direct_ru_by_domains",
+                            "outboundTag": "direct",
+                            "domain": ["ext:geosite_v2fly.dat:category-ru"],
+                        },
+                        {
+                            "type": "field",
+                            "ruleTag": "log_07_catch_all_fast_web_balancer",
+                            "balancerTag": "fast_web_balancer",
+                            "network": "tcp,udp",
+                        },
+                    ],
+                }
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (xray_dir / "07_observatory.json").write_text(
+        json.dumps(
+            {
+                "observatory": {
+                    "subjectSelector": ["VPS_"],
+                    "probeUrl": "https://probe.example.com",
+                    "probeInterval": "120s",
+                }
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "subscription-only",
+            "tag": "cp.landing-nl.rfid-technologies.org",
+            "url": "https://example.com/sub",
+            "enabled": True,
+            "ping_enabled": True,
+            "routing_auto_rule": True,
+            "routing_mode": "subscription-only",
+        },
+    )
+
+    result = subs.refresh_subscription(
+        str(ui_state_dir),
+        "subscription-only",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=None,
+        restart=False,
+    )
+
+    assert result["ok"] is True
+    assert result["routing_mode"] == "subscription-only"
+    assert result["routing_selector_count"] == 1
+
+    observatory = json.loads((xray_dir / "07_observatory.json").read_text(encoding="utf-8"))
+    assert observatory["observatory"]["subjectSelector"] == ["cp.landing-nl.rfid-technologies.org"]
+    assert observatory["observatory"]["probeUrl"] == "https://probe.example.com"
+
+    routing = json.loads((xray_dir / "05_routing.json").read_text(encoding="utf-8"))
+    balancers = {item["tag"]: item for item in routing["routing"]["balancers"]}
+    assert balancers["fast_web_balancer"]["selector"] == ["VPS_"]
+    assert balancers["proxy"]["selector"] == ["cp.landing-nl.rfid-technologies.org"]
+
+    rules = routing["routing"]["rules"]
+    assert [rule.get("ruleTag") for rule in rules] == [
+        "log_05_direct_ru_by_domains",
+        "xk_auto_leastPing",
+        "log_07_catch_all_fast_web_balancer",
+    ]
+    assert rules[0]["outboundTag"] == "direct"
+    assert rules[1]["balancerTag"] == "proxy"
+    assert rules[2]["balancerTag"] == "fast_web_balancer"
+
+
 def test_refresh_subscription_strict_mode_keeps_ru_direct_rules_before_migrated_pool_rule(tmp_path: Path, monkeypatch):
     from services import xray_subscriptions as subs
 

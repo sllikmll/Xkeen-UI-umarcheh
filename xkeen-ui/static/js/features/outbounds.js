@@ -4216,7 +4216,14 @@ let outboundsModuleApi = null;
       if (state.routing_auto_rule) {
         const shadowRuleTag = subsRoutingMetaText('auto_rule_shadowing_rule_tag');
         const shadowTargetLabel = subsRoutingMetaText('auto_rule_shadowing_target_label');
-        if (shadowRuleTag && shadowTargetLabel) {
+        const routingMode = subsRoutingModeValue(state.routing_mode);
+        if (routingMode === SUB_ROUTING_MODE_SUBSCRIPTION_ONLY && (shadowRuleTag || shadowTargetLabel)) {
+          items.push(
+            shadowRuleTag && shadowTargetLabel
+              ? `Routing: раннее правило ${subsQuotedTag(shadowRuleTag)} для ${shadowTargetLabel} будет оставлено ниже служебного правила, чтобы режим «Только подписка» не уходил в ручной outbound.`
+              : 'Routing: раннее ручное proxy-правило будет оставлено ниже служебного правила, чтобы режим «Только подписка» использовал generated nodes.'
+          );
+        } else if (shadowRuleTag && shadowTargetLabel) {
           warnings.push(`\u0412 05_routing.json \u043f\u0440\u0430\u0432\u0438\u043b\u043e ${subsQuotedTag(shadowRuleTag)} \u0434\u043b\u044f ${shadowTargetLabel} \u0441\u0442\u043e\u0438\u0442 \u0440\u0430\u043d\u044c\u0448\u0435 \u0438, \u0432\u0435\u0440\u043e\u044f\u0442\u043d\u043e, \u043f\u0435\u0440\u0435\u0445\u0432\u0430\u0442\u0438\u0442 \u0442\u0440\u0430\u0444\u0438\u043a \u0434\u043e xk_auto_leastPing.`);
         } else if (shadowRuleTag) {
           warnings.push(`\u0412 05_routing.json \u043f\u0440\u0430\u0432\u0438\u043b\u043e ${subsQuotedTag(shadowRuleTag)} \u0441\u0442\u043e\u0438\u0442 \u0440\u0430\u043d\u044c\u0448\u0435 \u0438, \u0432\u0435\u0440\u043e\u044f\u0442\u043d\u043e, \u043f\u0435\u0440\u0435\u0445\u0432\u0430\u0442\u0438\u0442 \u0442\u0440\u0430\u0444\u0438\u043a \u0434\u043e xk_auto_leastPing.`);

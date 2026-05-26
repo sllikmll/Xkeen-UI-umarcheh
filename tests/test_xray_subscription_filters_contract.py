@@ -495,3 +495,11 @@ def test_xray_subscription_modal_surfaces_refresh_diagnostics_details():
     assert "html[data-theme=\"light\"] .xk-sub-diagnostics {" in styles_src
     assert "html[data-theme=\"light\"] .xk-sub-diag-pill.is-error {" in styles_src
     assert "html[data-theme=\"light\"] .xk-sub-diag-group.is-warning {" in styles_src
+
+
+def test_xray_subscription_only_mode_does_not_warn_about_shadowed_manual_pool():
+    outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
+
+    assert "routingMode === SUB_ROUTING_MODE_SUBSCRIPTION_ONLY && (shadowRuleTag || shadowTargetLabel)" in outbounds_src
+    assert "будет оставлено ниже служебного правила" in outbounds_src
+    assert "не уходил в ручной outbound" in outbounds_src
