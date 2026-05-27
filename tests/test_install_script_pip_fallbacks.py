@@ -26,3 +26,12 @@ def test_install_script_refreshes_bundled_xray_templates_without_touching_custom
     assert 'cp -f "$dest" "$dest.dist-$TS" 2>/dev/null || true' in text
     assert 'sync_bundled_template_dir "$SRC_XRAY_ROUTING_TEMPLATES" "$XRAY_ROUTING_TEMPLATES_DIR"' in text
     assert 'sync_bundled_template_dir "$SRC_XRAY_OBSERVATORY_TEMPLATES" "$XRAY_OBSERVATORY_TEMPLATES_DIR"' in text
+
+
+def test_install_script_jsonc_migration_leaves_unpaired_user_files_in_configs():
+    text = Path("xkeen-ui/install.sh").read_text(encoding="utf-8")
+
+    assert 'main_json="${src%?}"' in text
+    assert 'if [ ! -f "$main_json" ]; then' in text
+    assert 'SKIPPED=$((SKIPPED + 1))' in text
+    assert 'skipped=$SKIPPED jsonc_dir=$JSONC_DIR' in text

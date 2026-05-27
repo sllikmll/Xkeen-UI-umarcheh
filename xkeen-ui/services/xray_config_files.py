@@ -91,6 +91,7 @@ def migrate_jsonc_sidecars_from_configs() -> dict:
 
     Behavior:
       - For every *.jsonc inside XRAY_CONFIGS_DIR (top-level only):
+        * Only files with a sibling <name>.json are considered UI sidecars.
         * Move it to XRAY_JSONC_DIR keeping the same basename.
         * If destination exists:
             - keep the newer file as the main sidecar
@@ -106,6 +107,7 @@ def migrate_jsonc_sidecars_from_configs() -> dict:
         "moved_as_old": 0,
         "replaced": 0,
         "disabled_in_place": 0,
+        "skipped_unpaired": 0,
         "errors": 0,
     }
 
@@ -141,6 +143,10 @@ def migrate_jsonc_sidecars_from_configs() -> dict:
                 continue
 
             summary["found"] += 1
+            main_json = src[:-1]
+            if not os.path.isfile(main_json):
+                summary["skipped_unpaired"] += 1
+                continue
 
             dst = os.path.join(XRAY_JSONC_DIR, os.path.basename(name))
             dst_old = _unique_suffix_path(f"{dst}.old-{now}")

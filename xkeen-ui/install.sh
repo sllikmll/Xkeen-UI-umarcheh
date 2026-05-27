@@ -471,10 +471,17 @@ migrate_legacy_jsonc_files() {
 
   MOVED=0
   ARCHIVED=0
+  SKIPPED=0
 
   for src in "$XRAY_CONFIG_DIR"/*.jsonc; do
     [ -f "$src" ] || continue
     base="$(basename "$src")"
+    main_json="${src%?}"
+    if [ ! -f "$main_json" ]; then
+      echo "[*] JSONC миграция: пропускаю $base — рядом нет основного ${base%?}"
+      SKIPPED=$((SKIPPED + 1))
+      continue
+    fi
     dest="$JSONC_DIR/$base"
 
     TS="$(date +%Y%m%d-%H%M%S 2>/dev/null || echo no-date)"
@@ -511,12 +518,20 @@ migrate_legacy_jsonc_files() {
     fi
   done
 
-  echo "[*] JSONC миграция (install): перемещено=$MOVED, архивировано=$ARCHIVED."
-  echo "[install] JSONC миграция: moved=$MOVED archived=$ARCHIVED jsonc_dir=$JSONC_DIR" >> "$LOG_DIR/xkeen-ui.log"
+  echo "[*] JSONC миграция (install): перемещено=$MOVED, архивировано=$ARCHIVED, пропущено=$SKIPPED."
+  echo "[install] JSONC миграция: moved=$MOVED archived=$ARCHIVED skipped=$SKIPPED jsonc_dir=$JSONC_DIR" >> "$LOG_DIR/xkeen-ui.log"
 
-  # Если что-то осталось (например, из-за прав) — предупредим.
-  if find "$XRAY_CONFIG_DIR" -maxdepth 1 -type f -name '*.jsonc' 2>/dev/null | grep -q .; then
+  REMAINING_PAIRED=0
+  for src in "$XRAY_CONFIG_DIR"/*.jsonc; do
+    [ -f "$src" ] || continue
+    [ -f "${src%?}" ] && REMAINING_PAIRED=1
+  done
+
+  # Если sidecar остался рядом с основным .json (например, из-за прав) — предупредим.
+  if [ "$REMAINING_PAIRED" -eq 1 ]; then
     echo "[!] Внимание: в $XRAY_CONFIG_DIR всё ещё есть *.jsonc. Проверь права/перенеси вручную."
+  elif [ "$SKIPPED" -gt 0 ]; then
+    echo "[*] JSONC миграция: оставлены пользовательские *.jsonc без соседнего .json."
   fi
 }
 
