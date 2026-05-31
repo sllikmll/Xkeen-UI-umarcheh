@@ -60,6 +60,7 @@ from services.xray_outbounds import (
 )
 from services.xray_subscriptions import (
     build_xray_outbounds_nodes,
+    list_subscriptions,
     normalize_xray_outbounds_node_latency,
     probe_xray_outbounds_node_latency,
     probe_xray_outbounds_nodes_latency,
@@ -234,6 +235,7 @@ def create_xray_configs_blueprint(
     def _load_outbounds_nodes_all_fragments() -> list[dict[str, Any]]:
         nodes: list[dict[str, Any]] = []
         seen: set[str] = set()
+        subscription_names = _subscription_node_names_by_tag()
         try:
             fragments = list_xray_fragments("outbounds")
         except Exception:
@@ -260,9 +262,46 @@ def create_xray_configs_blueprint(
                     continue
                 seen.add(dedupe_key)
                 item_node = dict(node)
+                source_name = subscription_names.get(tag)
+                if source_name:
+                    item_node.setdefault("subscription_node_name", source_name)
                 item_node.setdefault("fragment", fragment_file)
                 item_node.setdefault("file", fragment_file)
                 nodes.append(item_node)
+        return nodes
+
+    def _subscription_node_names_by_tag() -> dict[str, str]:
+        if not str(ui_state_dir or "").strip():
+            return {}
+        out: dict[str, str] = {}
+        try:
+            subscriptions = list_subscriptions(ui_state_dir)
+        except Exception:
+            return {}
+        for sub in subscriptions:
+            nodes = sub.get("last_nodes") if isinstance(sub, dict) else None
+            if not isinstance(nodes, list):
+                continue
+            for node in nodes:
+                if not isinstance(node, dict):
+                    continue
+                tag = str(node.get("tag") or "").strip()
+                name = str(node.get("name") or "").strip()
+                if tag and name and tag not in out:
+                    out[tag] = name
+        return out
+
+    def _enrich_outbounds_nodes(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        subscription_names = _subscription_node_names_by_tag()
+        if not subscription_names:
+            return nodes
+        for node in nodes:
+            if not isinstance(node, dict):
+                continue
+            tag = str(node.get("tag") or "").strip()
+            source_name = subscription_names.get(tag)
+            if source_name:
+                node.setdefault("subscription_node_name", source_name)
         return nodes
 
     _ROUTING_SERVICE_OUTBOUND_TAGS = {
@@ -1120,7 +1159,7 @@ def create_xray_configs_blueprint(
     def api_xray_outbounds_nodes():
         file_arg = request.args.get("file", "")
         selection = _load_outbounds_selection(file_arg)
-        nodes = build_xray_outbounds_nodes(selection.get("config"))
+        nodes = _enrich_outbounds_nodes(build_xray_outbounds_nodes(selection.get("config")))
         latency = _load_outbounds_node_latency(str(selection.get("path") or ""), nodes)
         return (
             jsonify(

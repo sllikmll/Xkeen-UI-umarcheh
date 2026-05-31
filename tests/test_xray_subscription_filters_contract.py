@@ -139,6 +139,13 @@ def test_outbounds_card_exposes_current_proxy_nodes_and_ping_controls():
     assert "/api/xray/outbounds/active" in routes_src
     assert "/api/xray/outbounds/nodes/ping" in routes_src
     assert "/api/xray/outbounds/nodes/ping-bulk" in routes_src
+    assert "subscription_node_name" in routes_src
+    assert "list_subscriptions(ui_state_dir)" in routes_src
+    assert "function nodeCountryFlagInfo(node) {" in outbounds_src
+    assert "function nodeDisplayNameWithCountry(node, fallback) {" in outbounds_src
+    assert "'subscription_node_name'," in outbounds_src
+    assert "countryFlagBadgeHtml(nodeCountryFlagInfo(node))" in outbounds_src
+    assert "xk-sub-node-country" in outbounds_src
     assert 'id="outbounds-active-node-status"' in template_src
     assert 'class="xk-outbounds-active-status is-unknown hidden"' in template_src
     assert "showActiveOutbound: false" in settings_src
@@ -159,6 +166,9 @@ def test_outbounds_card_exposes_current_proxy_nodes_and_ping_controls():
     assert ".xk-outbounds-node-list {\n  grid-template-columns: 1fr;\n  gap: 8px;\n  min-height: 0;\n  max-height: min(36vh, 320px);\n  overflow: auto;" in styles_src
     assert "#outbounds-body.xk-outbounds-subscription-fragment .xk-outbounds-node-item {" in styles_src
     assert "-webkit-line-clamp: 2;" in styles_src
+    assert ".xk-sub-node-country[data-country=\"DE\"]" in styles_src
+    assert ".xk-sub-node-country[data-country=\"RU\"]" in styles_src
+    assert ".xk-sub-node-country.is-globe" in styles_src
     assert "#outbounds-body.xk-outbounds-subscription-fragment .xk-outbounds-node-item .xk-sub-node-side {\n  min-width: 54px;" in styles_src
 
 

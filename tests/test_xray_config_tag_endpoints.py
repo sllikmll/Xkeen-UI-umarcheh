@@ -69,7 +69,7 @@ def _hy2_url(name: str = "") -> str:
     return f"hy2://secret@example.com:443?sni=edge.example.com&pinSHA256=pin-one{suffix}"
 
 
-def _make_app() -> Flask:
+def _make_app(ui_state_dir: str = "") -> Flask:
     app = Flask(__name__)
     app.config["TESTING"] = True
     bp = xray_configs_mod.create_xray_configs_blueprint(
@@ -78,7 +78,7 @@ def _make_app() -> Flask:
         save_json=_save_json,
         strip_json_comments_text=_strip_json_comments_text,
         snapshot_xray_config_before_overwrite=lambda _path: None,
-        ui_state_dir="",
+        ui_state_dir=ui_state_dir,
     )
     app.register_blueprint(bp)
     return app
@@ -155,6 +155,67 @@ def test_xray_outbound_tags_all_collects_tags_across_all_fragments_and_jsonc(tmp
         "vless-reality",
         "cdn.pecan.run--Node-01",
     ]
+
+
+def test_xray_outbounds_nodes_include_subscription_source_name(tmp_path, monkeypatch):
+    configs_dir = tmp_path / "configs"
+    configs_dir.mkdir()
+    outbounds_name = "04_outbounds.cdn.pecan.run.json"
+    outbounds_path = configs_dir / outbounds_name
+    source_name = "\U0001F3F3\U0001F1F7\U0001F1FA\ufe0f Anti 20.70ce"
+    outbounds_path.write_text(
+        json.dumps(
+            {
+                "outbounds": [
+                    {
+                        "tag": "cdn.pecan.run--Anti_20.70ce",
+                        "protocol": "vless",
+                        "settings": {},
+                        "streamSettings": {"network": "xhttp", "security": "tls"},
+                    }
+                ]
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        xray_configs_mod,
+        "resolve_xray_fragment_file",
+        lambda file_arg, *, kind, default_path: str(configs_dir / (file_arg or Path(default_path).name)),
+    )
+    monkeypatch.setattr(
+        xray_configs_mod,
+        "jsonc_path_for",
+        lambda main_path: str(Path(main_path).with_suffix(Path(main_path).suffix + "c")),
+    )
+    monkeypatch.setattr(
+        xray_configs_mod,
+        "list_subscriptions",
+        lambda _ui_state_dir: [
+            {
+                "id": "cdn",
+                "last_nodes": [
+                    {
+                        "tag": "cdn.pecan.run--Anti_20.70ce",
+                        "name": source_name,
+                    }
+                ],
+            }
+        ],
+    )
+
+    app = _make_app(ui_state_dir=str(tmp_path / "state"))
+    with app.test_client() as client:
+        response = client.get(f"/api/xray/outbounds/nodes?file={outbounds_name}")
+
+    assert response.status_code == 200
+    nodes = response.get_json()["nodes"]
+    assert nodes[0]["tag"] == "cdn.pecan.run--Anti_20.70ce"
+    assert nodes[0]["subscription_node_name"] == source_name
 
 
 def test_xray_inbound_tags_all_collects_tags_across_all_fragments_and_jsonc(tmp_path, monkeypatch):

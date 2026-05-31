@@ -1038,7 +1038,8 @@ let outboundsModuleApi = null;
         const keyText = String(node && node.key ? node.key : '').trim();
         const tagText = String(node && node.tag ? node.tag : '').trim();
         const key = escapeHtml(keyText);
-        const name = escapeHtml(String(node && node.name ? node.name : tagText || 'proxy'));
+        const countryBadge = countryFlagBadgeHtml(nodeCountryFlagInfo(node));
+        const name = escapeHtml(nodeDisplayNameWithCountry(node, tagText || 'proxy'));
         const tag = escapeHtml(tagText);
         const stateLabel = isSubscription ? '\u0432\u043a\u043b\u044e\u0447\u0451\u043d' : (tag || 'proxy');
         const protocol = escapeHtml(String(node && node.protocol ? node.protocol : ''));
@@ -1068,7 +1069,7 @@ let outboundsModuleApi = null;
         rows.push(`
           <div class="xk-sub-node-item xk-outbounds-node-item is-enabled ${isActiveRoute ? 'is-active-route' : ''}" data-node-key="${key}" ${activeTooltip ? `title="${activeTooltip}"` : ''}>
             <div class="xk-sub-node-main">
-              <div class="xk-sub-node-name">${name}</div>
+              <div class="xk-sub-node-name">${countryBadge}<span class="xk-sub-node-title-text">${name}</span></div>
               <div class="xk-sub-node-meta">
                 ${protocol ? `<span class="xk-sub-node-pill">${protocol}</span>` : ''}
                 ${transport ? `<span class="xk-sub-node-pill xk-sub-node-pill-transport">${transport}</span>` : ''}
@@ -1435,6 +1436,252 @@ let outboundsModuleApi = null;
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+    }
+
+    const COUNTRY_FLAG_NAMES = Object.freeze({
+      AE: 'United Arab Emirates',
+      AM: 'Armenia',
+      AR: 'Argentina',
+      AT: 'Austria',
+      AU: 'Australia',
+      AZ: 'Azerbaijan',
+      BE: 'Belgium',
+      BG: 'Bulgaria',
+      BR: 'Brazil',
+      BY: 'Belarus',
+      CA: 'Canada',
+      CH: 'Switzerland',
+      CN: 'China',
+      CZ: 'Czechia',
+      DE: 'Germany',
+      DK: 'Denmark',
+      ES: 'Spain',
+      FI: 'Finland',
+      FR: 'France',
+      GB: 'United Kingdom',
+      GE: 'Georgia',
+      GR: 'Greece',
+      HK: 'Hong Kong',
+      HU: 'Hungary',
+      ID: 'Indonesia',
+      IE: 'Ireland',
+      IL: 'Israel',
+      IN: 'India',
+      IT: 'Italy',
+      JP: 'Japan',
+      KR: 'South Korea',
+      KZ: 'Kazakhstan',
+      LV: 'Latvia',
+      MD: 'Moldova',
+      MX: 'Mexico',
+      MY: 'Malaysia',
+      NL: 'Netherlands',
+      NO: 'Norway',
+      PL: 'Poland',
+      PT: 'Portugal',
+      RO: 'Romania',
+      RS: 'Serbia',
+      RU: 'Russia',
+      SE: 'Sweden',
+      SG: 'Singapore',
+      SI: 'Slovenia',
+      SK: 'Slovakia',
+      TH: 'Thailand',
+      TR: 'Turkey',
+      TW: 'Taiwan',
+      UA: 'Ukraine',
+      US: 'United States',
+      VN: 'Vietnam',
+    });
+
+    const COUNTRY_CODE_ALIASES = Object.freeze({
+      UK: 'GB',
+      UAE: 'AE',
+      USA: 'US',
+    });
+
+    const COUNTRY_TEXT_RULES = Object.freeze([
+      [/\b(HONG\s*KONG|HKG)\b/i, 'HK'],
+      [/\b(SINGAPORE)\b/i, 'SG'],
+      [/\b(JAPAN|TOKYO|OSAKA)\b/i, 'JP'],
+      [/\b(KOREA|SEOUL)\b/i, 'KR'],
+      [/\b(UNITED\s*STATES|USA|NEW\s*YORK|LOS\s*ANGELES|CHICAGO)\b/i, 'US'],
+      [/\b(UNITED\s*KINGDOM|GREAT\s*BRITAIN|LONDON)\b/i, 'GB'],
+      [/\b(GERMANY|DEUTSCHLAND|BERLIN|FRANKFURT)\b/i, 'DE'],
+      [/\b(LATVIA|RIGA)\b/i, 'LV'],
+      [/\b(SWEDEN|STOCKHOLM)\b/i, 'SE'],
+      [/\b(NETHERLANDS|AMSTERDAM|HOLLAND)\b/i, 'NL'],
+      [/\b(FRANCE|PARIS)\b/i, 'FR'],
+      [/\b(SPAIN|MADRID)\b/i, 'ES'],
+      [/\b(INDIA|MUMBAI|DELHI)\b/i, 'IN'],
+      [/\b(TURKEY|ISTANBUL)\b/i, 'TR'],
+      [/\b(KAZAKHSTAN|ALMATY|ASTANA)\b/i, 'KZ'],
+      [/\b(ISRAEL|TEL\s*AVIV)\b/i, 'IL'],
+      [/\b(RUSSIA|MOSCOW|SAINT\s*PETERSBURG)\b/i, 'RU'],
+      [/\b(ITALY|MILAN|ROME)\b/i, 'IT'],
+      [/\b(CANADA|TORONTO|MONTREAL)\b/i, 'CA'],
+      [/\b(AUSTRALIA|SYDNEY|MELBOURNE)\b/i, 'AU'],
+      [/\b(FINLAND|HELSINKI)\b/i, 'FI'],
+      [/\b(NORWAY|OSLO)\b/i, 'NO'],
+      [/\b(POLAND|WARSAW)\b/i, 'PL'],
+      [/\b(UKRAINE|KYIV|KIEV)\b/i, 'UA'],
+      [/\b(BRAZIL|SAO\s*PAULO)\b/i, 'BR'],
+      [/\b(CHINA|BEIJING|SHANGHAI)\b/i, 'CN'],
+      [/\b(TAIWAN|TAIPEI)\b/i, 'TW'],
+      [/\b(VIETNAM|HANOI)\b/i, 'VN'],
+      [/\b(THAILAND|BANGKOK)\b/i, 'TH'],
+      [/\b(MALAYSIA|KUALA\s*LUMPUR)\b/i, 'MY'],
+      [/\b(INDONESIA|JAKARTA)\b/i, 'ID'],
+      [/\b(UAE|DUBAI|ABU\s*DHABI)\b/i, 'AE'],
+    ]);
+
+    function normalizeCountryCode(value) {
+      const raw = String(value || '').trim().toUpperCase();
+      if (!raw) return '';
+      const alias = COUNTRY_CODE_ALIASES[raw] || raw;
+      return Object.prototype.hasOwnProperty.call(COUNTRY_FLAG_NAMES, alias) ? alias : '';
+    }
+
+    function countryCodeFromRegionalIndicators(text) {
+      const chars = Array.from(String(text || ''));
+      for (let i = 0; i < chars.length - 1; i += 1) {
+        const a = chars[i].codePointAt(0);
+        const b = chars[i + 1].codePointAt(0);
+        if (a >= 0x1F1E6 && a <= 0x1F1FF && b >= 0x1F1E6 && b <= 0x1F1FF) {
+          return normalizeCountryCode(
+            String.fromCharCode(65 + (a - 0x1F1E6)) + String.fromCharCode(65 + (b - 0x1F1E6))
+          );
+        }
+      }
+      return '';
+    }
+
+    function countryCodeFromTokens(text) {
+      const clean = String(text || '')
+        .replace(/[\u{1F1E6}-\u{1F1FF}\u{1F3F3}\u{1F3F4}\uFE0F\u200D]/gu, ' ')
+        .replace(/--+/g, ' ');
+      const tokens = clean.split(/[\s._/\\|()[\]{}:,;+"'<>-]+/).filter(Boolean);
+      for (let i = 0; i < Math.min(tokens.length, 8); i += 1) {
+        const rawToken = String(tokens[i] || '').trim();
+        if (!/^[A-Z]{2,3}$/.test(rawToken)) continue;
+        const token = rawToken.toUpperCase();
+        const code = normalizeCountryCode(token);
+        if (code) return code;
+      }
+      return '';
+    }
+
+    function countryCodeFromText(text) {
+      const value = String(text || '');
+      if (!value.trim()) return '';
+      const emojiCode = countryCodeFromRegionalIndicators(value);
+      if (emojiCode) return emojiCode;
+      const tokenCode = countryCodeFromTokens(value);
+      if (tokenCode) return tokenCode;
+      for (const rule of COUNTRY_TEXT_RULES) {
+        try {
+          if (rule[0].test(value)) return rule[1];
+        } catch (e) {}
+      }
+      return '';
+    }
+
+    function nodeCountryTextCandidates(node) {
+      if (!node || typeof node !== 'object') return [];
+      const keys = [
+        'country_code',
+        'countryCode',
+        'country',
+        'geo',
+        'region',
+        'subscription_node_name',
+        'source_name',
+        'original_name',
+        'display_name',
+        'remarks',
+        'name',
+        'tag',
+        'host',
+        'detail',
+      ];
+      const out = [];
+      const seen = new Set();
+      keys.forEach((key) => {
+        const value = String(node[key] || '').trim();
+        if (!value || seen.has(value)) return;
+        seen.add(value);
+        out.push(value);
+      });
+      return out;
+    }
+
+    function hasGenericRegionIcon(text) {
+      const value = String(text || '');
+      if (!value.trim()) return false;
+      if (/[\u{1F3F3}\u{1F3F4}\u{1F30D}-\u{1F30F}]/u.test(value)) return true;
+      return /\bFREE\s+WhatsApp\b/i.test(value);
+    }
+
+    function nodeCountryFlagInfo(node) {
+      const candidates = nodeCountryTextCandidates(node);
+      for (const value of candidates) {
+        const code = countryCodeFromText(value);
+        if (code) {
+          return {
+            code,
+            label: COUNTRY_FLAG_NAMES[code] || code,
+            globe: false,
+          };
+        }
+      }
+      if (candidates.some(hasGenericRegionIcon)) {
+        return { code: '', label: 'Global', globe: true };
+      }
+      return null;
+    }
+
+    function stripLeadingFlagTokens(value) {
+      return String(value || '')
+        .replace(/^(?:(?:[\u{1F1E6}-\u{1F1FF}]{2})|[\u{1F3F3}\u{1F3F4}\u{1F30D}-\u{1F30F}]|\uFE0F|\u200D|\s)+/gu, '')
+        .trim();
+    }
+
+    function stripLeadingCountryCode(value, code) {
+      const normalized = normalizeCountryCode(code);
+      if (!normalized) return String(value || '').trim();
+      const aliases = Object.keys(COUNTRY_CODE_ALIASES)
+        .filter((alias) => COUNTRY_CODE_ALIASES[alias] === normalized)
+        .concat(normalized);
+      const pattern = aliases
+        .map((alias) => alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+        .join('|');
+      try {
+        return String(value || '')
+          .replace(new RegExp(`^(?:${pattern})(?=$|[\\s._:-])(?:[\\s._:-]+)?`, 'i'), '')
+          .trim();
+      } catch (e) {
+        return String(value || '').trim();
+      }
+    }
+
+    function nodeDisplayNameWithCountry(node, fallback) {
+      const raw = String((node && (node.name || node.tag)) || fallback || 'node').trim() || String(fallback || 'node');
+      const info = nodeCountryFlagInfo(node);
+      let name = stripLeadingFlagTokens(raw);
+      if (info && info.code) {
+        name = stripLeadingCountryCode(name, info.code);
+      }
+      name = String(name || '').replace(/^[\s._:-]+/, '').trim();
+      return name || raw;
+    }
+
+    function countryFlagBadgeHtml(info) {
+      if (!info) return '';
+      const label = escapeHtml(info.label || info.code || 'Region');
+      const code = normalizeCountryCode(info.code);
+      const countryAttr = code ? ` data-country="${escapeHtml(code)}"` : '';
+      const kindClass = code ? '' : ' is-globe';
+      return `<span class="xk-sub-node-country${kindClass}"${countryAttr} role="img" aria-label="${label}" title="${label}" data-tooltip="${label}"></span>`;
     }
 
     function isValidPort(p) {
@@ -6265,7 +6512,8 @@ let outboundsModuleApi = null;
         else hiddenCount += 1;
         if (!enabled && !showHidden) return;
         const key = escapeHtml(String(node && node.key ? node.key : ''));
-        const name = escapeHtml(String(node && node.name ? node.name : 'node'));
+        const countryBadge = countryFlagBadgeHtml(nodeCountryFlagInfo(node));
+        const name = escapeHtml(nodeDisplayNameWithCountry(node, 'node'));
         const protocol = escapeHtml(String(node && node.protocol ? node.protocol : ''));
         const transport = escapeHtml(String(node && node.transport ? node.transport : ''));
         const security = escapeHtml(String(node && node.security ? node.security : ''));
@@ -6298,7 +6546,7 @@ let outboundsModuleApi = null;
         rows.push(`
           <div class="xk-sub-node-item ${enabled ? 'is-enabled' : 'is-disabled'}" data-node-key="${key}">
             <div class="xk-sub-node-main">
-              <div class="xk-sub-node-name">${name}</div>
+              <div class="xk-sub-node-name">${countryBadge}<span class="xk-sub-node-title-text">${name}</span></div>
               <div class="xk-sub-node-meta">
                 ${protocol ? `<span class="xk-sub-node-pill">${protocol}</span>` : ''}
                 ${transport ? `<span class="xk-sub-node-pill xk-sub-node-pill-transport">${transport}</span>` : ''}
