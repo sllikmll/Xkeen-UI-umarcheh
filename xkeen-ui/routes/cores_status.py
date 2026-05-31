@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import subprocess
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 
 from routes.common.errors import log_route_exception
 
@@ -59,6 +59,18 @@ def _cfg_api_timeout_s() -> float:
 def _cfg_user_agent() -> str:
     ua = os.environ.get("XKEEN_UI_HTTP_USER_AGENT", "xkeen-ui") or "xkeen-ui"
     return str(ua)
+
+
+def _log_github_request_failure(repo: str, exc: BaseException) -> None:
+    """Record expected upstream/network failures without a traceback."""
+    try:
+        current_app.logger.debug(
+            "cores_status.request_failed | %r | %s",
+            {"repo": repo},
+            str(exc or "request_failed"),
+        )
+    except Exception:
+        pass
 
 
 def _norm_ver(v: Optional[str]) -> str:
@@ -469,7 +481,10 @@ def _github_latest_release_tag(repo: str, *, timeout_s: float) -> Dict[str, Any]
             "error": "http_error",
             "meta": {"status": int(getattr(e, "code", 0) or 0), "body": body[:200]},
         }
-    except Exception as e:
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        _log_github_request_failure(repo, e)
+        return {"ok": False, "repo": repo, "tag": None, "url": None, "error": "request_failed", "meta": {}}
+    except Exception:
         log_route_exception("cores_status.request_failed", repo=repo)
         return {"ok": False, "repo": repo, "tag": None, "url": None, "error": "request_failed", "meta": {}}
 

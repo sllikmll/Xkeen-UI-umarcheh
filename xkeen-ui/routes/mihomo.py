@@ -156,6 +156,29 @@ def _mihomo_exception(
     )
 
 
+def _subscription_fetch_failure_reason(exc: BaseException) -> str:
+    if isinstance(exc, urllib.error.HTTPError):
+        status = int(getattr(exc, "code", 0) or 0)
+        if status:
+            return f"http_{status}"
+    reason = getattr(exc, "reason", None)
+    text = str(reason or exc or "request_failed").strip()
+    if not text:
+        text = "request_failed"
+    if len(text) > 240:
+        text = text[:237].rstrip() + "..."
+    return text
+
+
+def _mihomo_fetch_failed_response(reason: str):
+    return _mihomo_error(
+        f"Не удалось скачать подписку: {reason}",
+        status=502,
+        code="fetch_failed",
+        hint="Проверьте интернет, DNS/блокировки и доступность URL подписки.",
+    )
+
+
 _MIHOMO_HWID_URL_POLICY_ENV_PREFIX = "XKEEN_MIHOMO_HWID"
 
 
@@ -1412,12 +1435,9 @@ def create_mihomo_blueprint(
                         status=413,
                         code="size_limit",
                     )
-                return _mihomo_error(
-                    f"Не удалось скачать подписку: {reason}",
-                    status=502,
-                    code="fetch_failed",
-                    hint="Проверьте интернет, DNS/блокировки и доступность URL подписки.",
-                )
+                return _mihomo_fetch_failed_response(reason)
+            except (urllib.error.URLError, TimeoutError, OSError) as e:
+                return _mihomo_fetch_failed_response(_subscription_fetch_failure_reason(e))
             except Exception as e:
                 return _mihomo_exception(
                     "Не удалось скачать подписку.",

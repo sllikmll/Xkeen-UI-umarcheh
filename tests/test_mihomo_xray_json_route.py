@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import urllib.error
 from unittest.mock import patch
 
 import pytest
@@ -143,6 +144,21 @@ def test_parse_xray_json_fetch_failed_returns_user_hint(client):
     body = r.get_json()
     assert body["code"] == "fetch_failed"
     assert "DNS" in body["hint"]
+
+
+def test_parse_xray_json_urlopen_failure_returns_user_hint_without_exception_log(client):
+    with patch(
+        "routes.mihomo._xray_fetch_subscription_body",
+        side_effect=urllib.error.URLError("certificate verify failed"),
+    ), patch("routes.common.errors.log_route_exception") as log_exception:
+        r = client.post(
+            "/api/mihomo/parse/xray-json", json={"url": "https://example.com/sub"}
+        )
+    assert r.status_code == 502
+    body = r.get_json()
+    assert body["code"] == "fetch_failed"
+    assert "certificate verify failed" in body["error"]
+    log_exception.assert_not_called()
 
 
 def test_parse_xray_json_returns_422_when_no_supported_proxies(client):

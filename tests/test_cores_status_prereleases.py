@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import urllib.error
 from pathlib import Path
 
 
@@ -62,6 +63,44 @@ def test_pick_release_selects_latest_release_within_each_channel():
 
     assert stable["tag_name"] == "v1.2.0"
     assert prerelease["tag_name"] == "alpha-2"
+
+
+def test_github_latest_release_network_failure_does_not_log_exception(monkeypatch):
+    def fail_urlopen(_req, timeout):
+        raise urllib.error.URLError("Temporary failure in name resolution")
+
+    logged = []
+    monkeypatch.setattr(cores_status.urllib.request, "urlopen", fail_urlopen)
+    monkeypatch.setattr(
+        cores_status,
+        "log_route_exception",
+        lambda *args, **kwargs: logged.append((args, kwargs)),
+    )
+
+    data = cores_status._github_latest_release_tag("XTLS/Xray-core", timeout_s=0.1)
+
+    assert data["ok"] is False
+    assert data["error"] == "request_failed"
+    assert logged == []
+
+
+def test_github_latest_release_unexpected_failure_still_logs_exception(monkeypatch):
+    def fail_urlopen(_req, timeout):
+        raise ValueError("bad payload")
+
+    logged = []
+    monkeypatch.setattr(cores_status.urllib.request, "urlopen", fail_urlopen)
+    monkeypatch.setattr(
+        cores_status,
+        "log_route_exception",
+        lambda *args, **kwargs: logged.append((args, kwargs)),
+    )
+
+    data = cores_status._github_latest_release_tag("XTLS/Xray-core", timeout_s=0.1)
+
+    assert data["ok"] is False
+    assert data["error"] == "request_failed"
+    assert logged == [(("cores_status.request_failed",), {"repo": "XTLS/Xray-core"})]
 
 
 def test_resolve_mihomo_prerelease_install_selects_arch_specific_gz_asset():
