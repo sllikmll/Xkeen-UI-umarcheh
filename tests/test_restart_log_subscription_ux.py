@@ -52,6 +52,12 @@ def test_restart_log_formats_subscription_refresh_entries_and_polls_for_updates(
     assert "restart-log-filter-btn" in styles_src
     assert "restart-log-search-input" in styles_src
     assert "restart-log-bottom-btn" in styles_src
+    assert ".log-card.xk-restart-log-card .log-header-actions {" in styles_src
+    restart_toolbar_block = styles_src.split(".log-card.xk-restart-log-card .log-header-actions {", 1)[1].split("\n}", 1)[0]
+    assert "justify-content: flex-end;" in restart_toolbar_block
+    assert "flex-wrap: nowrap;" in restart_toolbar_block
+    assert ".log-card.xk-restart-log-card .log-header-actions > .restart-log-fullscreen-btn {" in styles_src
+    assert ".log-card.xk-restart-log-card .log-header-actions > .restart-log-search {" in styles_src
     assert "restart-log-level-info" in styles_src
     assert "restart-log-runtime-source" in styles_src
     assert "grid-template-columns: max-content max-content minmax(0, max-content);" in styles_src

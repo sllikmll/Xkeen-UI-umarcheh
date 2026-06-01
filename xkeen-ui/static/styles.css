@@ -3214,6 +3214,23 @@ html[data-theme="light"] .log-card.xk-restart-log-card.is-fullscreen {
   flex: 1 1 180px;
 }
 
+.log-card.xk-restart-log-card .log-header-actions {
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+}
+
+.log-card.xk-restart-log-card .log-header-actions > .log-btn,
+.log-card.xk-restart-log-card .log-header-actions > .restart-log-fullscreen-btn {
+  flex: 0 0 auto;
+}
+
+.log-card.xk-restart-log-card .log-header-actions > .restart-log-search {
+  flex: 0 1 260px;
+  min-width: 150px;
+}
+
 .restart-log-search-icon {
   position: absolute;
   left: 10px;
