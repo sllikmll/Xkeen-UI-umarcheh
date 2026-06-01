@@ -663,8 +663,11 @@ def test_codemirror6_json_schema_bridge_is_tracked_and_wired_to_xray_editors():
     assert "if (shouldDeferSchemaHoverForSettings()) return false" in boot
     assert "isSchemaHoverEnabled(opts)" in boot
     assert "refreshSchemaExtensions()" in boot
+    assert "function isJsoncCommentPosition" in boot
     assert "isSchemaHoverTarget" in boot
+    assert "if (isJsoncCommentPosition(text, safePos)) return false;" in boot
     assert "!/[{}\\[\\]:,]/.test(ch)" in boot
+    assert "hideLinkTooltip(); hideSchemaHoverTooltips();" in boot
     assert "makeJsonDiagnostics(source" in boot
     assert "__xkeenCm6Bridge: true" in boot
     assert "__xkeen_cm6_bridge: true" in boot
@@ -1947,6 +1950,7 @@ def test_codemirror_lint_tooltips_are_scrollable_and_width_limited_inside_editor
     assert '.cm-tooltip.cm-tooltip-lint {' in styles
     assert 'max-width: min(560px, calc(100vw - 32px)) !important;' in styles
     assert '.cm-tooltip.cm-tooltip-hover {' in styles
+    assert 'pointer-events: none;' in styles
     assert '.xkeen-cm6-host .cm-tooltip-lint > ul {' in styles
     assert '.cm-tooltip.cm-tooltip-lint > ul {' in styles
     assert '.cm-tooltip.cm-tooltip-hover > * {' in styles
@@ -1962,6 +1966,7 @@ def test_codemirror_lint_tooltips_are_scrollable_and_width_limited_inside_editor
     assert "'.cm-tooltip-lint': {" in boot
     assert "'.cm-tooltip-hover': {" in boot
     assert "maxWidth: 'min(560px, calc(100vw - 32px))'," in boot
+    assert "pointerEvents: 'none'," in boot
     assert "'.cm-tooltip-lint > ul': {" in boot
     assert "'.cm-tooltip-hover > *': {" in boot
     assert "'.cm6-json-schema-hover': {" in boot

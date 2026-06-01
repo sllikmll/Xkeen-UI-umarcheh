@@ -575,6 +575,57 @@ function jsonSchemaWithSyntaxLinter(opts) {
   };
 }
 
+function isJsoncCommentPosition(text, pos) {
+  try {
+    const source = asString(text);
+    const safePos = Math.max(0, Math.min(source.length, clampNumber(pos, 0)));
+    let inString = false;
+    let escaped = false;
+    let inLineComment = false;
+    let inBlockComment = false;
+    for (let i = 0; i < source.length && i <= safePos; i += 1) {
+      const ch = source.charAt(i);
+      const next = source.charAt(i + 1);
+      if (inLineComment) {
+        if (i >= safePos) return true;
+        if (ch === '\n' || ch === '\r') inLineComment = false;
+        continue;
+      }
+      if (inBlockComment) {
+        if (i >= safePos) return true;
+        if (ch === '*' && next === '/') {
+          if (safePos <= i + 1) return true;
+          inBlockComment = false;
+          i += 1;
+        }
+        continue;
+      }
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (ch === '\\') escaped = true;
+        else if (ch === '"') inString = false;
+        continue;
+      }
+      if (ch === '"') {
+        inString = true;
+        continue;
+      }
+      if (ch === '/' && next === '/') {
+        if (safePos <= i + 1) return true;
+        inLineComment = true;
+        i += 1;
+        continue;
+      }
+      if (ch === '/' && next === '*') {
+        if (safePos <= i + 1) return true;
+        inBlockComment = true;
+        i += 1;
+      }
+    }
+  } catch (e) {}
+  return false;
+}
+
 function isSchemaHoverTarget(view, pos, side) {
   try {
     const doc = view && view.state && view.state.doc ? view.state.doc : null;
@@ -582,6 +633,7 @@ function isSchemaHoverTarget(view, pos, side) {
     const length = doc.length;
     const safePos = Math.max(0, Math.min(length, clampNumber(pos, 0)));
     const text = doc.toString();
+    if (isJsoncCommentPosition(text, safePos)) return false;
     const current = safePos < length ? text.charAt(safePos) : '';
     const previous = safePos > 0 ? text.charAt(safePos - 1) : '';
     const preferred = side < 0 ? previous || current : current || previous;
@@ -1023,6 +1075,7 @@ function createThemeExtension(theme) {
         boxSizing: 'border-box',
         maxWidth: 'min(560px, calc(100vw - 32px))',
         overflow: 'hidden',
+        pointerEvents: 'none',
       },
       '.cm-tooltip-lint > ul': {
         maxWidth: '100%',
@@ -1055,6 +1108,7 @@ function createThemeExtension(theme) {
         overflowX: 'hidden',
         overflowWrap: 'anywhere',
         wordBreak: 'break-word',
+        pointerEvents: 'none',
       },
       '.cm6-json-schema-hover pre, .cm6-json-schema-hover code': {
         whiteSpace: 'pre-wrap',
@@ -1832,7 +1886,7 @@ function createBridge(target, opts = {}) {
   const value = typeof opts.value === 'string' ? opts.value : (textarea ? asString(textarea.value) : asString(opts.doc));
   const view = new EditorView({ state: buildState(ctx, ctx.options, value, null), parent: host });
   try { view.dom.classList.add('xkeen-cm6-editor'); } catch (e) {}
-  ctx.scrollHandler = () => { try { emitter.emit('scroll', { left: view.scrollDOM.scrollLeft, top: view.scrollDOM.scrollTop }); hideLinkTooltip(); } catch (e) {} };
+  ctx.scrollHandler = () => { try { emitter.emit('scroll', { left: view.scrollDOM.scrollLeft, top: view.scrollDOM.scrollTop }); hideLinkTooltip(); hideSchemaHoverTooltips(); } catch (e) {} };
   try { view.scrollDOM.addEventListener('scroll', ctx.scrollHandler, { passive: true }); } catch (e) {}
   const bridge = buildBridge(view, ctx);
   const themeListener = (event) => {
