@@ -168,6 +168,11 @@ def test_outbounds_card_exposes_current_proxy_nodes_and_ping_controls():
     assert "function poolCountryNode(ent) {" in outbounds_src
     assert "xk-pool-tag-country-slot" in outbounds_src
     assert "const COUNTRY_FLAG_SVG = Object.freeze({" in outbounds_src
+    assert "SH: 'CH'" in outbounds_src
+    assert "CZECHIA|CZECH\\s*REPUBLIC|PRAGUE|PRAHA" in outbounds_src
+    assert "SWITZERLAND|SWISS|ZURICH|ZÜRICH|GENEVA" in outbounds_src
+    assert "CH: '<svg" in outbounds_src
+    assert "CZ: '<svg" in outbounds_src
     assert "xk-sub-node-country-svg" in outbounds_src
     assert "countryFlagBadgeHtml(nodeCountryFlagInfo(node))" in outbounds_src
     assert "xk-sub-node-country" in outbounds_src
@@ -194,6 +199,8 @@ def test_outbounds_card_exposes_current_proxy_nodes_and_ping_controls():
     assert "-webkit-line-clamp: 2;" in styles_src
     assert ".xk-sub-node-country[data-country=\"DE\"]" in styles_src
     assert ".xk-sub-node-country[data-country=\"RU\"]" in styles_src
+    assert ".xk-sub-node-country[data-country=\"CH\"]" in styles_src
+    assert ".xk-sub-node-country[data-country=\"CZ\"]" in styles_src
     assert ".xk-sub-node-country-svg" in styles_src
     assert ".xk-sub-node-country.is-globe" in styles_src
     assert "#outbounds-body.xk-outbounds-subscription-fragment .xk-outbounds-node-item .xk-sub-node-side {\n  min-width: 54px;" in styles_src

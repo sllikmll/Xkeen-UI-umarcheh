@@ -1534,6 +1534,7 @@ let outboundsModuleApi = null;
       UK: 'GB',
       UAE: 'AE',
       USA: 'US',
+      SH: 'CH',
     });
 
     const COUNTRY_TEXT_RULES = Object.freeze([
@@ -1544,6 +1545,8 @@ let outboundsModuleApi = null;
       [/\b(UNITED\s*STATES|USA|NEW\s*YORK|LOS\s*ANGELES|CHICAGO)\b/i, 'US'],
       [/\b(UNITED\s*KINGDOM|GREAT\s*BRITAIN|LONDON)\b/i, 'GB'],
       [/\b(GERMANY|DEUTSCHLAND|BERLIN|FRANKFURT)\b/i, 'DE'],
+      [/\b(SWITZERLAND|SWISS|ZURICH|ZÜRICH|GENEVA)\b/i, 'CH'],
+      [/\b(CZECHIA|CZECH\s*REPUBLIC|PRAGUE|PRAHA)\b/i, 'CZ'],
       [/\b(LATVIA|RIGA)\b/i, 'LV'],
       [/\b(SWEDEN|STOCKHOLM)\b/i, 'SE'],
       [/\b(NETHERLANDS|AMSTERDAM|HOLLAND)\b/i, 'NL'],
@@ -1733,8 +1736,10 @@ let outboundsModuleApi = null;
       KR: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#fff"/><circle cx="10" cy="7" r="3.1" fill="#0047a0"/><path d="M6.9 7a3.1 3.1 0 0 1 6.2 0z" fill="#cd2e3a"/><path d="M4.2 3.1l2.2-1.4M4.8 4l2.2-1.4M13.6 11.9l2.2-1.4M13 11l2.2-1.4M15.8 3.1l-2.2-1.4M15.2 4L13 2.6M6.4 11.9l-2.2-1.4M7 11l-2.2-1.4" stroke="#111827" stroke-width=".55"/></svg>',
       AE: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#000"/><rect width="20" height="9.333" fill="#fff"/><rect width="20" height="4.667" fill="#009639"/><rect width="5.2" height="14" fill="#ff0000"/></svg>',
       CA: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#fff"/><rect width="5" height="14" fill="#d52b1e"/><rect x="15" width="5" height="14" fill="#d52b1e"/><path d="M10 2.2l.8 2.1 1.8-.9-.7 2 1.9.6-1.9 1.1.7 2-1.8-.45-.25 2.15h-1.1L9.2 8.65l-1.8.45.7-2L6.2 6l1.9-.6-.7-2 1.8.9z" fill="#d52b1e"/></svg>',
+      CH: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#d52b1e"/><rect x="8.2" y="2.3" width="3.6" height="9.4" fill="#fff"/><rect x="5.2" y="5.2" width="9.6" height="3.6" fill="#fff"/></svg>',
       AU: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#012169"/><rect width="9" height="6.5" fill="#012169"/><path d="M0 0l9 6.5M9 0L0 6.5" stroke="#fff" stroke-width="1.4"/><path d="M4.5 0v6.5M0 3.25h9" stroke="#fff" stroke-width="1.8"/><path d="M4.5 0v6.5M0 3.25h9" stroke="#c8102e" stroke-width=".9"/><circle cx="14.8" cy="9.1" r="1" fill="#fff"/><circle cx="17.1" cy="3.6" r=".7" fill="#fff"/></svg>',
       PL: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#dc143c"/><rect width="20" height="7" fill="#fff"/></svg>',
+      CZ: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#d7141a"/><rect width="20" height="7" fill="#fff"/><path d="M0 0l10 7L0 14z" fill="#11457e"/></svg>',
       UA: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#ffd700"/><rect width="20" height="7" fill="#0057b7"/></svg>',
       BR: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#009b3a"/><path d="M10 1.7L18.1 7 10 12.3 1.9 7z" fill="#ffdf00"/><circle cx="10" cy="7" r="3.1" fill="#002776"/><path d="M6.9 6.35c2.1-.35 4.15-.05 6.2.85" stroke="#fff" stroke-width=".55" fill="none"/></svg>',
       CN: '<svg class="xk-sub-node-country-svg" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#de2910"/><path d="M4.2 1.6l.5 1.5h1.6l-1.3.95.5 1.55-1.3-.95-1.3.95.5-1.55-1.3-.95h1.6z" fill="#ffde00"/><circle cx="8" cy="2.2" r=".5" fill="#ffde00"/><circle cx="9.2" cy="3.6" r=".5" fill="#ffde00"/><circle cx="9.1" cy="5.4" r=".5" fill="#ffde00"/><circle cx="7.8" cy="6.6" r=".5" fill="#ffde00"/></svg>',
