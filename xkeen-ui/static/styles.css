@@ -31842,66 +31842,7 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-helper {
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid var(--modal-border, #475569d1);
-  background: var(--xk-cm-bg, #020617);
-  /* Mirror the CM6 palette defined on .xkeen-cm6-host so that the highlight
-     style applied to the diff editor (which resolves var(--xk-cm-keyword)
-     etc.) renders the same vibrant Monaco-like colors instead of cascading
-     to undefined and falling back to the inherited fg color. */
-  --xk-cm-bg: #020617;
-  --xk-cm-fg: #d4d4d4;
-  --xk-cm-caret: #d4d4d4;
-  --xk-cm-selection: #2d4f8e;
-  --xk-cm-selection-native: #2d4f8e;
-  --xk-cm-selection-match: #1e3a5f;
-  --xk-cm-active-line: transparent;
-  --xk-cm-active-line-gutter: transparent;
-  --xk-cm-active-line-fg: #c6c6c6;
-  --xk-cm-gutter-bg: #020617;
-  --xk-cm-gutter-fg: #858585;
-  --xk-cm-gutter-border: transparent;
-  --xk-cm-comment: #6a9955;
-  --xk-cm-keyword: #569cd6;
-  --xk-cm-string: #ce9178;
-  --xk-cm-number: #b5cea8;
-  --xk-cm-atom: #569cd6;
-  --xk-cm-property: #9cdcfe;
-  --xk-cm-variable: #d4d4d4;
-  --xk-cm-definition: #d4d4d4;
-  --xk-cm-type: #4ec9b0;
-  --xk-cm-operator: #d4d4d4;
-  --xk-cm-delimiter: #d4d4d4;
-  --xk-cm-punctuation: #d4d4d4;
-  --xk-cm-bracket-depth-0: #ffd700;
-  --xk-cm-bracket-depth-1: #c586c0;
-  --xk-cm-bracket-depth-2: #4fc1ff;
-  --xk-cm-comma: #d4d4d4;
-  --xk-cm-colon: #d4d4d4;
-  --xk-cm-meta: #9cdcfe;
-  --xk-cm-invalid: #f7768e;
-  --xk-cm-error: #f7768e;
-}
-
-html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host {
-  --xk-cm-fg: #111827;
-  --xk-cm-caret: #2563eb;
-  --xk-cm-selection: rgba(173, 214, 255, 0.44);
-  --xk-cm-selection-native: rgba(173, 214, 255, 0.84);
-  --xk-cm-selection-match: rgba(59, 130, 246, 0.10);
-  --xk-cm-comment: #6b7280;
-  --xk-cm-keyword: #7c3aed;
-  --xk-cm-string: #15803d;
-  --xk-cm-number: #c2410c;
-  --xk-cm-atom: #7c3aed;
-  --xk-cm-property: #2563eb;
-  --xk-cm-variable: #111827;
-  --xk-cm-definition: #111827;
-  --xk-cm-type: #2563eb;
-  --xk-cm-operator: #0891b2;
-  --xk-cm-delimiter: #0891b2;
-  --xk-cm-punctuation: #0891b2;
-  --xk-cm-meta: #be185d;
-  --xk-cm-invalid: #7f1d1d;
-  --xk-cm-error: #e11d48;
+  background: var(--xk-cm-bg, #01030a);
 }
 
 /* Selection: CM6 default cm-selectionLayer is light grey on dark and white on
@@ -31919,12 +31860,9 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host {
   color: inherit;
 }
 
-/* Gutters & editor surface: the CM6 baseTheme paints .cm-gutters white on
-   light system and unstyled (= white) when no JS theme is registered. We
-   apply only HighlightStyle here, not EditorView.theme(...), so style the
-   gutters via CSS to match the rest of the dark panel. */
+/* Gutters and editor surface inherit the same CM6 palette as the main editor. */
 .xkeen-diff-modal .xkeen-diff-host .cm-editor {
-  background-color: var(--xk-cm-bg, #020617);
+  background-color: var(--xk-cm-bg, #01030a);
   color: var(--xk-cm-fg, var(--text, #e5e7eb));
 }
 
@@ -31946,7 +31884,7 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host {
 }
 
 .xkeen-diff-modal .xkeen-diff-host .cm-gutters {
-  background-color: var(--xk-cm-gutter-bg, var(--xk-cm-bg, #020617));
+  background-color: var(--xk-cm-gutter-bg, var(--xk-cm-bg, #01030a));
   color: var(--xk-cm-gutter-fg, #858585);
   border-right: 1px solid rgba(96, 165, 250, 0.10);
 }
@@ -31965,7 +31903,7 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host {
 .xkeen-diff-modal .xkeen-diff-host .cm-mergeSpacer,
 .xkeen-diff-modal .xkeen-diff-host .cm-merge-revert,
 .xkeen-diff-modal .xkeen-diff-host .cm-changeGutter {
-  background-color: color-mix(in srgb, var(--xk-cm-bg, #020617) 88%, #071427 12%);
+  background-color: color-mix(in srgb, var(--xk-cm-bg, #01030a) 88%, #071427 12%);
 }
 
 html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-gutters {
@@ -32008,7 +31946,7 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-gutters {
 }
 
 /* CodeMirror 6 @codemirror/merge backend — fits the merge view inside our
-   .xkeen-diff-host card and matches the dark Monaco palette.
+   .xkeen-diff-host card and uses the same CM6 palette as the main editor.
    Scrolling: every level on the chain to .cm-scroller MUST keep min-height:0
    and overflow:hidden so that expanding a collapsed-fold doesn't push the
    document past the modal's viewport. The .cm-scroller itself must take
@@ -32024,7 +31962,7 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-gutters {
 }
 
 .xkeen-diff-modal .xkeen-diff-host .cm-mergeView {
-  background: var(--xk-cm-bg, #020617);
+  background: var(--xk-cm-bg, #01030a);
   color: var(--text, #e5e7eb);
 }
 
@@ -32044,9 +31982,15 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-gutters {
   font-size: calc(13px * var(--xk-font-scale, 1));
 }
 
+.xkeen-diff-modal .xkeen-diff-host.xkeen-cm6-host .cm-editor {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
 .xkeen-diff-modal .xkeen-diff-host .cm-scroller {
   font-family: inherit;
-  background-color: var(--xk-cm-bg, #020617);
+  background-color: var(--xk-cm-bg, #01030a);
   overflow-x: hidden;
   overflow-y: auto;
   height: 100%;

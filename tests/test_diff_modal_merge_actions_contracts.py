@@ -12,6 +12,7 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     mihomo = (ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_panel.js").read_text(encoding="utf-8")
     json_modal = (ROOT / "xkeen-ui" / "static" / "js" / "ui" / "json_editor_modal.js").read_text(encoding="utf-8")
     editor_shared = (ROOT / "xkeen-ui" / "static" / "js" / "pages" / "editor.shared.js").read_text(encoding="utf-8")
+    cm6_runtime = (ROOT / "xkeen-ui" / "static" / "js" / "ui" / "codemirror6_boot.js").read_text(encoding="utf-8")
     styles = (ROOT / "xkeen-ui" / "static" / "styles.css").read_text(encoding="utf-8")
 
     assert "_applyToLeftBtnEl = makeBtn(" in diff_modal
@@ -138,8 +139,22 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     # CM6 backend visual contracts: vibrant Monaco-like syntax highlight,
     # synchronized two-pane scrolling.
     assert "function cm6HighlightExtension(rt)" in diff_modal
+    assert "function cm6EditorRuntime()" in diff_modal
+    assert "function cm6CurrentTheme()" in diff_modal
+    assert "function cm6ApplyEditorTheme(host)" in diff_modal
+    assert "function cm6ClearEditorTheme(host)" in diff_modal
+    assert "function cm6SharedThemeExtension(rt)" in diff_modal
     assert "function _bindCm6ScrollSync()" in diff_modal
     assert "_bindCm6ScrollSync();" in diff_modal
+    assert "shared.createThemeExtension(cm6CurrentTheme())" in diff_modal
+    assert "shared.languageExtensionFor(language)" in diff_modal
+    assert "cm6ApplyEditorTheme(host);" in diff_modal
+    assert "cm6ClearEditorTheme(host);" in diff_modal
+    assert "if (!themeExt) {" in diff_modal
+    assert "normalizeMode," in cm6_runtime
+    assert "languageExtensionFor," in cm6_runtime
+    assert "createThemeExtension," in cm6_runtime
+    assert "applyThemeClasses," in cm6_runtime
     assert "@codemirror/language" in diff_modal
     assert "@lezer/highlight" in diff_modal
     assert "function reportBackendFallback(fromKind, err)" in diff_modal
@@ -152,14 +167,15 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert ".xkeen-diff-modal .xkeen-diff-host .cm-lineWrapping {" in styles
     assert ".xkeen-diff-modal .xkeen-diff-host .cm-lineWrapping .cm-line {" in styles
     assert ".xkeen-diff-modal .xkeen-diff-host .cm-gutters {" in styles
+    assert ".xkeen-diff-modal .xkeen-diff-host.xkeen-cm6-host .cm-editor {" in styles
     assert ".xkeen-diff-modal .xkeen-diff-host .cm-line.xkeen-diff-cm6-active-hunk-line {" in styles
     assert ".xkeen-diff-modal .xkeen-diff-host .cm-line.xkeen-diff-cm6-active-hunk-line-left {" in styles
     assert ".xkeen-diff-modal .xkeen-diff-host .cm-line.xkeen-diff-cm6-active-hunk-line-right {" in styles
     assert ".xkeen-diff-modal .xkeen-diff-host .cm-line.xkeen-diff-cm6-active-hunk-start {" in styles
     assert ".xkeen-diff-modal .xkeen-diff-host .cm-line.xkeen-diff-cm6-active-hunk-end {" in styles
-    assert "background: var(--xk-cm-bg, #020617);" in styles
-    assert "background-color: var(--xk-cm-bg, #020617);" in styles
-    assert "background-color: var(--xk-cm-gutter-bg, var(--xk-cm-bg, #020617));" in styles
+    assert "background: var(--xk-cm-bg, #01030a);" in styles
+    assert "background-color: var(--xk-cm-bg, #01030a);" in styles
+    assert "background-color: var(--xk-cm-gutter-bg, var(--xk-cm-bg, #01030a));" in styles
     assert "overflow-x: hidden;" in styles
     assert "overflow-y: auto;" in styles
 

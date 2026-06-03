@@ -1138,6 +1138,7 @@
     _activeMonaco = monaco;
     bindLayoutHooks(monaco);
 
+    cm6ClearEditorTheme(host);
     while (host && host.firstChild) host.removeChild(host.firstChild);
 
     const lang = languageFor(monaco, spec.language || 'text');
@@ -1219,6 +1220,59 @@
       if (eng && isFn(eng.get) && String(eng.get() || '') === 'codemirror') return 'cm6';
     } catch (e) {}
     return 'monaco';
+  }
+
+  function cm6EditorRuntime() {
+    try {
+      if (XKeen.ui && XKeen.ui.cm6Runtime) return XKeen.ui.cm6Runtime;
+    } catch (e) {}
+    try {
+      if (window.__XKEEN_CM6_RUNTIME__) return window.__XKEEN_CM6_RUNTIME__;
+    } catch (e2) {}
+    return null;
+  }
+
+  function cm6CurrentTheme() {
+    try {
+      const attr = document.documentElement && document.documentElement.getAttribute('data-theme');
+      return attr === 'light' ? 'default' : 'material-darker';
+    } catch (e) {}
+    return 'material-darker';
+  }
+
+  function cm6ApplyEditorTheme(host) {
+    if (!host || !host.classList) return;
+    const theme = cm6CurrentTheme();
+    try { host.classList.add('CodeMirror', 'xkeen-cm', 'xkeen-cm6-host'); } catch (e) {}
+    const shared = cm6EditorRuntime();
+    if (shared && isFn(shared.applyThemeClasses)) {
+      try {
+        shared.applyThemeClasses(host, theme);
+        return;
+      } catch (e2) {}
+    }
+    try {
+      host.classList.remove('cm-s-default', 'cm-s-material-darker', 'xkeen-cm6-light', 'xkeen-cm6-dark');
+      host.classList.add(theme === 'default' ? 'cm-s-default' : 'cm-s-material-darker');
+      host.classList.add(theme === 'default' ? 'xkeen-cm6-light' : 'xkeen-cm6-dark');
+      host.setAttribute('data-xkeen-cm6-theme', theme === 'default' ? 'light' : 'dark');
+    } catch (e3) {}
+  }
+
+  function cm6ClearEditorTheme(host) {
+    if (!host || !host.classList) return;
+    try {
+      host.classList.remove(
+        'CodeMirror',
+        'xkeen-cm',
+        'xkeen-cm6-host',
+        'cm-s-default',
+        'cm-s-material-darker',
+        'xkeen-cm6-light',
+        'xkeen-cm6-dark'
+      );
+      host.removeAttribute('data-xkeen-cm6-theme');
+    } catch (e) {}
   }
 
   async function ensureCM6Merge() {
@@ -1385,12 +1439,24 @@
     } catch (e) { return null; }
   }
 
+  function cm6SharedThemeExtension(rt) {
+    const shared = cm6EditorRuntime();
+    if (shared && isFn(shared.createThemeExtension)) {
+      try { return shared.createThemeExtension(cm6CurrentTheme()); } catch (e) {}
+    }
+    return null;
+  }
+
   function cm6LanguageExtension(rt, language) {
+    const shared = cm6EditorRuntime();
+    if (shared && isFn(shared.languageExtensionFor)) {
+      try { return shared.languageExtensionFor(language); } catch (e) {}
+    }
     const want = String(language || '').toLowerCase().trim();
-    if ((want === 'json' || want === 'jsonc') && rt.langJson && isFn(rt.langJson.json)) {
+    if ((want === 'json' || want === 'jsonc' || want === 'application/json' || want === 'application/jsonc' || want === 'text/jsonc') && rt.langJson && isFn(rt.langJson.json)) {
       try { return rt.langJson.json(); } catch (e) {}
     }
-    if ((want === 'yaml' || want === 'yml') && rt.langYaml && isFn(rt.langYaml.yaml)) {
+    if ((want === 'yaml' || want === 'yml' || want === 'text/yaml' || want === 'application/yaml') && rt.langYaml && isFn(rt.langYaml.yaml)) {
       try { return rt.langYaml.yaml(); } catch (e) {}
     }
     return null;
@@ -1399,6 +1465,8 @@
   function cm6BaseExtensions(rt, language, readOnly, side) {
     const ext = [];
     if (rt.cm && rt.cm.basicSetup) ext.push(rt.cm.basicSetup);
+    const themeExt = cm6SharedThemeExtension(rt);
+    if (themeExt) ext.push(themeExt);
     const activeHunkExt = cm6ActiveHunkExtension(rt);
     if (activeHunkExt) ext.push(activeHunkExt);
     const selectionSyncExt = cm6SelectionSyncExtension(rt, side);
@@ -1412,8 +1480,10 @@
     } catch (e) {}
     const langExt = cm6LanguageExtension(rt, language);
     if (langExt) ext.push(langExt);
-    const hlExt = cm6HighlightExtension(rt);
-    if (hlExt) ext.push(hlExt);
+    if (!themeExt) {
+      const hlExt = cm6HighlightExtension(rt);
+      if (hlExt) ext.push(hlExt);
+    }
     if (readOnly && rt.view && rt.view.EditorView && isFn(rt.view.EditorView.editable && rt.view.EditorView.editable.of)) {
       ext.push(rt.view.EditorView.editable.of(false));
     }
@@ -1444,6 +1514,7 @@
     const collapseUnchanged = (leftText === rightText) ? null : { margin: 3, minSize: 4 };
 
     disposeCM6();
+    cm6ApplyEditorTheme(host);
     while (host && host.firstChild) host.removeChild(host.firstChild);
 
     if (mode === 'inline') {

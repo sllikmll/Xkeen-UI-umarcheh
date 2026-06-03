@@ -1960,6 +1960,10 @@ const runtime = {
   ensure: async () => ({ ok: true, ready: true, backend: BACKEND, source: 'local-offline-bundle' }),
   create(target, opts = {}) { if (!target) return null; return createBridge(target, opts); },
   toFacade,
+  normalizeMode,
+  languageExtensionFor,
+  createThemeExtension,
+  applyThemeClasses,
   validateText(text, opts = {}) { return makeJsonDiagnostics(text, opts); },
   applyValidation(editor, opts = {}) {
     const target = editor && editor.raw ? editor.raw : editor;
