@@ -299,8 +299,8 @@
           ev.preventDefault();
           navigateDiff(ev.shiftKey ? -1 : 1);
         } else if (ev && (ev.ctrlKey || ev.metaKey) && !ev.altKey && String(ev.key || '').toLowerCase() === 's') {
-          if (!_canSaveFromDiff()) return;
           ev.preventDefault();
+          if (!_canRunSaveAction()) return;
           saveComparedFile();
         }
       });
@@ -1103,8 +1103,9 @@
     } catch (e) {
       _clearActiveMonacoHunkHighlight();
       _summaryEl.textContent = _formatSummaryText('');
+    } finally {
+      try { refreshActionButtons(); } catch (e) {}
     }
-    try { refreshActionButtons(); } catch (e) {}
   }
 
   async function ensureMonaco() {
@@ -2016,8 +2017,12 @@
   function _saveDisabledReason() {
     if (!_activeSpec || !_hasSaveScope()) return null;
     if (!_hasWritableBufferSide()) return 'Выберите «Текущий редактор» слева или справа, чтобы сохранить файл';
-    if (!_hasAnyDiff() && !_hasAnyDraft()) return 'Нет изменений для сохранения';
+    if (!_hasAnyDiff() && !_hasAnyDraft() && !_dirtySinceOpen) return 'Нет изменений для сохранения';
     return '';
+  }
+
+  function _canRunSaveAction() {
+    return _saveDisabledReason() === '';
   }
 
   function _revertDisabledReason() {
@@ -2374,8 +2379,8 @@
   }
 
   async function saveComparedFile() {
-    if (!_canSaveFromDiff()) return;
-    if (!_hasAnyDiff() && !_hasAnyDraft()) {
+    if (!_canRunSaveAction()) return;
+    if (!_hasAnyDiff() && !_hasAnyDraft() && !_dirtySinceOpen) {
       showFeedback('Нет изменений для сохранения', 'info');
       return;
     }

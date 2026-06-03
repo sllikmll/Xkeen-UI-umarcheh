@@ -97,7 +97,25 @@ async function ensureCodeMirrorRouting(page) {
   });
 }
 
-async function installProbeScope(page) {
+async function ensureMonacoRouting(page) {
+  const select = page.locator('#routing-editor-engine-select');
+  await expect(select).toBeVisible();
+  await select.selectOption('monaco');
+  await page.waitForFunction(() => {
+    const maybeEditor = window.XKeen?.features?.routingShell?.getEditorInstance?.({ preferRaw: true });
+    const editor = maybeEditor && maybeEditor.raw ? maybeEditor.raw : maybeEditor;
+    return !!(
+      editor &&
+      typeof editor.getModel === 'function' &&
+      typeof editor.getAction === 'function' &&
+      editor.getModel()
+    );
+  });
+}
+
+async function installProbeScope(page, options = {}) {
+  const leftText = Object.prototype.hasOwnProperty.call(options, 'leftText') ? options.leftText : LEFT_TEXT;
+  const rightText = Object.prototype.hasOwnProperty.call(options, 'rightText') ? options.rightText : RIGHT_TEXT;
   await page.evaluate(({ leftText, rightText }) => {
     window.__xkeenDiffProbe = {
       leftText,
@@ -123,7 +141,7 @@ async function installProbeScope(page) {
         return true;
       },
     });
-  }, { leftText: LEFT_TEXT, rightText: RIGHT_TEXT });
+  }, { leftText, rightText });
 }
 
 async function installWrapProbeScope(page) {
@@ -157,6 +175,82 @@ async function openScope(page, scopeName) {
 async function openProbeDiff(page) {
   await openScope(page, 'probe-cm6');
   await expect(page.locator('#xkeen-diff-modal .xkeen-diff-summary')).toContainText('Изменений: 2');
+}
+
+async function closeDiffModal(page) {
+  await page.evaluate(() => {
+    try { window.XKeen?.ui?.diffModal?.close?.('e2e'); } catch (e) {}
+  });
+  await expect(page.locator('#xkeen-diff-modal')).toBeHidden();
+}
+
+async function probeSaveCount(page) {
+  return page.evaluate(() => Number(window.__xkeenDiffProbe?.saved || 0));
+}
+
+async function expectProbeSaveCount(page, count) {
+  await expect.poll(() => probeSaveCount(page)).toBe(count);
+}
+
+async function expectSaveButtonState(page, enabled) {
+  const saveBtn = page.locator('#xkeen-diff-modal .xkeen-diff-save-btn');
+  await expect(saveBtn).toBeVisible();
+  if (enabled) await expect(saveBtn).toBeEnabled();
+  else await expect(saveBtn).toBeDisabled();
+}
+
+async function triggerSave(page, via) {
+  if (via === 'button') {
+    await page.locator('#xkeen-diff-modal .xkeen-diff-save-btn').click();
+    return;
+  }
+  await page.keyboard.press('Control+S');
+}
+
+async function triggerDisabledButtonSave(page) {
+  await page.locator('#xkeen-diff-modal .xkeen-diff-save-btn').evaluate((btn) => {
+    btn.click();
+  });
+}
+
+async function runDiffSaveMatrix(page, ensureEngine) {
+  const triggerCases = [
+    { via: 'button', trigger: () => triggerSave(page, 'button') },
+    { via: 'hotkey', trigger: () => triggerSave(page, 'hotkey') },
+  ];
+
+  for (const item of triggerCases) {
+    await installProbeScope(page);
+    await openProbeDiff(page);
+    await expectSaveButtonState(page, true);
+    await item.trigger();
+    await expectProbeSaveCount(page, 1);
+    await closeDiffModal(page);
+    await ensureEngine(page);
+  }
+
+  await installProbeScope(page, { leftText: LEFT_TEXT, rightText: LEFT_TEXT });
+  await openScope(page, 'probe-cm6');
+  await expect(page.locator('#xkeen-diff-modal .xkeen-diff-summary')).toContainText('Различий нет');
+  await expectSaveButtonState(page, false);
+  await triggerDisabledButtonSave(page);
+  await expectProbeSaveCount(page, 0);
+  await page.keyboard.press('Control+S');
+  await expectProbeSaveCount(page, 0);
+  await closeDiffModal(page);
+  await ensureEngine(page);
+
+  for (const item of triggerCases) {
+    await installProbeScope(page);
+    await openProbeDiff(page);
+    await page.locator('#xkeen-diff-modal .xkeen-diff-apply-group .xkeen-diff-apply-btn').nth(0).click();
+    await expect(page.locator('#xkeen-diff-modal .xkeen-diff-summary')).toContainText('Различий нет');
+    await expectSaveButtonState(page, true);
+    await item.trigger();
+    await expectProbeSaveCount(page, 1);
+    await closeDiffModal(page);
+    await ensureEngine(page);
+  }
 }
 
 async function collectCm6State(page) {
@@ -233,6 +327,24 @@ function expectPanesVisible(state) {
   expect(state.leftVisibleText.length).toBeGreaterThan(0);
   expect(state.rightVisibleText.length).toBeGreaterThan(0);
 }
+
+test('CodeMirror diff modal keeps save button and Ctrl+S behavior identical', async ({ page }) => {
+  await page.goto('/');
+  await waitForRoutingEditor(page);
+  await ensureCodeMirrorRouting(page);
+  await page.waitForFunction(() => !!window.XKeen?.ui?.diffModal?.open);
+
+  await runDiffSaveMatrix(page, ensureCodeMirrorRouting);
+});
+
+test('Monaco diff modal keeps save button and Ctrl+S behavior identical', async ({ page }) => {
+  await page.goto('/');
+  await waitForRoutingEditor(page);
+  await ensureMonacoRouting(page);
+  await page.waitForFunction(() => !!window.XKeen?.ui?.diffModal?.open);
+
+  await runDiffSaveMatrix(page, ensureMonacoRouting);
+});
 
 test('CodeMirror diff modal keeps both panes visible after apply-left', async ({ page }) => {
   await page.goto('/');

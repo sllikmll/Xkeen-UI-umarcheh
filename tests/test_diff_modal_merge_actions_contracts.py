@@ -106,9 +106,16 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "function _hasAnyDraft()" in diff_modal
     assert "function _applyDisabledReason(side)" in diff_modal
     assert "function _saveDisabledReason()" in diff_modal
+    assert "function _canRunSaveAction()" in diff_modal
     assert "if (!_activeSpec || !_hasSaveScope()) return null;" in diff_modal
     assert "if (!_hasWritableBufferSide()) return 'Выберите «Текущий редактор» слева или справа, чтобы сохранить файл';" in diff_modal
+    assert "if (!_hasAnyDiff() && !_hasAnyDraft() && !_dirtySinceOpen) return 'Нет изменений для сохранения';" in diff_modal
+    assert "if (!_hasAnyDiff() && !_hasAnyDraft() && !_dirtySinceOpen) {" in diff_modal
     assert "return !!(_hasSaveScope() && _hasWritableBufferSide());" in diff_modal
+    assert "return _saveDisabledReason() === '';" in diff_modal
+    assert diff_modal.count("if (!_canRunSaveAction()) return;") >= 2
+    assert "String(ev.key || '').toLowerCase() === 's') {\n          ev.preventDefault();\n          if (!_canRunSaveAction()) return;" in diff_modal
+    assert "} finally {\n      try { refreshActionButtons(); } catch (e) {}" in diff_modal
     assert "btn.classList.toggle('is-disabled', disabled);" in diff_modal
     assert "btn.disabled = disabled;" in diff_modal
     assert "btn.setAttribute('title', reason);" in diff_modal
