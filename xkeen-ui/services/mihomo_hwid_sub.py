@@ -35,6 +35,12 @@ from services.url_policy import URLPolicy, env_flag, is_url_allowed
 _B64_RE = re.compile(r"^[A-Za-z0-9+/=]+$")
 _NAME_SAFE_RE = re.compile(r"[^A-Za-z0-9._-]+")
 _MIHOMO_HWID_UA_FALLBACK_VERSION = "1.19.24"
+_HWID_RESPONSE_HEADER_KEYS = (
+    "x-hwid-active",
+    "x-hwid-limit",
+    "x-hwid-max-devices-reached",
+    "x-hwid-not-supported",
+)
 
 
 def _read_text(path: str, *, max_bytes: int = 64 * 1024) -> str | None:
@@ -178,10 +184,33 @@ def _hwid_from_mac(mac: str | None) -> str:
     return s
 
 
+def _normalize_env_hwid_override(raw: str | None) -> str:
+    """Return a safe x-hwid override value for provider requests.
+
+    Remnawave-style panels treat HWID as a client-provided string, not
+    necessarily as a MAC-derived 12-hex value. Keep user-provided strings as-is
+    after trimming, but reject control/non-ASCII bytes so they cannot become
+    invalid HTTP headers.
+    """
+
+    s = (raw or "").strip()
+    if not s or len(s) > 128:
+        return ""
+    if any(ord(ch) < 32 or ord(ch) == 127 or ord(ch) > 126 for ch in s):
+        return ""
+
+    # Preserve backward-compatible convenience for MAC-like values with
+    # separators while leaving plain Remnawave/Happ HWID strings untouched.
+    if re.fullmatch(r"[0-9A-Fa-f]{2}([:-][0-9A-Fa-f]{2}){5}", s):
+        return _hwid_from_mac(s)
+
+    return s
+
+
 def _env_hwid_override() -> tuple[str | None, str | None]:
     for key in ("XKEEN_MIHOMO_HWID", "XKEEN_HWID"):
-        hwid = _hwid_from_mac(os.environ.get(key))
-        if len(hwid) == 12:
+        hwid = _normalize_env_hwid_override(os.environ.get(key))
+        if hwid:
             return hwid, key
     return None, None
 
@@ -443,7 +472,7 @@ def get_device_info() -> Dict[str, Any]:
     }
 
     hwid_env_hint = (
-        "Если провайдер выдал конкретный HWID для привязки подписки к роутеру, "
+        "Если нужно отправлять уже привязанный или ожидаемый провайдером HWID, "
         "откройте DevTools → ENV, найдите через поиск HWID, вставьте значение в "
         "XKEEN_MIHOMO_HWID и нажмите Save. После этого заново нажмите «Проверить» "
         "в окне HWID-подписки."
@@ -501,6 +530,75 @@ class _ProbeMeta:
     content_type: str | None
     content_length: int | None
     timing_ms: int
+    hwid_response_headers: Dict[str, str] | None = None
+
+
+def _extract_hwid_response_headers(headers: Any) -> Dict[str, str]:
+    """Return Remnawave/Happ HWID response headers in lowercase form."""
+
+    if not headers:
+        return {}
+
+    lower_items: Dict[str, str] = {}
+    try:
+        for k, v in headers.items():
+            kk = str(k or "").strip().lower()
+            vv = str(v or "").strip()
+            if kk and vv:
+                lower_items[kk] = vv
+    except Exception:
+        lower_items = {}
+
+    out: Dict[str, str] = {}
+    for key in _HWID_RESPONSE_HEADER_KEYS:
+        raw = None
+        try:
+            raw = headers.get(key)
+        except Exception:
+            raw = None
+        if raw is None:
+            raw = lower_items.get(key)
+        val = str(raw or "").strip()
+        if val:
+            out[key] = val
+    return out
+
+
+def _header_truthy(value: str | None) -> bool:
+    s = str(value or "").strip().lower()
+    return bool(s) and s not in {"0", "false", "no", "off", "none", "null"}
+
+
+def _hwid_response_warnings(headers: Dict[str, str]) -> list[Dict[str, Any]]:
+    warnings: list[Dict[str, Any]] = []
+    if _header_truthy(headers.get("x-hwid-not-supported")):
+        warnings.append(
+            {
+                "code": "HWID_NOT_SUPPORTED",
+                "header": "x-hwid-not-supported",
+                "value": headers.get("x-hwid-not-supported"),
+                "hint": "Провайдер сообщил, что HWID не поддержан или не принят этим запросом.",
+            }
+        )
+    if _header_truthy(headers.get("x-hwid-max-devices-reached")):
+        warnings.append(
+            {
+                "code": "HWID_MAX_DEVICES_REACHED",
+                "header": "x-hwid-max-devices-reached",
+                "value": headers.get("x-hwid-max-devices-reached"),
+                "hint": "Провайдер сообщил, что для подписки достигнут лимит устройств.",
+            }
+        )
+    if _header_truthy(headers.get("x-hwid-limit")):
+        warnings.append(
+            {
+                "code": "HWID_LIMIT_REACHED",
+                "header": "x-hwid-limit",
+                "value": headers.get("x-hwid-limit"),
+                "hint": "Провайдер сообщил о срабатывании HWID-лимита устройств.",
+            }
+        )
+    return warnings
 
 
 _URL_POLICY_ENV_PREFIX = "XKEEN_MIHOMO_HWID"
@@ -665,6 +763,7 @@ def fetch_provider_payload(
         if len(raw) > max_bytes:
             raise ValueError("subscription_too_large")
         content_type = resp.headers.get("Content-Type") or ""
+        hwid_response_headers = _extract_hwid_response_headers(resp.headers)
 
     charset = "utf-8"
     m = re.search(r"charset=([A-Za-z0-9._-]+)", content_type, flags=re.I)
@@ -676,7 +775,13 @@ def fetch_provider_payload(
         text = raw.decode("utf-8", errors="replace")
 
     payload, meta = provider_payload_from_subscription_text(text)
-    meta.update({"content_type": content_type, "bytes": len(raw)})
+    meta.update(
+        {
+            "content_type": content_type,
+            "bytes": len(raw),
+            "hwid_response_headers": hwid_response_headers,
+        }
+    )
     return payload, meta
 
 
@@ -757,7 +862,8 @@ def _probe_once(
         pt_dec, enc = _decode_profile_title(pt_raw) if pt_raw else (None, None)
         suggested = _sanitize_provider_name(pt_dec or "")
 
-        warnings: list[Dict[str, Any]] = []
+        hwid_response_headers = _extract_hwid_response_headers(resp.headers)
+        warnings: list[Dict[str, Any]] = _hwid_response_warnings(hwid_response_headers)
         if not pt_raw:
             warnings.append(
                 {
@@ -774,6 +880,7 @@ def _probe_once(
             content_type=ctype,
             content_length=clen,
             timing_ms=elapsed_ms,
+            hwid_response_headers=hwid_response_headers,
         )
 
         profile = {
@@ -797,7 +904,7 @@ def probe_subscription(
     """Probe a HWID subscription URL.
 
     Returns a JSON-friendly dict with:
-      {ok, probe, profile, headers_used, warnings, error}
+      {ok, probe, profile, headers_used, hwid_response_headers, warnings, error}
 
     This function is blocking (network I/O). Prefer probe_subscription_safe().
     """
@@ -823,6 +930,7 @@ def probe_subscription(
                 "suggested_name": None,
             },
             "headers_used": None,
+            "hwid_response_headers": {},
             "warnings": [],
             "error": _make_error(
                 "INVALID_URL",
@@ -853,6 +961,7 @@ def probe_subscription(
                 "suggested_name": None,
             },
             "headers_used": dict(headers or {}),
+            "hwid_response_headers": {},
             "warnings": [],
             "error": _make_error(
                 "URL_BLOCKED",
@@ -901,10 +1010,14 @@ def probe_subscription(
                 },
                 "profile": profile,
                 "headers_used": hdrs,
+                "hwid_response_headers": meta.hwid_response_headers or {},
                 "warnings": warnings,
                 "error": None,
             }
         except urllib.error.HTTPError as e:
+            hwid_response_headers = _extract_hwid_response_headers(
+                getattr(e, "headers", None)
+            )
             last_meta = _ProbeMeta(
                 url=u,
                 resolved_url=getattr(e, "url", None),
@@ -913,6 +1026,7 @@ def probe_subscription(
                 content_type=(getattr(e, "headers", None) or {}).get("Content-Type"),
                 content_length=None,
                 timing_ms=0,
+                hwid_response_headers=hwid_response_headers,
             )
 
             # If HEAD isn't supported (405/501) or is rejected (400), try GET.
@@ -946,7 +1060,8 @@ def probe_subscription(
                     else None,
                 },
                 "headers_used": hdrs,
-                "warnings": [],
+                "hwid_response_headers": hwid_response_headers,
+                "warnings": _hwid_response_warnings(hwid_response_headers),
                 "error": _make_error(
                     "HTTP_ERROR",
                     f"HTTP {getattr(e, 'code', '')}: {getattr(e, 'reason', '')}".strip(),
@@ -976,6 +1091,7 @@ def probe_subscription(
                         "suggested_name": None,
                     },
                     "headers_used": hdrs,
+                    "hwid_response_headers": {},
                     "warnings": [],
                     "error": _make_error(
                         "URL_BLOCKED",
@@ -1017,6 +1133,7 @@ def probe_subscription(
                     "suggested_name": None,
                 },
                 "headers_used": hdrs,
+                "hwid_response_headers": {},
                 "warnings": [],
                 "error": err_payload or _make_error(code, msg, hint, retryable=True),
             }
@@ -1046,6 +1163,7 @@ def probe_subscription(
                     "suggested_name": None,
                 },
                 "headers_used": hdrs,
+                "hwid_response_headers": {},
                 "warnings": [],
                 "error": err_payload,
             }
@@ -1070,6 +1188,9 @@ def probe_subscription(
                     "suggested_name": None,
                 },
                 "headers_used": hdrs,
+                "hwid_response_headers": (
+                    getattr(last_meta, "hwid_response_headers", None) or {}
+                ),
                 "warnings": [],
                 "error": err_payload or _make_error(
                     "PROBE_FAILED",
@@ -1097,6 +1218,7 @@ def probe_subscription(
             "suggested_name": None,
         },
         "headers_used": hdrs,
+        "hwid_response_headers": {},
         "warnings": [],
         "error": _make_error("PROBE_FAILED", "unknown", "", retryable=True),
     }
@@ -1145,6 +1267,7 @@ def probe_subscription_safe(
                 "suggested_name": None,
             },
             "headers_used": dict(headers or {}),
+            "hwid_response_headers": {},
             "warnings": [],
             "error": _make_error(
                 "TIMEOUT",

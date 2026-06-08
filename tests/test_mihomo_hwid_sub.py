@@ -141,6 +141,25 @@ def test_hwid_device_info_uses_stored_generated_fallback_when_mac_missing(monkey
     assert info2["hwid"] == "12DDB1C0BADF"
 
 
+def test_hwid_device_info_accepts_string_env_override(monkeypatch):
+    monkeypatch.setenv("XKEEN_MIHOMO_HWID", "4194304")
+    monkeypatch.setattr(hwid, "_pick_mac_address_keenetic", lambda: "aa:bb:cc:dd:ee:ff")
+    monkeypatch.setattr(hwid, "_ndmc_show_version", lambda: "")
+    monkeypatch.setattr(hwid, "_detect_mihomo_version", lambda: "v1.19.25")
+
+    info = hwid.get_device_info()
+
+    assert info["hwid"] == "4194304"
+    assert info["hwid_source"] == "XKEEN_MIHOMO_HWID"
+    assert info["headers"]["x-hwid"] == "4194304"
+
+
+def test_hwid_env_override_normalizes_mac_like_values_but_rejects_invalid_headers():
+    assert hwid._normalize_env_hwid_override("aa:bb:cc:dd:ee:ff") == "AABBCCDDEEFF"
+    assert hwid._normalize_env_hwid_override("remna-hwid-4194304") == "remna-hwid-4194304"
+    assert hwid._normalize_env_hwid_override("bad\r\nx-test: 1") == ""
+
+
 def test_hwid_provider_entry_uses_mihomo_provider_defaults():
     entry = hwid.build_provider_entry(
         "OverSecure_VPN_4G",
@@ -236,3 +255,31 @@ def test_hwid_probe_reports_tls_handshake_timeout(monkeypatch):
     assert result["error"]["message"] == "TLS handshake с сервером подписки не завершился вовремя."
     assert "VPN/exit-IP" in result["error"]["hint"]
     assert "_ssl.c:999" in result["error"]["detail"]
+
+
+def test_hwid_probe_exposes_provider_hwid_headers_on_http_error(monkeypatch):
+    def fake_probe_once(url, *, method, headers, insecure, timeout, policy):
+        raise urllib.error.HTTPError(
+            url,
+            404,
+            "Not Found",
+            {
+                "profile-title": "Premium",
+                "x-hwid-active": "true",
+                "x-hwid-max-devices-reached": "true",
+            },
+            None,
+        )
+
+    monkeypatch.setattr(hwid, "_probe_once", fake_probe_once)
+
+    result = hwid.probe_subscription(
+        "https://provider.example/sub",
+        headers={"x-hwid": "4194304"},
+    )
+
+    assert result["ok"] is False
+    assert result["profile"]["profile_title"] == "Premium"
+    assert result["hwid_response_headers"]["x-hwid-active"] == "true"
+    assert result["hwid_response_headers"]["x-hwid-max-devices-reached"] == "true"
+    assert any(w["code"] == "HWID_MAX_DEVICES_REACHED" for w in result["warnings"])

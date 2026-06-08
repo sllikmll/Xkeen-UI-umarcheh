@@ -111,6 +111,52 @@ let mihomoHwidSubModuleApi = null;
     toggleBlock(el, !!s);
   }
 
+  function hwidSourceLabel(source) {
+    const s = String(source || '').trim();
+    if (!s) return '';
+    if (s === 'XKEEN_MIHOMO_HWID') return 'DevTools override';
+    if (s === 'XKEEN_HWID') return 'XKEEN_HWID override';
+    if (s === 'mac') return 'MAC роутера';
+    if (s === 'machine_id') return 'machine-id';
+    if (s === 'generated_state') return 'сгенерирован и сохранён';
+    if (s === 'generated_ephemeral') return 'временный fallback';
+    if (s === 'none') return '';
+    return s;
+  }
+
+  function isTruthyHeader(value) {
+    const s = String(value == null ? '' : value).trim().toLowerCase();
+    return !!s && !['0', 'false', 'no', 'off', 'none', 'null'].includes(s);
+  }
+
+  function hwidProviderHeaderTips(headers) {
+    const h = headers || {};
+    const tips = [];
+    if (isTruthyHeader(h['x-hwid-not-supported'])) {
+      tips.push('Провайдер сообщил: HWID не поддержан или не принят этим запросом.');
+    }
+    if (isTruthyHeader(h['x-hwid-max-devices-reached'])) {
+      tips.push('Провайдер сообщил: достигнут лимит устройств для этой подписки.');
+    }
+    if (isTruthyHeader(h['x-hwid-limit'])) {
+      tips.push('Провайдер сообщил о срабатывании HWID-лимита устройств.');
+    }
+    if (!tips.length && isTruthyHeader(h['x-hwid-active'])) {
+      tips.push('Провайдер подтвердил активный HWID-limit для этой подписки.');
+    }
+    return tips;
+  }
+
+  function hwidProviderHeaderMeta(headers) {
+    const h = headers || {};
+    const parts = [];
+    if (isTruthyHeader(h['x-hwid-active'])) parts.push('HWID active');
+    if (isTruthyHeader(h['x-hwid-not-supported'])) parts.push('HWID not supported');
+    if (isTruthyHeader(h['x-hwid-max-devices-reached'])) parts.push('HWID max devices reached');
+    if (isTruthyHeader(h['x-hwid-limit'])) parts.push('HWID limit');
+    return parts;
+  }
+
   function cmThemeFromPage() {
     const t = document.documentElement.getAttribute('data-theme');
     return t === 'light' ? 'default' : 'material-darker';
@@ -676,10 +722,11 @@ let mihomoHwidSubModuleApi = null;
       try {
         const mac = data && data.mac ? String(data.mac) : '';
         const hwid = data && data.hwid ? String(data.hwid) : '';
+        const source = hwidSourceLabel(data && data.hwid_source);
         const ua = (data && data.user_agent) ? String(data.user_agent) : '';
         if (hwid || mac || ua) {
           setMeta([
-            hwid ? ('HWID: ' + hwid) : '',
+            hwid ? ('HWID: ' + hwid + (source ? (' (' + source + ')') : '')) : '',
             (!hwid && mac) ? ('MAC: ' + mac) : (hwid && mac ? ('MAC: ' + mac) : ''),
             ua ? ('UA: ' + ua) : '',
           ].filter(Boolean).join(' • '));
@@ -853,6 +900,10 @@ let mihomoHwidSubModuleApi = null;
         const hint = (errObj && errObj.hint) ? String(errObj.hint) : '';
         setStatus(msg, true);
         if (hint) setMeta(hint);
+        try {
+          const providerTips = hwidProviderHeaderTips(res && res.hwid_response_headers);
+          if (providerTips.length) setTip(providerTips.join(' '));
+        } catch (e3) {}
         return;
       }
 
@@ -881,10 +932,11 @@ let mihomoHwidSubModuleApi = null;
         const hwid = String((headers && headers['x-hwid']) || '').trim();
         const hwidWarning = dev && dev.hwid_warning ? String(dev.hwid_warning) : '';
         if (!hwid) {
-          tips.push('HWID не определён: provider будет без x-hwid. Если провайдер выдал HWID, открой DevTools → ENV, найди через поиск HWID, заполни XKEEN_MIHOMO_HWID и снова нажми «Проверить».');
+          tips.push('HWID не определён: provider будет без x-hwid. Если провайдер ожидает уже привязанный HWID, открой DevTools → ENV, найди через поиск HWID, заполни XKEEN_MIHOMO_HWID и снова нажми «Проверить».');
         } else if (hwidWarning) {
           tips.push(hwidWarning);
         }
+        tips.push(...hwidProviderHeaderTips(res.hwid_response_headers));
         if (res.no_headers_ok === true) {
           tips.push('Сервер отвечает и без HWID-заголовков, но это не доказывает, что подписка обычная. Для premium/HWID лучше оставить header.');
         }
@@ -903,6 +955,7 @@ let mihomoHwidSubModuleApi = null;
       if (probe.method) parts.push(probe.method);
       if (typeof probe.timing_ms === 'number') parts.push(probe.timing_ms + 'ms');
       if (probe.resolved_url && String(probe.resolved_url) !== url) parts.push('→ ' + String(probe.resolved_url));
+      parts.push(...hwidProviderHeaderMeta(res.hwid_response_headers));
       if (parts.length) setMeta(parts.join(' • '));
 
       // Warnings

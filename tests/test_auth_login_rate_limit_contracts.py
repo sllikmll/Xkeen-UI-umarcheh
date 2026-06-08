@@ -39,6 +39,8 @@ def test_devtools_env_exposes_mihomo_hwid_and_searchable_groups():
     assert 'if k == "XKEEN_XRAY_TEST_TIMEOUT":' in env_py
     assert 'if k == "XKEEN_XRAY_TEST_TIMEOUT":\n        return "30"' in env_py
     assert "ENV_HELP.XKEEN_MIHOMO_HWID" in env_js
+    assert "Ручной override x-hwid" in env_js
+    assert "который выдал провайдер" not in env_js
     assert "ENV_HELP.XKEEN_XRAY_TEST_TIMEOUT" in env_js
     assert "По умолчанию 30 секунд для всех роутеров" in env_js
     assert "15 на остальных" not in env_js
