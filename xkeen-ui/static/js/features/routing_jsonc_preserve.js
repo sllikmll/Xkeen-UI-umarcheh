@@ -1003,6 +1003,124 @@ let routingJsoncPreserveModuleApi = null;
     return seg;
   }
 
+  function stripRawChunks(raw, chunks) {
+    let out = String(raw == null ? "" : raw);
+    const list = Array.isArray(chunks) ? chunks : [];
+    for (const chunk0 of list) {
+      const chunk = String(chunk0 || "");
+      if (!chunk) continue;
+      out = out.split(chunk).join("");
+    }
+    return out;
+  }
+
+  function normalizeArrayNodeRaw(raw, indent) {
+    const out = String(raw == null ? "" : raw)
+      .replace(/\r\n?/g, "\n")
+      .replace(/^\n+/, "")
+      .replace(/\s+$/, "");
+    if (!out) return "";
+    if (out[0] === "\n" || out[0] === "\r") return out;
+    if (out[0] === " " || out[0] === "\t") return "\n" + out;
+    return "\n" + String(indent || "") + out;
+  }
+
+  function cloneActiveSegmentsWithoutDisabledRules(segments, disabledSegments) {
+    const chunks = (Array.isArray(disabledSegments) ? disabledSegments : [])
+      .map((seg) => String((seg && seg.raw) || ""))
+      .filter(Boolean);
+    if (!chunks.length) return Array.isArray(segments) ? segments : [];
+
+    return (Array.isArray(segments) ? segments : []).map((seg) => {
+      if (!seg || typeof seg !== "object") return seg;
+      return {
+        ...seg,
+        raw: stripRawChunks(seg.raw, chunks),
+        leadingCommentRaw: stripRawChunks(seg.leadingCommentRaw, chunks),
+      };
+    });
+  }
+
+  function firstIndexForRuleKey(rules, tagCounts, key) {
+    const arr = Array.isArray(rules) ? rules : [];
+    const wanted = String(key || "");
+    if (!wanted) return -1;
+    for (let i = 0; i < arr.length; i++) {
+      if (buildRuleKey(arr[i], i, tagCounts) === wanted) return i;
+    }
+    return -1;
+  }
+
+  function lastIndexForRuleKey(rules, tagCounts, key) {
+    const arr = Array.isArray(rules) ? rules : [];
+    const wanted = String(key || "");
+    if (!wanted) return -1;
+    for (let i = arr.length - 1; i >= 0; i--) {
+      if (buildRuleKey(arr[i], i, tagCounts) === wanted) return i;
+    }
+    return -1;
+  }
+
+  function buildDisabledRuleSlots(segments, disabledSegments, rules, tagCounts) {
+    const segs = Array.isArray(segments) ? segments : [];
+    const disabled = Array.isArray(disabledSegments) ? disabledSegments : [];
+    const nextRules = Array.isArray(rules) ? rules : [];
+    const maxSlot = nextRules.length;
+    const bySlot = new Map();
+
+    for (const meta of disabled) {
+      const start = Number(meta && meta.start);
+      let slot = 0;
+      let prevSeg = null;
+      let nextSeg = null;
+      if (Number.isFinite(start)) {
+        for (let i = 0; i < segs.length; i++) {
+          const seg = segs[i];
+          const objStart = Number(seg && seg.objStart);
+          if (!Number.isFinite(objStart)) continue;
+          if (objStart < start) {
+            slot++;
+            prevSeg = { seg, index: i };
+          } else if (!nextSeg) {
+            nextSeg = { seg, index: i };
+          }
+        }
+      } else {
+        slot = maxSlot;
+      }
+
+      let anchored = false;
+      if (nextSeg) {
+        const key = buildRuleKeyFromSegment(nextSeg.seg, nextSeg.index, tagCounts);
+        const nextIndex = firstIndexForRuleKey(nextRules, tagCounts, key);
+        if (nextIndex >= 0) {
+          slot = nextIndex;
+          anchored = true;
+        }
+      }
+      if (!anchored && prevSeg) {
+        const key = buildRuleKeyFromSegment(prevSeg.seg, prevSeg.index, tagCounts);
+        const prevIndex = lastIndexForRuleKey(nextRules, tagCounts, key);
+        if (prevIndex >= 0) slot = prevIndex + 1;
+      }
+
+      slot = Math.max(0, Math.min(maxSlot, slot));
+      if (!bySlot.has(slot)) bySlot.set(slot, []);
+      bySlot.get(slot).push(meta);
+    }
+
+    for (const list of bySlot.values()) {
+      list.sort((a, b) => {
+        const aa = Number(a && a.start);
+        const bb = Number(b && b.start);
+        if (Number.isFinite(aa) && Number.isFinite(bb) && aa !== bb) return aa - bb;
+        return 0;
+      });
+    }
+
+    return bySlot;
+  }
+
   /**
    * Build a new array text for `routing.rules`:
    * - unchanged items: keep raw segment (without trailing comma) to preserve inner formatting/comments
@@ -1019,11 +1137,14 @@ let routingJsoncPreserveModuleApi = null;
       }
 
       const rules = Array.isArray(newRules) ? newRules : [];
-      const segs = Array.isArray(oldSegments) ? oldSegments : [];
+      const originalSegs = Array.isArray(oldSegments) ? oldSegments : [];
+      const disabledSegments = extractDisabledRuleSegments(text, range);
+      const segs = cloneActiveSegmentsWithoutDisabledRules(originalSegs, disabledSegments);
 
       const countsOld = countSegmentRuleTags(segs);
       const countsNew = countRuleTags(rules);
       const tagCounts = mergeTagCountsMax(countsOld, countsNew);
+      const disabledSlots = buildDisabledRuleSlots(originalSegs, disabledSegments, rules, tagCounts);
 
       const queues = buildSegmentQueuesByKey(segs, tagCounts);
 
@@ -1041,7 +1162,7 @@ let routingJsoncPreserveModuleApi = null;
           const elemIndent = String(range.childIndent || "");
           const prefix = "\n" + elemIndent;
           const body = formatObjectNoFirstIndent(rule, elemIndent);
-          items.push(prefix + body);
+          items.push({ kind: "active", raw: prefix + body });
           continue;
         }
 
@@ -1052,7 +1173,7 @@ let routingJsoncPreserveModuleApi = null;
           if (raw && raw[0] !== "\n" && raw[0] !== "\r") {
             raw = "\n" + String(range.childIndent || "") + raw;
           }
-          items.push(raw);
+          items.push({ kind: "active", raw });
           continue;
         }
 
@@ -1075,7 +1196,7 @@ let routingJsoncPreserveModuleApi = null;
         if (out && out[0] !== "\n" && out[0] !== "\r") {
           out = "\n" + String(range.childIndent || "") + out;
         }
-        items.push(out);
+        items.push({ kind: "active", raw: out });
       }
 
       // Count removed
@@ -1083,15 +1204,33 @@ let routingJsoncPreserveModuleApi = null;
       for (const q of queues.values()) removed += q.length;
       stats.removed = removed;
 
+      const nodes = [];
+      for (let slot = 0; slot <= rules.length; slot++) {
+        const disabledAtSlot = disabledSlots.get(slot) || [];
+        for (const meta of disabledAtSlot) {
+          nodes.push({
+            kind: "disabled",
+            raw: normalizeArrayNodeRaw(meta && meta.raw, (meta && meta.indent) || range.childIndent || ""),
+          });
+        }
+        if (slot < items.length) nodes.push(items[slot]);
+      }
+
       // Render
-      if (items.length === 0) {
+      if (nodes.length === 0) {
         return { ok: true, text: "[]", stats };
       }
 
+      const activeTotal = items.length;
+      let activeSeen = 0;
       let out = "[";
-      for (let i = 0; i < items.length; i++) {
-        out += items[i];
-        if (i !== items.length - 1) out += ",";
+      for (const node of nodes) {
+        if (!node || !node.raw) continue;
+        out += node.raw;
+        if (node.kind === "active") {
+          activeSeen++;
+          if (activeSeen < activeTotal) out += ",";
+        }
       }
       out += "\n" + String(range.indent || "") + "]";
 

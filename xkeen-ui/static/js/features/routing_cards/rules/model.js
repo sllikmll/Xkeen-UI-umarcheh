@@ -62,9 +62,8 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
 
       ruleSegments = segments.map((seg, index) => {
         const rawSeg = String((seg && seg.raw) || '');
-        const leading = String((seg && seg.leadingCommentRaw) || '');
         const objStart = Number(seg && seg.objStart);
-        const start = Number.isFinite(objStart) ? Math.max(0, objStart - leading.length) : 0;
+        const start = Number.isFinite(objStart) ? Math.max(0, objStart) : 0;
         return {
           index,
           start,

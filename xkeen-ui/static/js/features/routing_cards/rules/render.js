@@ -2185,7 +2185,6 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
 
     const buildRuleCard = ({ idx, rule, displayIndex }) => {
       const sum = summarizeRule(rule);
-      const structureLocked = hasDisabledRules;
 
       const card = document.createElement('div');
       card.className = 'routing-rule-card' + (dragEnabled ? ' is-draggable' : '');
@@ -2314,7 +2313,7 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
       upBtn.textContent = '⬆';
       upBtn.setAttribute('title', 'Переместить правило вверх');
       upBtn.setAttribute('aria-label', 'Переместить правило вверх');
-      upBtn.disabled = structureLocked || idx <= 0;
+      upBtn.disabled = idx <= 0;
       upBtn.addEventListener('click', () => {
         if (idx <= 0) return;
         if (moveRuleToIndex(idx, idx - 1)) {
@@ -2331,7 +2330,7 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
       downBtn.textContent = '⬇';
       downBtn.setAttribute('title', 'Переместить правило вниз');
       downBtn.setAttribute('aria-label', 'Переместить правило вниз');
-      downBtn.disabled = structureLocked || idx >= m.rules.length - 1;
+      downBtn.disabled = idx >= m.rules.length - 1;
       downBtn.addEventListener('click', () => {
         if (idx >= m.rules.length - 1) return;
         if (moveRuleToIndex(idx, idx + 1)) {
@@ -2348,7 +2347,6 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
       dupBtn.textContent = '📄';
       dupBtn.setAttribute('title', 'Дублировать правило');
       dupBtn.setAttribute('aria-label', 'Дублировать правило');
-      dupBtn.disabled = structureLocked;
       dupBtn.addEventListener('click', () => {
         const copy = JSON.parse(JSON.stringify(rule || {}));
         m.rules.splice(idx + 1, 0, copy);
@@ -2364,7 +2362,6 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
       delBtn.textContent = '🗑';
       delBtn.setAttribute('title', 'Удалить правило');
       delBtn.setAttribute('aria-label', 'Удалить правило');
-      delBtn.disabled = structureLocked;
       delBtn.addEventListener('click', async () => {
         const ok = await confirmModal({
           title: 'Удалить правило',
