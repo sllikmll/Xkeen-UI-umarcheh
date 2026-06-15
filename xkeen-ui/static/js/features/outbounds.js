@@ -6921,7 +6921,6 @@ let outboundsModuleApi = null;
         if (!res.ok || !data || data.ok === false) {
           const msg = String((data && (data.error || data.message)) || 'Не удалось проверить задержку узла.');
           subsSetStatus(msg, true);
-          try { toastXkeen(msg, 'error'); } catch (e2) {}
           return false;
         }
         const delay = Number(data.delay_ms || (data.entry && data.entry.delay_ms));
@@ -6933,7 +6932,6 @@ let outboundsModuleApi = null;
       } catch (e) {
         const msg = 'Ошибка проверки задержки: ' + String(e && e.message ? e.message : e);
         subsSetStatus(msg, true);
-        try { toastXkeen(msg, 'error'); } catch (e2) {}
         return false;
       } finally {
         delete _subscriptionNodePingState[pendingKey];

@@ -5314,6 +5314,30 @@ def test_probe_subscription_node_latency_updates_state(tmp_path: Path, monkeypat
     assert saved["node_latency"][node["key"]]["history"][0]["status"] == "ok"
 
 
+def test_probe_text_summary_keeps_xray_tail_separate():
+    from services import xray_subscriptions as subs
+
+    raw_error = "<urlopen error [Errno 104] Connection reset by peer>"
+    tail = subs._probe_process_log_tail(
+        "",
+        "\n".join(
+            [
+                "xray: Xray 26.4.25",
+                "infra/conf/serial: Reading config",
+                "core: Xray started",
+                "accepted //www.gstatic.com:443",
+            ]
+        ),
+        limit=120,
+    )
+    summary = subs._trim_probe_text(raw_error, limit=subs.PROBE_ERROR_SUMMARY_LIMIT)
+
+    assert summary == raw_error
+    assert "Xray 26.4.25" in tail
+    assert "accepted //www.gstatic.com:443" in tail
+    assert "xray:" not in summary.lower()
+
+
 def test_probe_subscription_nodes_latency_updates_state_once(tmp_path: Path, monkeypatch):
     from services import xray_subscriptions as subs
 

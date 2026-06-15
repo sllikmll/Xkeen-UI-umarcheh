@@ -775,7 +775,7 @@
       "properties": {
         "network": {
           "type": "string",
-          "enum": ["tcp", "kcp", "ws", "http", "quic", "grpc", "httpupgrade", "splithttp", "xhttp"],
+          "enum": ["tcp", "kcp", "ws", "http", "quic", "grpc", "httpupgrade", "splithttp", "hysteria", "xhttp"],
           "deprecatedValues": ["grpc"],
           "deprecationMessage": "Transport gRPC устарел в актуальных версиях Xray; по возможности используйте XHTTP (stream-up H2).",
           "default": "tcp",
@@ -807,6 +807,7 @@
               "type": "string",
               "enum": ["chrome", "firefox", "safari", "ios", "android", "edge", "360", "qq", "random", "randomized", ""]
             },
+            "show": { "type": "boolean", "default": false },
             "certificates": { "type": "array", "items": { "$ref": "#/definitions/certificate" } },
             "disableSystemRoot": { "type": "boolean", "default": false },
             "pinnedPeerCertificateChainSha256": { "type": "array", "items": { "type": "string" } },
@@ -906,6 +907,44 @@
               "description": "Дополнительные HTTP-заголовки.",
               "additionalProperties": { "type": "string" }
             }
+          }
+        },
+        "hysteriaSettings": {
+          "type": "object",
+          "description": "Hysteria/Hysteria2 transport settings. For Hysteria2, use version=2 and auth.",
+          "properties": {
+            "version": { "type": "integer", "enum": [1, 2], "default": 2 },
+            "auth": { "type": "string" },
+            "congestion": { "type": "string" },
+            "up": { "type": "string" },
+            "down": { "type": "string" }
+          }
+        },
+        "finalmask": {
+          "type": "object",
+          "description": "Final mask settings for Hysteria2, including salamander UDP masking.",
+          "properties": {
+            "udp": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": { "type": "string" },
+                  "settings": { "type": "object" }
+                }
+              }
+            },
+            "udpmasks": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": { "type": "string" },
+                  "settings": { "type": "object" }
+                }
+              }
+            },
+            "quicParams": { "type": "object" }
           }
         },
         "sockopt": {
@@ -1058,7 +1097,7 @@
         "sendThrough": { "type": "string", "default": "0.0.0.0", "description": "IP для отправки" },
         "protocol": {
           "type": "string",
-          "enum": ["blackhole", "dns", "freedom", "http", "socks", "vmess", "vless", "shadowsocks", "trojan", "wireguard", "loopback"],
+          "enum": ["blackhole", "dns", "freedom", "http", "socks", "vmess", "vless", "shadowsocks", "trojan", "hysteria", "wireguard", "loopback"],
           "description": "Протокол"
         },
         "settings": {

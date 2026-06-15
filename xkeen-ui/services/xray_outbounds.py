@@ -644,7 +644,7 @@ def build_hy2_url_from_config(cfg):
     Поддерживаем базовые параметры:
       - auth (username[:password])
       - sni / insecure
-      - obfs salamander (udpmasks)
+      - obfs salamander (finalmask/legacy udpmasks)
 
     Если конфиг не похож на Hysteria2 — вернёт None.
     """
@@ -723,7 +723,8 @@ def build_hy2_url_from_config(cfg):
 
         # obfs salamander
         try:
-            masks = ss.get("udpmasks") or []
+            finalmask = ss.get("finalmask") if isinstance(ss.get("finalmask"), dict) else {}
+            masks = finalmask.get("udp") or finalmask.get("udpmasks") or ss.get("udpmasks") or []
             if isinstance(masks, list) and masks:
                 m0 = masks[0] if isinstance(masks[0], dict) else None
                 if m0 and str(m0.get("type") or "").lower() == "salamander":
@@ -834,7 +835,7 @@ def build_outbounds_config_from_hysteria2(url: str, *, proxy_tags: Optional[List
       - username[:password] -> hysteriaSettings.auth
       - host/port -> settings.address/port
       - sni / insecure
-      - obfs=salamander + obfs-password -> udpmasks
+      - obfs=salamander + obfs-password -> finalmask.udp
 
     Дополнительно поддерживаем pinSHA256 из ссылки и добавляем его в Xray-конфиг как
     tlsSettings.pinnedPeerCertificateChainSha256.
@@ -871,7 +872,7 @@ def build_outbounds_config_from_hysteria2(url: str, *, proxy_tags: Optional[List
     qs = parse_qs(parsed.query, keep_blank_values=True)
 
     sni = _first(qs, "sni", None) or host
-    fp = _first(qs, "fp", None) or _first(qs, "fingerprint", None)
+    fp = _first(qs, "fp", None) or _first(qs, "fingerprint", None) or "chrome"
     alpn_raw = _first(qs, "alpn", None)
     alpn = [x.strip() for x in str(alpn_raw or "").split(",") if x.strip()] if alpn_raw else ["h3"]
     insecure = _to_bool(_first(qs, "insecure", None)) or _to_bool(_first(qs, "allowInsecure", None))
@@ -897,7 +898,7 @@ def build_outbounds_config_from_hysteria2(url: str, *, proxy_tags: Optional[List
     # obfs salamander
     obfs = str(_first(qs, "obfs", "") or "").strip().lower()
     obfs_pwd = _first(qs, "obfs-password", None) or _first(qs, "obfs_password", None)
-    udpmasks: List[Dict[str, Any]] = []
+    finalmask_udp: List[Dict[str, Any]] = []
     if obfs == "salamander":
         pwd = str(obfs_pwd or "").strip()
         m: Dict[str, Any] = {
@@ -906,7 +907,7 @@ def build_outbounds_config_from_hysteria2(url: str, *, proxy_tags: Optional[List
         }
         if pwd:
             m["settings"]["password"] = pwd
-        udpmasks.append(m)
+        finalmask_udp.append(m)
     elif _first(qs, "fm", None):
         try:
             final_mask = json.loads(unquote(str(_first(qs, "fm", "") or "")))
@@ -919,14 +920,14 @@ def build_outbounds_config_from_hysteria2(url: str, *, proxy_tags: Optional[List
                     if not item_type:
                         continue
                     settings = item.get("settings")
-                    udpmasks.append(
+                    finalmask_udp.append(
                         {
                             "type": item_type,
                             "settings": settings if isinstance(settings, dict) else {},
                         }
                     )
         except Exception:
-            udpmasks = []
+            finalmask_udp = []
 
     # Optional: user-specified params (best-effort)
     congestion = _first(qs, "congestion", None)
@@ -951,29 +952,16 @@ def build_outbounds_config_from_hysteria2(url: str, *, proxy_tags: Optional[List
         "tlsSettings": {
             "serverName": str(sni),
             "alpn": alpn or ["h3"],
+            "allowInsecure": bool(insecure),
+            "fingerprint": str(fp),
+            "show": False,
         },
     }
 
-    if fp:
-        stream_settings["tlsSettings"]["fingerprint"] = str(fp)
     if pin_values:
         stream_settings["tlsSettings"]["pinnedPeerCertificateChainSha256"] = pin_values
-    if insecure:
-        stream_settings["tlsSettings"]["allowInsecure"] = True
-
-    if obfs == "salamander":
-        pwd = str(obfs_pwd or "").strip()
-        # Пароль для salamander в Xray задаётся в udpmasks
-        m = {
-            "type": "salamander",
-            "settings": {},
-        }
-        if pwd:
-            m["settings"]["password"] = pwd
-        stream_settings["udpmasks"] = [m]
-
-    if udpmasks and "udpmasks" not in stream_settings:
-        stream_settings["udpmasks"] = udpmasks
+    if finalmask_udp:
+        stream_settings["finalmask"] = {"udp": finalmask_udp}
 
     outbound = {
         "tag": PROXY_OUTBOUND_TAG,

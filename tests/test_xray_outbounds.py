@@ -139,9 +139,13 @@ def test_build_hysteria2_from_link_preserves_tls_fingerprint_and_finalmask():
     assert stream["tlsSettings"]["serverName"] == "nosfer-nle.mooo.com"
     assert stream["tlsSettings"]["fingerprint"] == "chrome"
     assert stream["tlsSettings"]["alpn"] == ["h3", "h2"]
-    assert stream["udpmasks"] == [
-        {"type": "salamander", "settings": {"password": "mask-secret"}}
-    ]
+    assert stream["tlsSettings"]["allowInsecure"] is False
+    assert stream["tlsSettings"]["show"] is False
+    assert stream["finalmask"] == {
+        "udp": [
+            {"type": "salamander", "settings": {"password": "mask-secret"}}
+        ]
+    }
 
 
 def test_build_hysteria2_url_from_config_preserves_tls_fingerprint_and_alpn():
@@ -165,6 +169,13 @@ def test_build_hysteria2_url_from_config_preserves_tls_fingerprint_and_alpn():
                         "serverName": "nosfer-nle.mooo.com",
                         "fingerprint": "chrome",
                         "alpn": ["h3"],
+                        "allowInsecure": False,
+                        "show": False,
+                    },
+                    "finalmask": {
+                        "udp": [
+                            {"type": "salamander", "settings": {"password": "mask-secret"}}
+                        ]
                     },
                 },
             }
@@ -182,3 +193,5 @@ def test_build_hysteria2_url_from_config_preserves_tls_fingerprint_and_alpn():
     assert qs["sni"] == ["nosfer-nle.mooo.com"]
     assert qs["fp"] == ["chrome"]
     assert qs["alpn"] == ["h3"]
+    assert qs["obfs"] == ["salamander"]
+    assert qs["obfs-password"] == ["mask-secret"]

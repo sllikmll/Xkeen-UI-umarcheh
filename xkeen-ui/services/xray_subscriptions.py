@@ -122,6 +122,8 @@ DEFAULT_PROBE_TIMEOUT_SECONDS = 8.0
 PROBE_PROCESS_START_TIMEOUT_SECONDS = 4.0
 PROBE_PROCESS_START_ATTEMPTS = 3
 PROBE_BATCH_CONCURRENCY = 3
+PROBE_ERROR_SUMMARY_LIMIT = 240
+PROBE_ERROR_DETAIL_LIMIT = 700
 NODE_LATENCY_HISTORY_LIMIT = 5
 AUTO_BALANCER_RULE_TAG = "xk_auto_leastPing"
 AUTO_BALANCER_TAG = "proxy"
@@ -5162,7 +5164,7 @@ def _history_entry(*, status: str, checked_at: float, delay_ms: int | None = Non
     if delay_ms is not None:
         item["delay_ms"] = int(delay_ms)
     if error:
-        item["error"] = str(error)[:240]
+        item["error"] = str(error)[:PROBE_ERROR_SUMMARY_LIMIT]
     return item
 
 
@@ -5184,7 +5186,7 @@ def _merge_latency_entry(existing: Any, *, checked_at: float, probe_url: str, de
     if delay_ms is not None:
         out["delay_ms"] = int(delay_ms)
     if error:
-        out["error"] = str(error)[:240]
+        out["error"] = str(error)[:PROBE_ERROR_SUMMARY_LIMIT]
     return out
 
 
@@ -5372,7 +5374,9 @@ def probe_xray_outbounds_nodes_latency(
         probe_item = probe_results.get(target_key, {})
         checked_at = _now()
         delay_ms = probe_item.get("delay_ms")
-        error_text = str(probe_item.get("error") or "")
+        error_text = _trim_probe_text(probe_item.get("error"), limit=PROBE_ERROR_SUMMARY_LIMIT)
+        error_detail = _trim_probe_text(probe_item.get("error_detail"), limit=PROBE_ERROR_DETAIL_LIMIT)
+        xray_log_tail = str(probe_item.get("xray_log_tail") or "").strip()
         entry = _merge_latency_entry(
             latency_map.get(target_key),
             checked_at=checked_at,
@@ -5396,6 +5400,10 @@ def probe_xray_outbounds_nodes_latency(
             ok_count += 1
         else:
             item["error"] = error_text
+            if error_detail:
+                item["error_detail"] = error_detail
+            if xray_log_tail:
+                item["xray_log_tail"] = xray_log_tail
             failed_count += 1
         results.append(item)
 
@@ -5532,6 +5540,29 @@ def _start_probe_process(
     return None, last_error
 
 
+def _trim_probe_text(value: Any, *, limit: int) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    text = re.sub(r"\s+", " ", text)
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 3)].rstrip() + "..."
+
+
+def _probe_process_log_tail(stdout: str, stderr: str, *, limit: int = PROBE_ERROR_DETAIL_LIMIT) -> str:
+    text = "\n".join(part for part in (stdout, stderr) if str(part or "").strip())
+    if not text:
+        return ""
+    lines = [line.strip() for line in text.replace("\r", "").splitlines() if line.strip()]
+    if not lines:
+        return ""
+    compact = " | ".join(lines[-8:])
+    if len(compact) > limit:
+        compact = "..." + compact[-max(0, limit - 3):]
+    return compact
+
+
 def _probe_outbounds_batch(
     *,
     xray_bin: str,
@@ -5565,6 +5596,8 @@ def _probe_outbounds_batch(
                 continue
 
             results: Dict[str, Dict[str, Any]] = {}
+            stdout_text = ""
+            stderr_text = ""
             try:
                 max_workers = max(1, min(int(concurrency or 1), len(prepared)))
                 with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -5579,14 +5612,25 @@ def _probe_outbounds_batch(
                             delay_ms, error_text = future.result()
                         except Exception as exc:
                             delay_ms, error_text = None, str(exc)
-                        results[key] = {"delay_ms": delay_ms, "error": error_text}
+                        results[key] = {"delay_ms": delay_ms, "error": _trim_probe_text(error_text, limit=PROBE_ERROR_SUMMARY_LIMIT)}
             finally:
-                _terminate_process(proc)
+                if any(item.get("delay_ms") is None for item in results.values()):
+                    time.sleep(0.2)
+                stdout_text, stderr_text = _terminate_process(proc)
+            log_tail = _probe_process_log_tail(stdout_text, stderr_text)
+            if log_tail:
+                for item in results.values():
+                    if item.get("delay_ms") is not None:
+                        continue
+                    base_error = str(item.get("error") or "").strip()
+                    item["error"] = base_error or "xray probe failed"
+                    item["xray_log_tail"] = log_tail
+                    item["error_detail"] = (base_error + " | " if base_error else "") + "xray: " + log_tail
             return results
 
     error_text = last_error or "xray probe start failed"
     return {
-        str(item.get("key") or ""): {"delay_ms": None, "error": error_text}
+        str(item.get("key") or ""): {"delay_ms": None, "error": _trim_probe_text(error_text, limit=PROBE_ERROR_SUMMARY_LIMIT)}
         for item in targets
         if str(item.get("key") or "")
     }
@@ -5792,7 +5836,9 @@ def probe_subscription_nodes_latency(
         probe_item = probe_results.get(target_key, {})
         checked_at = _now()
         delay_ms = probe_item.get("delay_ms")
-        error_text = str(probe_item.get("error") or "")
+        error_text = _trim_probe_text(probe_item.get("error"), limit=PROBE_ERROR_SUMMARY_LIMIT)
+        error_detail = _trim_probe_text(probe_item.get("error_detail"), limit=PROBE_ERROR_DETAIL_LIMIT)
+        xray_log_tail = str(probe_item.get("xray_log_tail") or "").strip()
         entry = _merge_latency_entry(
             existing_latency.get(target_key),
             checked_at=checked_at,
@@ -5816,6 +5862,10 @@ def probe_subscription_nodes_latency(
             ok_count += 1
         else:
             item["error"] = error_text
+            if error_detail:
+                item["error_detail"] = error_detail
+            if xray_log_tail:
+                item["xray_log_tail"] = xray_log_tail
             failed_count += 1
         results.append(item)
 
