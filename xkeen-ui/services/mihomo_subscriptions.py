@@ -33,6 +33,8 @@ STATE_FILENAME = "mihomo_subscriptions.json"
 DEFAULT_INTERVAL_HOURS = 24
 MIN_INTERVAL_HOURS = 1
 MAX_INTERVAL_HOURS = 168
+REFRESH_PARSER_XRAY_JSON = "xray-json"
+REFRESH_PARSER_MIHOMO_PROVIDER = "mihomo-provider"
 
 _STATE_LOCK = threading.RLock()
 _SCHEDULER_LOCK = threading.Lock()
@@ -106,6 +108,13 @@ def _clean_string_list(value: Any) -> List[str]:
     return out
 
 
+def _clean_refresh_parser(value: Any) -> str:
+    raw = str(value or "").strip().lower().replace("_", "-")
+    if raw in {"mihomo-provider", "provider", "proxy-provider", "hwid-provider"}:
+        return REFRESH_PARSER_MIHOMO_PROVIDER
+    return REFRESH_PARSER_XRAY_JSON
+
+
 def _derive_tag_from_url(url: str) -> str:
     try:
         host = urlparse(str(url or "")).hostname or ""
@@ -136,6 +145,7 @@ def _normalise_saved_state(raw: Any) -> Dict[str, Any]:
         entry["url"] = url
         entry["source"] = str(item.get("source") or ("config" if item.get("proxy_names") else "generator")).strip() or "generator"
         entry["tag"] = str(item.get("tag") or _derive_tag_from_url(url)).strip() or "xray-sub"
+        entry["refresh_parser"] = _clean_refresh_parser(item.get("refresh_parser") or item.get("refreshParser"))
         entry["enabled"] = bool(item.get("enabled", True))
         entry["interval_hours"] = _clamp_interval(item.get("interval_hours", item.get("intervalHours")))
         entry["groups"] = _clean_string_list(item.get("groups"))
@@ -489,8 +499,9 @@ def sync_imported_xray_subscription(
     groups: Sequence[Any] | None = None,
     interval_hours: Any = DEFAULT_INTERVAL_HOURS,
     tag: str | None = None,
+    refresh_parser: Any = REFRESH_PARSER_XRAY_JSON,
 ) -> Dict[str, Any]:
-    """Persist an Xray-JSON subscription inserted directly into config.yaml.
+    """Persist a parsed subscription inserted directly into config.yaml.
 
     The Mihomo panel import modal patches raw YAML instead of saving generator
     state.  These entries keep enough source metadata to refresh only the
@@ -504,7 +515,13 @@ def sync_imported_xray_subscription(
     if not blocks:
         raise ValueError("proxy_yamls is required")
 
-    clean_tag = str(tag or _derive_tag_from_url(clean_url)).strip() or "xray-sub"
+    parser = _clean_refresh_parser(refresh_parser)
+    fallback_tag = (
+        "mihomo-provider:" + (urlparse(clean_url).hostname or "provider")
+        if parser == REFRESH_PARSER_MIHOMO_PROVIDER
+        else _derive_tag_from_url(clean_url)
+    )
+    clean_tag = str(tag or fallback_tag).strip() or "xray-sub"
     sub_id = _entry_id_from_url(clean_url, clean_tag)
     proxy_names = _extract_proxy_names_from_yaml("\n\n".join(blocks))
     if not proxy_names:
@@ -529,6 +546,7 @@ def sync_imported_xray_subscription(
             "url": clean_url,
             "source": "config",
             "tag": clean_tag,
+            "refresh_parser": parser,
             "enabled": enabled,
             "interval_hours": interval,
             "groups": _clean_string_list(groups or prev.get("groups")),
@@ -601,6 +619,77 @@ def _extract_proxy_names_from_yaml(yaml_text: Any) -> List[str]:
         if value:
             names.append(value)
     return names
+
+
+def _provider_proxy_blocks_from_payload(payload: Any, *, max_count: int = 256) -> List[str]:
+    text = str(payload or "").replace("\r\n", "\n").replace("\r", "\n")
+    lines = text.splitlines()
+    section_start = -1
+    section_indent = 0
+    for idx, line in enumerate(lines):
+        stripped = line.lstrip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(line) - len(stripped)
+        if re.match(r"^proxies\s*:\s*(?:#.*)?$", stripped):
+            section_start = idx + 1
+            section_indent = indent
+            break
+
+    section = lines[section_start:] if section_start >= 0 else lines
+    if section_start >= 0:
+        clipped: List[str] = []
+        for line in section:
+            stripped = line.lstrip()
+            indent = len(line) - len(stripped)
+            if stripped and not stripped.startswith("#") and indent <= section_indent:
+                break
+            clipped.append(line)
+        section = clipped
+
+    starts: List[int] = []
+    item_indent: int | None = None
+    for idx, line in enumerate(section):
+        m = re.match(r"^(\s*)-\s*name\s*:", line)
+        if not m:
+            continue
+        indent = len(m.group(1))
+        if item_indent is None:
+            item_indent = indent
+        if indent == item_indent:
+            starts.append(idx)
+
+    if not starts or item_indent is None:
+        return []
+
+    blocks: List[str] = []
+    for pos, start in enumerate(starts[:max_count]):
+        end = starts[pos + 1] if pos + 1 < len(starts) else len(section)
+        normalized: List[str] = []
+        for line in section[start:end]:
+            if len(line) >= item_indent and line[:item_indent].strip() == "":
+                normalized.append(line[item_indent:])
+            else:
+                normalized.append(line)
+        while normalized and not normalized[-1].strip():
+            normalized.pop()
+        block = "\n".join(normalized).strip()
+        if block and _extract_proxy_names_from_yaml(block):
+            blocks.append(block)
+    return blocks
+
+
+def _fetch_mihomo_provider_proxy_blocks(url: str) -> Tuple[List[str], List[Dict[str, Any]]]:
+    from services.mihomo_hwid_sub import fetch_provider_payload, get_device_info
+
+    info = get_device_info()
+    headers = info.get("headers") if isinstance(info, dict) else {}
+    payload, meta = fetch_provider_payload(str(url or ""), headers=headers if isinstance(headers, dict) else {})
+    blocks = _provider_proxy_blocks_from_payload(payload)
+    skipped: List[Dict[str, Any]] = []
+    if isinstance(meta, dict) and meta.get("skipped_count"):
+        skipped.append({"name": "provider", "reason": f"skipped_count: {meta.get('skipped_count')}"})
+    return blocks, skipped
 
 
 def _existing_names_for_refresh(generator_state: Dict[str, Any], *, skip_index: int) -> List[str]:
@@ -859,12 +948,15 @@ def _refresh_config_subscription(
 
         old_names_set = set(old_names)
         existing_names = [name for name in _all_proxy_names_from_config(active_text) if name not in old_names_set]
-        body, _headers = fetch_subscription_body(str(sub.get("url") or ""))
-        proxies, skipped = convert_subscription_text(body, existing_names=existing_names)
-        if not proxies:
-            raise RuntimeError("no_supported_proxies")
-
-        new_blocks = [str(getattr(proxy, "yaml", "") or "").strip() for proxy in proxies]
+        parser = _clean_refresh_parser(sub.get("refresh_parser") or sub.get("refreshParser"))
+        if parser == REFRESH_PARSER_MIHOMO_PROVIDER:
+            new_blocks, skipped = _fetch_mihomo_provider_proxy_blocks(str(sub.get("url") or ""))
+        else:
+            body, _headers = fetch_subscription_body(str(sub.get("url") or ""))
+            proxies, skipped = convert_subscription_text(body, existing_names=existing_names)
+            if not proxies:
+                raise RuntimeError("no_supported_proxies")
+            new_blocks = [str(getattr(proxy, "yaml", "") or "").strip() for proxy in proxies]
         new_blocks = [block for block in new_blocks if block]
         if not new_blocks:
             raise RuntimeError("empty_proxy_yaml")
@@ -892,6 +984,7 @@ def _refresh_config_subscription(
                     restart_xkeen("mihomo-subscription-refresh")
 
         sub["source"] = "config"
+        sub["refresh_parser"] = parser
         sub["groups"] = groups
         sub["proxy_names"] = new_names
         sub["managed_yaml"] = "\n\n".join(new_blocks)

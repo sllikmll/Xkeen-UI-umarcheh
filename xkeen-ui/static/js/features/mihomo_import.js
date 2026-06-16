@@ -49,6 +49,7 @@ let mihomoImportModuleApi = null;
     xrayManagedList: 'mihomo-import-xray-managed',
 
     btnParse: 'mihomo-import-parse-btn',
+    btnParseStatic: 'mihomo-import-parse-static-btn',
     btnInsert: 'mihomo-import-insert-btn',
   };
 
@@ -127,6 +128,10 @@ let mihomoImportModuleApi = null;
 
   function $(id) {
     return document.getElementById(id);
+  }
+
+  function boolOpt(value) {
+    return value === true || value === 1 || String(value || '').trim().toLowerCase() === 'true';
   }
 
   function toastMsg(msg, kind) {
@@ -429,9 +434,24 @@ let mihomoImportModuleApi = null;
     return (Array.isArray(outputs) ? outputs : []).filter((item) => item && item.xrayBulk && item.type === 'proxy');
   }
 
+  function providerStaticBulkOutputs(outputs) {
+    return (Array.isArray(outputs) ? outputs : []).filter((item) => item && item.providerStaticBulk && item.type === 'proxy');
+  }
+
   function groupXrayOutputsByUri(outputs) {
     const map = new Map();
     xrayBulkOutputs(outputs).forEach((item) => {
+      const uri = String(item && item.uri || '').trim();
+      if (!uri) return;
+      if (!map.has(uri)) map.set(uri, []);
+      map.get(uri).push(item);
+    });
+    return Array.from(map.entries()).map(([uri, items]) => ({ uri, items }));
+  }
+
+  function groupProviderStaticOutputsByUri(outputs) {
+    const map = new Map();
+    providerStaticBulkOutputs(outputs).forEach((item) => {
       const uri = String(item && item.uri || '').trim();
       if (!uri) return;
       if (!map.has(uri)) map.set(uri, []);
@@ -592,14 +612,16 @@ let mihomoImportModuleApi = null;
     const block = $(IDS.xrayRefreshBlock);
     const note = $(IDS.xrayRefreshNote);
     const input = $(IDS.xrayInterval);
-    const groups = groupXrayOutputsByUri(outputs);
+    const xrayGroups = groupXrayOutputsByUri(outputs);
+    const providerGroups = groupProviderStaticOutputsByUri(outputs);
+    const groups = xrayGroups.concat(providerGroups);
     if (!block) return;
-    const hasXray = groups.length > 0;
+    const hasManagedImport = groups.length > 0;
     const managed = managedConfigXraySubscriptions();
-    block.classList.toggle('hidden', !hasXray && !managed.length);
+    block.classList.toggle('hidden', !hasManagedImport && !managed.length);
     try {
       const field = input && input.closest ? input.closest('.xk-mi-refresh-field') : null;
-      if (field) field.style.display = hasXray ? '' : 'none';
+      if (field) field.style.display = hasManagedImport ? '' : 'none';
     } catch (e) {}
     if (input && !String(input.value || '').trim()) {
       input.value = String(loadXrayIntervalPref());
@@ -609,7 +631,7 @@ let mihomoImportModuleApi = null;
       const count = groups.reduce((sum, group) => sum + group.items.length, 0);
       const subWord = pluralRu(groups.length, ['подписка', 'подписки', 'подписок']);
       const nodeWord = pluralRu(count, ['узел', 'узла', 'узлов']);
-      if (hasXray) {
+      if (hasManagedImport) {
         note.textContent = `Будет создана запись автообновления: ${groups.length} ${subWord}, ${count} ${nodeWord}. Интервал применится при «Вставить в конфиг».`;
       } else if (managed.length) {
         const managedWord = pluralRu(managed.length, ['подписка уже управляется', 'подписки уже управляются', 'подписок уже управляется']);
@@ -1986,7 +2008,7 @@ let mihomoImportModuleApi = null;
     return data;
   }
 
-  async function buildSubscriptionProviderConfig(uri, existingConfig) {
+  async function buildSubscriptionProviderConfig(uri, existingConfig, options = {}) {
     let probe = null;
     try {
       probe = await probeRegularProvider(uri);
@@ -1995,6 +2017,22 @@ let mihomoImportModuleApi = null;
     }
     const profile = (probe && probe.profile) || {};
     const providerName = String(profile.suggested_name || profile.profile_title || '').trim();
+    const providerProxies = Array.isArray(probe && probe.provider_proxies) ? probe.provider_proxies : [];
+    if (options && options.staticProxies && providerProxies.length) {
+      const warnings = providerProbeWarningMessages(probe);
+      return providerProxies
+        .map((p) => ({
+          type: 'proxy',
+          proxy_name: String(p.proxy_name || p.proxyName || '').trim(),
+          content: String(p.proxy_yaml || p.proxyYaml || p.content || '').trimEnd() + '\n',
+          providerStaticBulk: true,
+          provider_mode: String((probe && probe.provider_mode) || '').trim(),
+          provider_payload: (probe && probe.provider_payload) || null,
+          provider_warnings: warnings,
+          refresh_parser: 'mihomo-provider',
+        }))
+        .filter((p) => p.proxy_name && String(p.content || '').trim());
+    }
     const providerUrl = String((probe && probe.provider_url) || '').trim() || localProviderAdapterUrl(uri, false);
     const providerHeaders = normalizeProviderHeaders((probe && probe.provider_headers) || null);
     const out = generateConfigForMihomo(uri, existingConfig, { providerName, providerUrl, providerHeaders });
@@ -2116,7 +2154,12 @@ let mihomoImportModuleApi = null;
   }
 
   async function registerImportedXraySubscriptions(configText, groups) {
-    const grouped = groupXrayOutputsByUri(_lastResult && _lastResult.outputs);
+    const grouped = groupXrayOutputsByUri(_lastResult && _lastResult.outputs)
+      .map((group) => ({ ...group, refreshParser: 'xray-json' }))
+      .concat(
+        groupProviderStaticOutputsByUri(_lastResult && _lastResult.outputs)
+          .map((group) => ({ ...group, refreshParser: 'mihomo-provider' })),
+      );
     if (!grouped.length) return [];
 
     const intervalHours = readXrayIntervalHours();
@@ -2133,6 +2176,8 @@ let mihomoImportModuleApi = null;
         config: String(configText || ''),
         groups: Array.isArray(groups) ? groups : [],
         interval_hours: intervalHours,
+        refresh_parser: group.refreshParser,
+        tag: group.refreshParser === 'mihomo-provider' ? 'mihomo-provider:' + hostFromUrl(group.uri) : undefined,
         proxies: group.items.map((item) => ({
           proxy_name: String(item.proxy_name || '').trim(),
           proxy_yaml: String(item.content || '').trimEnd(),
@@ -2149,6 +2194,15 @@ let mihomoImportModuleApi = null;
 
   function escapeRegExp(s) {
     return String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function hostFromUrl(url) {
+    try {
+      const host = new URL(String(url || '')).hostname || '';
+      return host || 'provider';
+    } catch (e) {
+      return 'provider';
+    }
   }
 
   function configHasProxyName(cfgText, name) {
@@ -2260,10 +2314,11 @@ let mihomoImportModuleApi = null;
   // UI Actions
   // ---------------------------------------------------------------------------
 
-  async function parseInput() {
+  async function parseInput(options = {}) {
     const inp = $(IDS.input);
     const rawText = inp ? String(inp.value || '') : '';
     const mode = getImportMode();
+    const staticProviderProxies = boolOpt(options && options.staticProviderProxies);
 
     if (!rawText.trim()) {
       let msg = 'Вставь ссылку узла или https-подписку.';
@@ -2355,9 +2410,18 @@ let mihomoImportModuleApi = null;
               }
               continue;
             }
-            const out = await buildSubscriptionProviderConfig(line, tmp);
-            outputs.push({ ...out, uri: line });
-            tmp += '\n' + out.content;
+            const out = await buildSubscriptionProviderConfig(line, tmp, {
+              staticProxies: staticProviderProxies,
+            });
+            if (Array.isArray(out)) {
+              out.forEach((item) => {
+                outputs.push({ ...item, uri: line });
+                tmp += '\n' + item.content;
+              });
+            } else {
+              outputs.push({ ...out, uri: line });
+              tmp += '\n' + out.content;
+            }
             continue;
           }
 
@@ -2414,6 +2478,18 @@ let mihomoImportModuleApi = null;
         previewSections.push(`${header}\n${group.join('\n\n')}`);
         continue;
       }
+      if (o.providerStaticBulk) {
+        const startUri = o.uri;
+        const group = [];
+        while (i < outputs.length && outputs[i].providerStaticBulk && outputs[i].uri === startUri) {
+          const raw = String(outputs[i].content || '').trimEnd();
+          group.push(raw.split('\n').map((l) => (l ? '  ' + l : l)).join('\n'));
+          i += 1;
+        }
+        const header = `# proxies (HWID-подписка: ${group.length} узлов из ${startUri})`;
+        previewSections.push(`${header}\n${group.join('\n\n')}`);
+        continue;
+      }
       const raw = String(o.content || '').trimEnd();
       const ind = raw.split('\n').map((l) => (l ? '  ' + l : l)).join('\n');
       previewSections.push(`# proxies\n${ind}`);
@@ -2427,6 +2503,7 @@ let mihomoImportModuleApi = null;
     setHint('Будет добавлено в секцию: ' + targets.join(' + '));
 
     const xrayNodeCount = outputs.filter((o) => o.xrayBulk).length;
+    const providerStaticNodeCount = outputs.filter((o) => o.providerStaticBulk).length;
     const providerWarningsRaw = [];
     outputs.forEach((o) => {
       providerWarningsRaw.push(...providerOutputWarnings(o));
@@ -2449,6 +2526,12 @@ let mihomoImportModuleApi = null;
         `Распознана Xray-подписка: ${xrayNodeCount} узлов будут вставлены как блок proxies. Автообновление: каждые ${intervalHours} ч после вставки.`,
         false,
       );
+    } else if (providerStaticNodeCount > 0) {
+      const intervalHours = readXrayIntervalHours();
+      setStatus(
+        `Распознана HWID-подписка: ${providerStaticNodeCount} узлов будут вставлены как блок proxies. Автообновление: каждые ${intervalHours} ч после вставки.`,
+        false,
+      );
     } else {
       setStatus('Готово. Нажми «Вставить в конфиг».', false);
     }
@@ -2465,6 +2548,7 @@ let mihomoImportModuleApi = null;
 
     const btnIns = $(IDS.btnInsert);
     const btnParse = $(IDS.btnParse);
+    const btnParseStatic = $(IDS.btnParseStatic);
 
     if (btnIns) {
       btnIns.disabled = true;
@@ -2473,6 +2557,10 @@ let mihomoImportModuleApi = null;
     if (btnParse) {
       btnParse.disabled = true;
       try { btnParse.classList.add('loading'); } catch (e2) {}
+    }
+    if (btnParseStatic) {
+      btnParseStatic.disabled = true;
+      try { btnParseStatic.classList.add('loading'); } catch (e2b) {}
     }
 
     setStatus('Вставляю в config.yaml…', false);
@@ -2503,7 +2591,7 @@ let mihomoImportModuleApi = null;
         xrayRegisterFailed = true;
         try { console.warn('mihomo import subscription register failed', registerErr); } catch (e4a) {}
         toastMsg(
-          'YAML вставлен, но автообновление Xray-JSON не сохранилось: ' +
+          'YAML вставлен, но автообновление подписки не сохранилось: ' +
             (registerErr && registerErr.message ? registerErr.message : String(registerErr || 'ошибка')),
           true,
         );
@@ -2519,7 +2607,7 @@ let mihomoImportModuleApi = null;
       if (!xrayRegisterFailed) {
         toastMsg(
           registeredXrayCount
-            ? `Добавлено в config.yaml. Автообновление Xray-JSON: ${registeredXrayCount} ${pluralRu(registeredXrayCount, ['подписка', 'подписки', 'подписок'])}.`
+            ? `Добавлено в config.yaml. Автообновление: ${registeredXrayCount} ${pluralRu(registeredXrayCount, ['подписка', 'подписки', 'подписок'])}.`
             : 'Добавлено в config.yaml ✅',
           false,
         );
@@ -2544,6 +2632,10 @@ let mihomoImportModuleApi = null;
       if (btnParse) {
         btnParse.disabled = false;
         try { btnParse.classList.remove('loading'); } catch (e6) {}
+      }
+      if (btnParseStatic) {
+        btnParseStatic.disabled = false;
+        try { btnParseStatic.classList.remove('loading'); } catch (e6b) {}
       }
     }
   }
@@ -2581,6 +2673,7 @@ let mihomoImportModuleApi = null;
     }
 
     wireButton(IDS.btnParse, () => parseInput());
+    wireButton(IDS.btnParseStatic, () => parseInput({ staticProviderProxies: true }));
     wireButton(IDS.btnInsert, () => insertIntoEditor());
 
     // Persist groups selection (if remember enabled)
@@ -2601,9 +2694,10 @@ let mihomoImportModuleApi = null;
       xrayIntervalInput.addEventListener('change', () => {
         const hours = readXrayIntervalHours();
         saveXrayIntervalPref(hours);
-        if (_lastResult && xrayBulkOutputs(_lastResult.outputs).length) {
+        if (_lastResult && (xrayBulkOutputs(_lastResult.outputs).length || providerStaticBulkOutputs(_lastResult.outputs).length)) {
+          const count = xrayBulkOutputs(_lastResult.outputs).length + providerStaticBulkOutputs(_lastResult.outputs).length;
           setStatus(
-            `Распознана Xray-подписка: ${xrayBulkOutputs(_lastResult.outputs).length} узлов будут вставлены как блок proxies. Автообновление: каждые ${hours} ч после вставки.`,
+            `Распознана статическая подписка: ${count} узлов будут вставлены как блок proxies. Автообновление: каждые ${hours} ч после вставки.`,
             false,
           );
         }

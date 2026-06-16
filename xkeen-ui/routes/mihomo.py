@@ -331,6 +331,82 @@ def _mihomo_provider_payload_summary(
     }
 
 
+def _mihomo_proxy_name_from_yaml_line(line: str) -> str:
+    m = re.match(r"^\s*-\s*name\s*:\s*(.+?)\s*$", str(line or ""))
+    if not m:
+        return ""
+    raw = m.group(1).strip()
+    if raw and raw[0] not in ("'", '"'):
+        raw = re.sub(r"\s+#.*$", "", raw).strip()
+    return raw.strip("'\"")
+
+
+def _mihomo_provider_payload_proxy_blocks(payload: str, *, max_count: int = 256) -> list[Dict[str, str]]:
+    """Extract individual proxy YAML blocks from a provider `proxies:` payload."""
+
+    text = str(payload or "").replace("\r\n", "\n").replace("\r", "\n")
+    lines = text.splitlines()
+    section_start = -1
+    section_indent = 0
+    for idx, line in enumerate(lines):
+        stripped = line.lstrip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(line) - len(stripped)
+        if re.match(r"^proxies\s*:\s*(?:#.*)?$", stripped):
+            section_start = idx + 1
+            section_indent = indent
+            break
+        if indent == 0 and re.match(r"^[A-Za-z0-9_.-]+\s*:", stripped):
+            continue
+
+    if section_start < 0:
+        return []
+
+    section: list[str] = []
+    for line in lines[section_start:]:
+        stripped = line.lstrip()
+        indent = len(line) - len(stripped)
+        if stripped and not stripped.startswith("#") and indent <= section_indent:
+            break
+        section.append(line)
+
+    starts: list[int] = []
+    item_indent: int | None = None
+    for idx, line in enumerate(section):
+        m = re.match(r"^(\s*)-\s*name\s*:", line)
+        if not m:
+            continue
+        indent = len(m.group(1))
+        if item_indent is None:
+            item_indent = indent
+        if indent == item_indent:
+            starts.append(idx)
+
+    if not starts or item_indent is None:
+        return []
+
+    out: list[Dict[str, str]] = []
+    for pos, start in enumerate(starts[:max_count]):
+        end = starts[pos + 1] if pos + 1 < len(starts) else len(section)
+        block_lines = section[start:end]
+        normalized: list[str] = []
+        for line in block_lines:
+            if len(line) >= item_indent and line[:item_indent].strip() == "":
+                normalized.append(line[item_indent:])
+            else:
+                normalized.append(line)
+        while normalized and not normalized[-1].strip():
+            normalized.pop()
+        if not normalized:
+            continue
+        name = _mihomo_proxy_name_from_yaml_line(normalized[0])
+        yaml_block = "\n".join(normalized).rstrip() + "\n"
+        if name and yaml_block.lstrip().startswith("- name"):
+            out.append({"proxy_name": name, "proxy_yaml": yaml_block})
+    return out
+
+
 def _mihomo_hwid_url_blocked_hint(reason: str) -> str:
     r = str(reason or "").strip()
     if r == "http_not_allowed":
@@ -611,12 +687,12 @@ def create_mihomo_blueprint(
                             policy=policy,
                         )
                         direct_summary = _mihomo_provider_payload_summary(payload, meta)
+                        current_provider_summary = direct_summary
                         if direct_summary.get("has_nodes"):
                             result["provider_url"] = url
                             result["provider_headers"] = dict(direct_headers)
                             result["provider_mode"] = "direct_headers"
                             result["provider_payload"] = direct_summary
-                            current_provider_summary = direct_summary
                     except Exception as exc:
                         result["provider_direct_error"] = _subscription_fetch_failure_reason(exc)
 
@@ -631,7 +707,11 @@ def create_mihomo_blueprint(
                 except Exception:
                     pass
 
-                if _mihomo_hwid_headers_suggest_required(hwid_markers):
+                direct_looks_hwid_gated = bool(
+                    current_provider_summary
+                    and current_provider_summary.get("hwid_placeholder_provider")
+                )
+                if _mihomo_hwid_headers_suggest_required(hwid_markers) or direct_looks_hwid_gated:
                     try:
                         info = _mh_hwid_get_device_info()
                         hwid_payload, hwid_meta = _mh_hwid_fetch_provider_payload(
@@ -651,6 +731,9 @@ def create_mihomo_blueprint(
                             result["provider_headers"] = {}
                             result["provider_mode"] = "hwid_adapter"
                             result["provider_payload"] = hwid_summary
+                            provider_proxies = _mihomo_provider_payload_proxy_blocks(hwid_payload)
+                            if provider_proxies:
+                                result["provider_proxies"] = provider_proxies
                     except Exception as exc:
                         result["provider_hwid_error"] = _subscription_fetch_failure_reason(exc)
 
@@ -1843,6 +1926,7 @@ def create_mihomo_blueprint(
                 groups=_norm_groups(payload.get("groups") or []),
                 interval_hours=payload.get("interval_hours", payload.get("intervalHours")),
                 tag=(payload.get("tag") or "").strip() or None,
+                refresh_parser=payload.get("refresh_parser", payload.get("refreshParser")),
             )
         except Exception as e:
             return _mihomo_exception(

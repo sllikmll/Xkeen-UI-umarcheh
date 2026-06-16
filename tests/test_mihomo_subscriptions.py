@@ -220,6 +220,73 @@ def test_sync_imported_xray_subscription_stores_config_source(tmp_path):
     assert state["last_config_hash"] == svc._hash_text(config)
 
 
+def test_refresh_mihomo_provider_static_subscription_uses_provider_parser(tmp_path, monkeypatch):
+    old_yaml = "- name: Old Node\n  type: vless\n  server: 1.1.1.1\n  port: 443\n"
+    config = (
+        "proxies:\n"
+        "  - name: Old Node\n"
+        "    type: vless\n"
+        "    server: 1.1.1.1\n"
+        "    port: 443\n"
+        "proxy-groups:\n"
+        "  - name: Auto\n"
+        "    type: select\n"
+        "    proxies:\n"
+        "      - \"Old Node\"\n"
+    )
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(config, encoding="utf-8")
+
+    saved = svc.sync_imported_xray_subscription(
+        str(tmp_path),
+        url="https://provider.example/sub",
+        config_text=config,
+        proxy_yamls=[old_yaml],
+        groups=["Auto"],
+        refresh_parser="mihomo-provider",
+        tag="mihomo-provider:provider.example",
+    )
+    assert saved["refresh_parser"] == "mihomo-provider"
+
+    def fake_provider_blocks(url):
+        assert url == "https://provider.example/sub"
+        return (
+            ["- name: New Node\n  type: vless\n  server: 2.2.2.2\n  port: 443\n"],
+            [],
+        )
+
+    monkeypatch.setattr(svc, "_fetch_mihomo_provider_proxy_blocks", fake_provider_blocks)
+
+    restarts: list[str] = []
+
+    def _restart(*, source="api"):
+        restarts.append(source)
+
+    def _save(text: str):
+        config_path.write_text(text, encoding="utf-8")
+
+    result = svc.refresh_subscription(
+        str(tmp_path),
+        saved["id"],
+        mihomo_config_file=str(config_path),
+        restart_xkeen=_restart,
+        save_callback=_save,
+    )
+
+    assert result["ok"] is True
+    assert result["changed"] is True
+    assert restarts == ["mihomo-subscription-refresh"]
+    written = config_path.read_text(encoding="utf-8")
+    assert "Old Node" not in written
+    assert "New Node" in written
+    assert "2.2.2.2" in written
+    assert '      - "New Node"' in written
+    state = svc.load_subscription_state(str(tmp_path))
+    sub = state["subscriptions"][0]
+    assert sub["refresh_parser"] == "mihomo-provider"
+    assert sub["proxy_names"] == ["New Node"]
+
+
 def test_delete_config_subscription_can_detach_without_touching_config(tmp_path):
     proxy_yaml = "- name: Old Node\n  type: vless\n  server: 1.1.1.1\n  port: 443\n"
     config = (

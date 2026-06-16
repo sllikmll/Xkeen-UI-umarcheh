@@ -544,6 +544,11 @@ def test_regular_provider_probe_prefers_hwid_adapter_when_hwid_payload_has_more_
     assert "/mihomo/hwid/provider.yaml?" in payload["provider_url"]
     assert payload["provider_headers"] == {}
     assert payload["provider_payload"]["node_count"] == 2
+    assert [item["proxy_name"] for item in payload["provider_proxies"]] == [
+        "one",
+        "two",
+    ]
+    assert payload["provider_proxies"][0]["proxy_yaml"].startswith("- name: one\n")
     assert fetch_calls[0] == {"User-Agent": "router"}
     assert fetch_calls[1]["x-hwid"] == "AABBCCDDEEFF"
 
@@ -615,5 +620,71 @@ def test_regular_provider_probe_ignores_hwid_placeholder_direct_nodes(monkeypatc
     assert "/mihomo/hwid/provider.yaml?" in payload["provider_url"]
     assert payload["provider_headers"] == {}
     assert payload["provider_payload"]["node_count"] == 1
+    assert fetch_calls[0] == {"User-Agent": "router"}
+    assert fetch_calls[1]["x-hwid"] == "AABBCCDDEEFF"
+
+
+def test_regular_provider_probe_tries_hwid_for_placeholder_without_hwid_headers(monkeypatch, client):
+    monkeypatch.setattr(
+        mihomo,
+        "_mh_hwid_get_device_info",
+        lambda: {"headers": {"x-hwid": "AABBCCDDEEFF", "User-Agent": "ClashMeta/1.19.24"}},
+    )
+
+    dummy_lines = "\n".join(
+        [
+            (
+                "vless://00000000-0000-0000-0000-000000000000@0.0.0.0:1"
+                f"?encryption=none#Enable%20HWID%20{i}"
+            )
+            for i in range(2)
+        ]
+    )
+    dummy_payload = base64.b64encode(dummy_lines.encode("utf-8")).decode("ascii")
+
+    def fake_probe(url, *, headers, insecure, timeout, prefer, policy):
+        return {
+            "ok": True,
+            "probe": {"url": url, "http_status": 200},
+            "profile": {"profile_title": "RightSide", "suggested_name": "RightSide"},
+            "headers_used": headers or {},
+            "hwid_response_headers": {},
+            "warnings": [],
+        }
+
+    fetch_calls = []
+
+    def fake_fetch(url, *, headers, insecure, timeout, policy):
+        fetch_calls.append(dict(headers or {}))
+        if (headers or {}).get("x-hwid"):
+            return (
+                "proxies:\n"
+                "  - name: Finland\n"
+                "    type: vless\n"
+                "  - name: Germany\n"
+                "    type: vless\n",
+                {"format": "yaml", "converted": True, "proxy_section": True},
+            )
+        return dummy_payload, {"format": "raw", "hwid_response_headers": {}}
+
+    monkeypatch.setattr(mihomo, "_mh_hwid_probe_subscription_safe", fake_probe)
+    monkeypatch.setattr(mihomo, "_mh_hwid_fetch_provider_payload", fake_fetch)
+
+    response = client.post(
+        "/api/mihomo/provider/probe",
+        json={"url": "https://provider.example/sub"},
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["provider_mode"] == "hwid_adapter"
+    assert "/mihomo/hwid/provider.yaml?" in payload["provider_url"]
+    assert payload["provider_headers"] == {}
+    assert payload["provider_payload"]["node_count"] == 2
+    assert [item["proxy_name"] for item in payload["provider_proxies"]] == [
+        "Finland",
+        "Germany",
+    ]
+    assert payload["provider_proxies"][0]["proxy_yaml"].startswith("- name: Finland\n")
     assert fetch_calls[0] == {"User-Agent": "router"}
     assert fetch_calls[1]["x-hwid"] == "AABBCCDDEEFF"

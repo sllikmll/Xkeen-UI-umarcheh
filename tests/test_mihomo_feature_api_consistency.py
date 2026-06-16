@@ -82,6 +82,8 @@ def test_panel_lazy_bindings_load_mihomo_compat_bridges_for_legacy_consumers():
 def test_mihomo_menu_feature_flows_keep_editor_patch_integrations_and_single_save_config():
     panel_src = _read("xkeen-ui/static/js/features/mihomo_panel.js")
     assert panel_src.count("MP.saveConfig = async function saveConfig() {") == 1
+    template_src = _read("xkeen-ui/templates/panel.html")
+    assert 'id="mihomo-import-parse-static-btn"' in template_src
 
     expectations = {
         "xkeen-ui/static/js/features/mihomo_import.js": [
@@ -91,7 +93,13 @@ def test_mihomo_menu_feature_flows_keep_editor_patch_integrations_and_single_sav
             "const api = getMihomoPanelApi();",
             "await post('/api/mihomo/provider/probe', {",
             "return `http://127.0.0.1:${port}/mihomo/provider.yaml?${params.toString()}`;",
-            "const out = await buildSubscriptionProviderConfig(line, tmp);",
+            "const out = await buildSubscriptionProviderConfig(line, tmp, {",
+            "providerStaticBulk: true,",
+            "provider_proxies",
+            "staticProviderProxies: true",
+            "refresh_parser: group.refreshParser",
+            "mihomo-provider",
+            "Распознана HWID-подписка:",
             "providerHeaders",
             "if (headers) provider.header = headers;",
         ],
