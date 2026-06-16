@@ -553,6 +553,65 @@ def test_xray_inbound_tags_all_includes_reverse_proxy_virtual_tags(tmp_path, mon
     ]
 
 
+def test_xray_inbound_tags_all_includes_dns_tag_virtual_inbound(tmp_path, monkeypatch):
+    configs_dir = tmp_path / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    configs_dir.mkdir()
+    jsonc_dir.mkdir()
+
+    inbounds_name = "03_inbounds.json"
+    routing_name = "05_routing_dns.json"
+
+    (configs_dir / inbounds_name).write_text(
+        json.dumps({"inbounds": [{"tag": "redirect", "protocol": "dokodemo-door"}]}, ensure_ascii=False, indent=2)
+        + "\n",
+        encoding="utf-8",
+    )
+    (configs_dir / routing_name).write_text(
+        json.dumps(
+            {
+                "dns": {
+                    "tag": "dns-in",
+                    "servers": ["8.8.8.8"],
+                }
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    def _list_fragments(kind: str):
+        if kind == "inbounds":
+            return [{"name": inbounds_name}]
+        if kind == "routing":
+            return [{"name": routing_name}]
+        return []
+
+    monkeypatch.setattr(xray_configs_mod, "list_xray_fragments", _list_fragments)
+    monkeypatch.setattr(
+        xray_configs_mod,
+        "resolve_xray_fragment_file",
+        lambda file_arg, *, kind, default_path: str(configs_dir / (file_arg or Path(default_path).name)),
+    )
+    monkeypatch.setattr(
+        xray_configs_mod,
+        "jsonc_path_for",
+        lambda main_path: str(jsonc_dir / (Path(main_path).name + "c")),
+    )
+
+    app = _make_app()
+    with app.test_client() as client:
+        response = client.get("/api/xray/inbound-tags?all=1")
+
+    assert response.status_code == 200
+    assert response.get_json()["tags"] == [
+        "redirect",
+        "dns-in",
+    ]
+
+
 def test_xray_outbounds_active_endpoint_marks_last_observed_node(tmp_path, monkeypatch):
     configs_dir = tmp_path / "configs"
     jsonc_dir = tmp_path / "jsonc"

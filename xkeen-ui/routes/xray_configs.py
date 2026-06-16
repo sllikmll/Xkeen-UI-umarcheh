@@ -430,10 +430,17 @@ def create_xray_configs_blueprint(
             tags.append(tag)
         return tags
 
+    def _dns_inbound_tags_from_config(cfg: Any) -> list[str]:
+        root = cfg if isinstance(cfg, dict) else {}
+        dns = root.get("dns") if isinstance(root.get("dns"), dict) else {}
+        tag = str(dns.get("tag") or "").strip() if isinstance(dns, dict) else ""
+        return [tag] if tag else []
+
     def _xray_named_tags_from_config(cfg: Any) -> set[str]:
         tags: set[str] = set()
         tags.update(_outbound_tags_from_config(cfg, proxy_only=False))
         tags.update(_inbound_tags_from_config(cfg))
+        tags.update(_dns_inbound_tags_from_config(cfg))
         tags.update(_reverse_tags_from_config(cfg, side="outbound"))
         tags.update(_reverse_tags_from_config(cfg, side="inbound"))
         tags.update(_vless_reverse_outbound_tags_from_config(cfg))
@@ -808,6 +815,18 @@ def create_xray_configs_blueprint(
                 _append_unique_tag(tags, seen, tag)
         return tags
 
+    def _collect_dns_semantic_tags(*, all_fragments: bool) -> list[str]:
+        tags: list[str] = []
+        seen: set[str] = set()
+        for path in _iter_semantic_tag_context_paths(all_fragments=all_fragments):
+            try:
+                obj = _load_xray_fragment_obj(path)
+            except Exception:
+                continue
+            for tag in _dns_inbound_tags_from_config(obj):
+                _append_unique_tag(tags, seen, tag)
+        return tags
+
     def _collect_loopback_inbound_tags_from_outbounds(*, default_path: str, all_fragments: bool) -> list[str]:
         tags: list[str] = []
         seen: set[str] = set()
@@ -1110,6 +1129,9 @@ def create_xray_configs_blueprint(
             if tag not in tags:
                 tags.append(tag)
         for tag in _collect_reverse_semantic_tags(side="inbound", all_fragments=all_fragments):
+            if tag not in tags:
+                tags.append(tag)
+        for tag in _collect_dns_semantic_tags(all_fragments=all_fragments):
             if tag not in tags:
                 tags.append(tag)
         return jsonify({"ok": True, "tags": tags}), 200

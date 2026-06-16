@@ -680,6 +680,13 @@ function collectXrayVlessReverseInboundTags(outbounds) {
   return uniqueSorted(tags);
 }
 
+function collectXrayDnsInboundTags(data) {
+  if (!isPlainObject(data)) return [];
+  const dns = isPlainObject(data.dns) ? data.dns : null;
+  const tag = cleanName(dns && dns.tag);
+  return tag ? [tag] : [];
+}
+
 function xrayItemPointer(basePointer, index) {
   const base = cleanName(basePointer);
   return base ? `${base}/${index}` : `/${index}`;
@@ -797,6 +804,7 @@ function collectXrayKnownTags(shape, options, kind) {
         collectXrayVlessReverseOutboundTags(shape && shape.inbounds),
       )
     : collectXrayTagsFromArray(shape && shape.inbounds, 'tag').concat(
+        collectXrayDnsInboundTags(shape && shape.data),
         collectXrayLoopbackInboundTags(shape && shape.outbounds),
         collectXrayLegacyReverseTags(shape && shape.data && shape.data.reverse, 'inbound'),
         collectXrayVlessReverseInboundTags(shape && shape.outbounds),

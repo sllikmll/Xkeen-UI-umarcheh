@@ -410,6 +410,44 @@ console.log(JSON.stringify(result.map((item) => ({
     assert "/routing/rules/0/inboundTag/0" not in pointers
 
 
+def test_xray_semantic_validation_accepts_dns_tag_as_virtual_inbound():
+    script = """
+import { validateXrayRoutingSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';
+
+const result = validateXrayRoutingSemantics({
+  dns: {
+    tag: 'dns-in',
+    servers: ['8.8.8.8']
+  },
+  outbounds: [
+    { tag: 'dns-out', protocol: 'dns' },
+    { tag: 'proxy', protocol: 'freedom' }
+  ],
+  routing: {
+    rules: [
+      {
+        inboundTag: ['dns-in'],
+        outboundTag: 'dns-out'
+      }
+    ]
+  }
+});
+
+console.log(JSON.stringify(result.map((item) => ({
+  pointer: item.pointer || '',
+  code: item.code || '',
+  message: item.message || '',
+}))));
+"""
+
+    payload = _run_node_json(script)
+    codes = [str(item["code"]) for item in payload]
+    pointers = [str(item["pointer"]) for item in payload]
+
+    assert "inbound-tag-missing" not in codes
+    assert "/routing/rules/0/inboundTag/0" not in pointers
+
+
 def test_xray_semantic_validation_reports_protocol_specific_settings_gaps():
     script = """
 import { validateXrayConfigSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';
