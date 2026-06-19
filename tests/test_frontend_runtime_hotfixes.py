@@ -339,7 +339,7 @@ def test_xray_live_logs_clear_uses_portal_confirm_modal():
     assert 'async function confirmAction(options) {' in xray_logs
     assert 'const ok = await confirmXkeenAction(opts, buildConfirmText(opts));' in xray_logs
     assert "title: 'Очистить логфайлы'," in xray_logs
-    assert "message: 'Очистить ' + formatXrayLogFileLabel(file) + '?'," in xray_logs
+    assert "message: 'Очистить все логфайлы Xray (access.log и error.log)?'," in xray_logs
     assert 'nativeConfirm' not in xray_logs
     assert 'window.confirm(' not in xray_logs
 
