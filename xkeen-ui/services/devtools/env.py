@@ -36,6 +36,7 @@ ENV_WHITELIST: Tuple[str, ...] = (
     "XKEEN_HAPP_DECRYPTOR_CMD",
     "XKEEN_HAPP_DECRYPTOR_REMOTE_URL",
     "XKEEN_HAPP_HELPER_TIMEOUT",
+    "XKEEN_HAPP_DECRYPTOR_TIMEOUT",
     "XKEEN_HAPP_HELPER_HWID",
     "XKEEN_SUBSCRIPTION_HAPP_USER_AGENT",
     "XKEEN_XRAY_TEST_TIMEOUT",
@@ -309,6 +310,8 @@ def _default_effective_value(
             return ""
     if k == "XKEEN_HAPP_HELPER_TIMEOUT":
         return "15"
+    if k == "XKEEN_HAPP_DECRYPTOR_TIMEOUT":
+        return "45"
     if k == "XKEEN_HAPP_HELPER_HWID":
         return ""
     if k == "XKEEN_SUBSCRIPTION_HAPP_USER_AGENT":

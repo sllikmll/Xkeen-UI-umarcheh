@@ -1265,6 +1265,17 @@ def _subscription_hwid_warning_messages(headers: Dict[str, str] | None) -> List[
     return out
 
 
+def _subscription_happ_resolution_warnings(headers: Dict[str, str] | None) -> List[str]:
+    h = {str(k or "").strip().lower(): str(v or "").strip() for k, v in (headers or {}).items()}
+    if not str(h.get(happ_links.HAPP_RESOLVED_HEADER) or "").strip():
+        return []
+    candidate = str(h.get(happ_links.HAPP_LINK_HEADER) or "").strip()
+    message = "Подписка была получена через Happ helper-дешифратор."
+    if candidate:
+        message += f" Источник: {candidate}."
+    return [message]
+
+
 _HWID_PLACEHOLDER_LINK_RE = re.compile(r"://[^\s#]*@?0\.0\.0\.0:1(?=$|[/?#])", re.IGNORECASE)
 _SUBSCRIPTION_HTML_RE = re.compile(r"(?is)^\s*(?:<!doctype html|<html\b)")
 _SUBSCRIPTION_CLIENT_INSTALL_RE = re.compile(r"(?i)\b(?:happ|incy)://")
@@ -1348,7 +1359,10 @@ def _happ_helper_error_message(reason: Any) -> str:
             f"Укажите {happ_links.HAPP_HELPER_CMD_ENV}."
         )
     if code == "happ_decryptor_timeout":
-        return "Внешний Happ decryptor не ответил вовремя."
+        return (
+            "Внешний Happ decryptor не ответил вовремя. "
+            f"Если это `crypt5` на слабом роутере, увеличьте {happ_links.HAPP_DECRYPTOR_TIMEOUT_ENV}."
+        )
     if code == "happ_helper_timeout":
         return "Happ helper не ответил вовремя."
     if code.startswith("happ_decryptor_missing:"):
@@ -1399,6 +1413,69 @@ def _happ_subscription_headers(headers: Dict[str, str]) -> Dict[str, str] | None
     return out
 
 
+def _subscription_request_variants() -> List[Tuple[str, Dict[str, str], str]]:
+    try:
+        from services.mihomo_hwid_sub import get_device_info
+
+        device_info = get_device_info()
+    except Exception:
+        return []
+    request_headers = device_info.get("headers") if isinstance(device_info, dict) else {}
+    if not isinstance(request_headers, dict) or not request_headers:
+        return []
+
+    variants: List[Tuple[str, Dict[str, str], str]] = [
+        (
+            "hwid",
+            {str(k): str(v) for k, v in request_headers.items() if str(k or "").strip()},
+            "Подписка была скачана с HWID-заголовками устройства.",
+        )
+    ]
+    happ_headers = _happ_subscription_headers(request_headers)
+    if happ_headers:
+        variants.append(
+            (
+                "happ_hwid",
+                {str(k): str(v) for k, v in happ_headers.items() if str(k or "").strip()},
+                "Подписка была скачана с HWID-заголовками устройства и Happ User-Agent.",
+            )
+        )
+    return variants
+
+
+def _try_subscription_request_variants(
+    url: str,
+    variants: List[Tuple[str, Dict[str, str], str]],
+) -> Tuple[Tuple[str, Dict[str, str], Dict[str, Any]] | None, List[str]]:
+    errors: List[str] = []
+    for fetch_mode, request_headers, success_message in variants:
+        try:
+            body, headers = fetch_subscription_body(url, request_headers=request_headers)
+        except Exception as exc:
+            errors.append(f"{fetch_mode}:{exc}")
+            continue
+        probe = _subscription_body_source_probe(body)
+        hwid_headers = _subscription_hwid_response_headers(headers)
+        if bool(probe.get("has_source")) and not bool(probe.get("placeholder")):
+            warnings = (
+                _subscription_happ_resolution_warnings(headers)
+                + _subscription_hwid_warning_messages(hwid_headers)
+                + [success_message]
+            )
+            meta = {
+                "fetch_mode": fetch_mode,
+                "hwid_response_headers": hwid_headers,
+                "hwid_limit_info": _subscription_hwid_limit_info(hwid_headers),
+                "warnings": warnings,
+            }
+            return (body, headers, meta), errors
+        if bool(probe.get("placeholder")):
+            errors.append(f"{fetch_mode}:placeholder")
+        else:
+            errors.append(f"{fetch_mode}:no_source")
+    return None, errors
+
+
 def fetch_subscription_body_for_xray(url: str) -> Tuple[str, Dict[str, str], Dict[str, Any]]:
     """Fetch subscription text, retrying with HWID headers when needed.
 
@@ -1408,13 +1485,26 @@ def fetch_subscription_body_for_xray(url: str) -> Tuple[str, Dict[str, str], Dic
     only retry when the response looks unusable or HWID-gated.
     """
 
+    direct_fetch_error: Exception | None = None
+    body = ""
+    headers: Dict[str, str] = {}
     try:
         body, headers = fetch_subscription_body(url)
     except RuntimeError as exc:
         reason = str(exc or "").strip()
         if reason.startswith("happ_helper_") or reason.startswith("happ_decryptor_"):
             raise ValueError(_happ_helper_error_message(reason)) from exc
-        raise
+        direct_fetch_error = exc
+    except Exception as exc:
+        direct_fetch_error = exc
+
+    if direct_fetch_error is not None:
+        if happ_links.is_happ_deep_link(url):
+            result, _errors = _try_subscription_request_variants(url, _subscription_request_variants())
+            if result is not None:
+                return result
+        raise direct_fetch_error
+
     probe = _subscription_body_source_probe(body)
     hwid_headers = _subscription_hwid_response_headers(headers)
     needs_hwid = (
@@ -1422,65 +1512,25 @@ def fetch_subscription_body_for_xray(url: str) -> Tuple[str, Dict[str, str], Dic
         or not bool(probe.get("has_source"))
         or bool(probe.get("placeholder"))
     )
+    happ_warnings = _subscription_happ_resolution_warnings(headers)
     meta: Dict[str, Any] = {
         "fetch_mode": "direct",
         "hwid_response_headers": hwid_headers,
         "hwid_limit_info": _subscription_hwid_limit_info(hwid_headers),
-        "warnings": [],
+        "warnings": list(happ_warnings),
     }
-    if str(headers.get(happ_links.HAPP_RESOLVED_HEADER) or "").strip():
+    if happ_warnings:
         meta["fetch_mode"] = "happ-helper"
-        candidate = str(headers.get(happ_links.HAPP_LINK_HEADER) or "").strip()
-        helper_message = "Подписка была получена через Happ helper-дешифратор."
-        if candidate:
-            helper_message += f" Источник: {candidate}."
-        meta["warnings"] = [helper_message]
     if not needs_hwid:
         return body, headers, meta
 
-    try:
-        from services.mihomo_hwid_sub import get_device_info
+    result, retry_errors = _try_subscription_request_variants(url, _subscription_request_variants())
+    if result is not None:
+        return result
+    if retry_errors:
+        meta["hwid_fetch_error"] = "; ".join(retry_errors)[:700]
 
-        device_info = get_device_info()
-        request_headers = device_info.get("headers") if isinstance(device_info, dict) else {}
-        if not isinstance(request_headers, dict) or not request_headers:
-            return body, headers, meta
-
-        hwid_body, hwid_headers_raw = fetch_subscription_body(url, request_headers=request_headers)
-        hwid_probe = _subscription_body_source_probe(hwid_body)
-        hwid_response_headers = _subscription_hwid_response_headers(hwid_headers_raw)
-        if bool(hwid_probe.get("has_source")) and not bool(hwid_probe.get("placeholder")):
-            meta.update(
-                {
-                    "fetch_mode": "hwid",
-                    "hwid_response_headers": hwid_response_headers,
-                    "hwid_limit_info": _subscription_hwid_limit_info(hwid_response_headers),
-                    "warnings": _subscription_hwid_warning_messages(hwid_response_headers)
-                    + ["Подписка была скачана с HWID-заголовками устройства."],
-                }
-            )
-            return hwid_body, hwid_headers_raw, meta
-
-        happ_headers = _happ_subscription_headers(request_headers)
-        if happ_headers:
-            happ_body, happ_headers_raw = fetch_subscription_body(url, request_headers=happ_headers)
-            happ_probe = _subscription_body_source_probe(happ_body)
-            happ_response_headers = _subscription_hwid_response_headers(happ_headers_raw)
-            if bool(happ_probe.get("has_source")) and not bool(happ_probe.get("placeholder")):
-                meta.update(
-                    {
-                        "fetch_mode": "happ_hwid",
-                        "hwid_response_headers": happ_response_headers,
-                        "hwid_limit_info": _subscription_hwid_limit_info(happ_response_headers),
-                        "warnings": _subscription_hwid_warning_messages(happ_response_headers)
-                        + ["Подписка была скачана с HWID-заголовками устройства и Happ User-Agent."],
-                    }
-                )
-                return happ_body, happ_headers_raw, meta
-    except Exception as exc:
-        meta["hwid_fetch_error"] = str(exc)
-
-    warnings = _subscription_hwid_warning_messages(hwid_headers)
+    warnings = list(happ_warnings) + _subscription_hwid_warning_messages(hwid_headers)
     if bool(probe.get("placeholder")):
         warnings.append("Провайдер вернул HWID-заглушку вместо реальных узлов.")
     meta["warnings"] = warnings

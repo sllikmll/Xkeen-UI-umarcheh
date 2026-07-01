@@ -211,6 +211,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   ENV_HELP.XKEEN_HAPP_DECRYPTOR_CMD = 'Команда внешнего decryptor для raw `happ://crypt...` deep-link. Если переменная пуста, панель попробует auto-detect drop-in decryptor в `xkeen-ui/bin` или `xkeen-ui/scripts`. В команде можно использовать `%LINK%` как placeholder входной ссылки.';
   ENV_HELP.XKEEN_HAPP_DECRYPTOR_REMOTE_URL = 'Необязательный HTTPS endpoint для remote fallback расшифровки raw `happ://crypt...`. Панель отправит POST JSON вида `{ \"url\": \"happ://crypt...\" }` и будет ждать JSON с `decryptedUrl`/`url`/`result`. По умолчанию выключено: включайте только если осознанно доверяете внешнему сервису.';
   ENV_HELP.XKEEN_HAPP_HELPER_TIMEOUT = 'Таймаут запуска Happ helper в секундах. По умолчанию 15. Применяется к следующей попытке импорта или обновления без Restart UI.';
+  ENV_HELP.XKEEN_HAPP_DECRYPTOR_TIMEOUT = 'Таймаут запуска raw Happ decryptor в секундах. По умолчанию 45, потому что `crypt5` на роутере может считаться заметно дольше обычного helper. Применяется к следующей попытке импорта или обновления без Restart UI.';
   ENV_HELP.XKEEN_HAPP_HELPER_HWID = 'Необязательный ручной HWID для bundled Happ helper. Обычно оставьте пустым: helper возьмёт HWID роутера автоматически.';
   ENV_HELP.XKEEN_SUBSCRIPTION_HAPP_USER_AGENT = 'User-Agent для bundled Happ helper и Happ fallback-запросов. По умолчанию: Happ/3.18.3/Android/17771400994551771562.';
   ENV_HELP.XKEEN_XRAY_TEST_TIMEOUT = 'Таймаут preflight-проверки Xray (`xray -test`) в секундах. По умолчанию 30 секунд для всех роутеров, минимум 5. Пользователь может подобрать значение под своё устройство; применяется при следующем сохранении без Restart UI.';
@@ -353,6 +354,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   ENV_NO_RESTART_KEYS.add('XKEEN_HAPP_DECRYPTOR_CMD');
   ENV_NO_RESTART_KEYS.add('XKEEN_HAPP_DECRYPTOR_REMOTE_URL');
   ENV_NO_RESTART_KEYS.add('XKEEN_HAPP_HELPER_TIMEOUT');
+  ENV_NO_RESTART_KEYS.add('XKEEN_HAPP_DECRYPTOR_TIMEOUT');
   ENV_NO_RESTART_KEYS.add('XKEEN_HAPP_HELPER_HWID');
   ENV_NO_RESTART_KEYS.add('XKEEN_SUBSCRIPTION_HAPP_USER_AGENT');
   ENV_NO_RESTART_KEYS.add('XKEEN_XRAY_TEST_TIMEOUT');
@@ -380,6 +382,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   ENV_RESTART_KEYS.delete('XKEEN_HAPP_DECRYPTOR_CMD');
   ENV_RESTART_KEYS.delete('XKEEN_HAPP_DECRYPTOR_REMOTE_URL');
   ENV_RESTART_KEYS.delete('XKEEN_HAPP_HELPER_TIMEOUT');
+  ENV_RESTART_KEYS.delete('XKEEN_HAPP_DECRYPTOR_TIMEOUT');
   ENV_RESTART_KEYS.delete('XKEEN_HAPP_HELPER_HWID');
   ENV_RESTART_KEYS.delete('XKEEN_SUBSCRIPTION_HAPP_USER_AGENT');
   ENV_RESTART_KEYS.delete('XKEEN_XRAY_TEST_TIMEOUT');
@@ -452,6 +455,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
         'XKEEN_HAPP_DECRYPTOR_CMD',
         'XKEEN_HAPP_DECRYPTOR_REMOTE_URL',
         'XKEEN_HAPP_HELPER_TIMEOUT',
+        'XKEEN_HAPP_DECRYPTOR_TIMEOUT',
         'XKEEN_HAPP_HELPER_HWID',
         'XKEEN_SUBSCRIPTION_HAPP_USER_AGENT',
       ],

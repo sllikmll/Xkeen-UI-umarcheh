@@ -36,6 +36,21 @@ def test_normalize_helper_output_supports_decrypted_url_json():
     assert parsed == {"kind": "url", "value": "https://example.com/sub", "headers": {}}
 
 
+def test_decryptor_timeout_defaults_to_longer_budget(monkeypatch):
+    monkeypatch.delenv(happ_links.HAPP_HELPER_TIMEOUT_ENV, raising=False)
+    monkeypatch.delenv(happ_links.HAPP_DECRYPTOR_TIMEOUT_ENV, raising=False)
+
+    assert happ_links.helper_timeout_seconds() == 15.0
+    assert happ_links.decryptor_timeout_seconds() == 45.0
+
+
+def test_decryptor_timeout_respects_explicit_override(monkeypatch):
+    monkeypatch.setenv(happ_links.HAPP_HELPER_TIMEOUT_ENV, "15")
+    monkeypatch.setenv(happ_links.HAPP_DECRYPTOR_TIMEOUT_ENV, "75")
+
+    assert happ_links.decryptor_timeout_seconds() == 75.0
+
+
 def test_resolve_source_uses_decryptor_for_raw_happ_link(monkeypatch):
     calls: list[str] = []
 

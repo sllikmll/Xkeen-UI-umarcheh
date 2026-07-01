@@ -20,11 +20,13 @@ HAPP_HELPER_CMD_ENV = "XKEEN_HAPP_HELPER_CMD"
 HAPP_DECRYPTOR_CMD_ENV = "XKEEN_HAPP_DECRYPTOR_CMD"
 HAPP_DECRYPTOR_REMOTE_URL_ENV = "XKEEN_HAPP_DECRYPTOR_REMOTE_URL"
 HAPP_HELPER_TIMEOUT_ENV = "XKEEN_HAPP_HELPER_TIMEOUT"
+HAPP_DECRYPTOR_TIMEOUT_ENV = "XKEEN_HAPP_DECRYPTOR_TIMEOUT"
 HAPP_RESOLVED_HEADER = "x-xkeen-happ-resolved"
 HAPP_LINK_HEADER = "x-xkeen-happ-link"
 HAPP_ERROR_HEADER = "x-xkeen-happ-error"
 
-_DEFAULT_TIMEOUT_SECONDS = 15.0
+_DEFAULT_HELPER_TIMEOUT_SECONDS = 15.0
+_DEFAULT_DECRYPTOR_TIMEOUT_SECONDS = 45.0
 _MAX_TIMEOUT_SECONDS = 120.0
 _HTML_LANDING_RE = re.compile(r"(?is)^\s*(?:<!doctype html|<html\b)")
 _HAPP_LINK_RE = re.compile(r"(?i)\bhapp://crypt[0-9]*/[^\s\"'<>]+")
@@ -200,15 +202,26 @@ def remote_decryptor_configured() -> bool:
     return bool(remote_decryptor_url())
 
 
-def helper_timeout_seconds() -> float:
-    raw = str(os.environ.get(HAPP_HELPER_TIMEOUT_ENV) or "").strip()
-    if not raw:
-        return _DEFAULT_TIMEOUT_SECONDS
+def _timeout_seconds(raw: Any, default: float) -> float:
+    raw_s = str(raw or "").strip()
+    if not raw_s:
+        return default
     try:
-        timeout = float(raw)
+        timeout = float(raw_s)
     except Exception:
-        timeout = _DEFAULT_TIMEOUT_SECONDS
+        timeout = default
     return max(1.0, min(_MAX_TIMEOUT_SECONDS, timeout))
+
+
+def helper_timeout_seconds() -> float:
+    return _timeout_seconds(os.environ.get(HAPP_HELPER_TIMEOUT_ENV), _DEFAULT_HELPER_TIMEOUT_SECONDS)
+
+
+def decryptor_timeout_seconds() -> float:
+    raw = os.environ.get(HAPP_DECRYPTOR_TIMEOUT_ENV)
+    if str(raw or "").strip():
+        return _timeout_seconds(raw, _DEFAULT_DECRYPTOR_TIMEOUT_SECONDS)
+    return max(_DEFAULT_DECRYPTOR_TIMEOUT_SECONDS, helper_timeout_seconds())
 
 
 def is_happ_deep_link(value: Any) -> bool:
@@ -357,7 +370,7 @@ def _run_command(parts: List[str], link: str, *, error_prefix: str) -> Dict[str,
         raise RuntimeError(f"{error_prefix}not_configured")
 
     command = _command_with_link(parts, str(link).strip())
-    timeout = helper_timeout_seconds()
+    timeout = decryptor_timeout_seconds() if error_prefix.startswith("happ_decryptor_") else helper_timeout_seconds()
     try:
         completed = subprocess.run(
             command,
@@ -413,7 +426,7 @@ def run_remote_decryptor(link: str) -> Dict[str, Any]:
         },
         method="POST",
     )
-    timeout = helper_timeout_seconds()
+    timeout = decryptor_timeout_seconds()
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             status = int(getattr(response, "status", 200) or 200)

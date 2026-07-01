@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import threading
+import urllib.error
 from pathlib import Path
 
 import pytest
@@ -116,6 +117,48 @@ def test_preview_subscription_accepts_happ_landing_when_helper_returns_links(mon
     assert preview["count"] == 1
     assert preview["fetch_mode"] == "happ-helper"
     assert any("Happ helper" in line for line in preview["warnings"])
+
+
+def test_fetch_subscription_body_for_xray_retries_raw_happ_with_happ_hwid_after_direct_error(monkeypatch):
+    from services import xray_subscriptions as subs
+
+    calls = []
+
+    def fake_fetch(url, request_headers=None, _happ_depth=0):
+        headers = {str(k): str(v) for k, v in (request_headers or {}).items()}
+        calls.append(headers)
+        if not headers:
+            raise urllib.error.HTTPError(url, 502, "Bad Gateway", hdrs=None, fp=None)
+        if headers.get("User-Agent") == "router":
+            raise urllib.error.HTTPError(url, 502, "Bad Gateway", hdrs=None, fp=None)
+        return (
+            _vless("Recovered"),
+            {
+                "content-type": "text/plain; charset=utf-8",
+                "x-xkeen-happ-resolved": "decryptor",
+                "x-xkeen-happ-link": "happ://crypt5/demo-token",
+            },
+        )
+
+    monkeypatch.setattr(subs, "fetch_subscription_body", fake_fetch)
+    monkeypatch.setattr(
+        "services.mihomo_hwid_sub.get_device_info",
+        lambda: {"headers": {"x-hwid": "hwid-demo", "User-Agent": "router"}},
+    )
+    monkeypatch.setenv("XKEEN_SUBSCRIPTION_HAPP_USER_AGENT", "Happ/3.18.3/Android/test-hwid")
+
+    body, headers, meta = subs.fetch_subscription_body_for_xray("happ://crypt5/demo-token")
+
+    assert _vless("Recovered") in body
+    assert headers["x-xkeen-happ-resolved"] == "decryptor"
+    assert meta["fetch_mode"] == "happ_hwid"
+    assert any("Happ helper" in line for line in meta["warnings"])
+    assert any("Happ User-Agent" in line for line in meta["warnings"])
+    assert calls == [
+        {},
+        {"x-hwid": "hwid-demo", "User-Agent": "router"},
+        {"x-hwid": "hwid-demo", "User-Agent": "Happ/3.18.3/Android/test-hwid"},
+    ]
 
 
 def test_preview_subscription_rejects_html_install_landing_page(monkeypatch):
