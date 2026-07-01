@@ -37,16 +37,26 @@ landing page подписки Happ.
 ============================
 
 Если локальный decryptor временно несовместим с будущим форматом Happ, можно
-явно включить HTTP fallback через доверенный внешний endpoint:
+явно включить HTTP fallback через доверенный внешний endpoint.
+
+Вариант 1: JSON API endpoint, который принимает POST `{ "url": "happ://crypt..." }`
+и возвращает JSON с `decryptedUrl`, `url` или `result`:
 
 ```sh
-XKEEN_HAPP_DECRYPTOR_REMOTE_URL='https://happy-decoder.cc/api/decrypt'
+XKEEN_HAPP_DECRYPTOR_REMOTE_URL='https://example.com/api/decrypt'
 ```
 
-Панель отправит туда POST JSON вида `{ "url": "happ://crypt..." }` и ожидает
-JSON с `decryptedUrl`, `url` или `result`. По умолчанию этот fallback выключен:
-включайте его только если осознанно доверяете внешнему сервису и понимаете, что
-ссылка подписки уйдёт на удалённый сервер.
+Вариант 2: GET URL-шаблон с `%LINK_ENCODED%` или `%LINK%`. Панель подставит raw
+Happ deep-link прямо в URL и выполнит GET-запрос. Это удобно для публичных proxy
+сервисов наподобие Happy Decoder:
+
+```sh
+XKEEN_HAPP_DECRYPTOR_REMOTE_URL='https://happy-decoder.cc/p/%LINK_ENCODED%'
+```
+
+По умолчанию этот fallback выключен: включайте его только если осознанно
+доверяете внешнему сервису и понимаете, что ссылка подписки уйдёт на удалённый
+сервер.
 
 Локальная сборка актуального crypt5
 ===================================

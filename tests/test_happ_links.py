@@ -36,6 +36,55 @@ def test_normalize_helper_output_supports_decrypted_url_json():
     assert parsed == {"kind": "url", "value": "https://example.com/sub", "headers": {}}
 
 
+def test_remote_decryptor_template_url_supports_encoded_and_raw_tokens():
+    built = happ_links._remote_decryptor_template_url(
+        "https://example.com/p/?u=%LINK_ENCODED%&raw=%LINK%",
+        "happ://crypt5/demo token",
+    )
+
+    assert built == (
+        "https://example.com/p/?u=happ%3A%2F%2Fcrypt5%2Fdemo%20token"
+        "&raw=happ://crypt5/demo token"
+    )
+
+
+def test_run_remote_decryptor_supports_get_template(monkeypatch):
+    captured = {}
+
+    class _Response:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return b"vless://demo"
+
+    def fake_urlopen(request, timeout=0):
+        captured["url"] = request.full_url
+        captured["method"] = request.get_method()
+        captured["data"] = request.data
+        captured["timeout"] = timeout
+        return _Response()
+
+    monkeypatch.setenv(
+        happ_links.HAPP_DECRYPTOR_REMOTE_URL_ENV,
+        "https://example.com/p/?u=%LINK_ENCODED%",
+    )
+    monkeypatch.setattr(happ_links.urllib.request, "urlopen", fake_urlopen)
+
+    parsed = happ_links.run_remote_decryptor("happ://crypt5/demo-token")
+
+    assert captured["url"] == "https://example.com/p/?u=happ%3A%2F%2Fcrypt5%2Fdemo-token"
+    assert captured["method"] == "GET"
+    assert captured["data"] is None
+    assert parsed["kind"] == "url"
+    assert parsed["value"] == "vless://demo"
+
+
 def test_decryptor_timeout_defaults_to_longer_budget(monkeypatch):
     monkeypatch.delenv(happ_links.HAPP_HELPER_TIMEOUT_ENV, raising=False)
     monkeypatch.delenv(happ_links.HAPP_DECRYPTOR_TIMEOUT_ENV, raising=False)

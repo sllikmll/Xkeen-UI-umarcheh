@@ -12,7 +12,7 @@ import sys
 import urllib.error
 import urllib.request
 from typing import Any, Dict, List
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 from pathlib import Path
 
 
@@ -200,6 +200,29 @@ def decryptor_configured() -> bool:
 
 def remote_decryptor_configured() -> bool:
     return bool(remote_decryptor_url())
+
+
+def _remote_decryptor_template_url(target: str, link: str) -> str:
+    template = str(target or "").strip()
+    source = str(link or "").strip()
+    if not template or not source:
+        return ""
+    encoded = quote(source, safe="")
+    pairs = (
+        ("%LINK_ENCODED%", encoded),
+        ("{link_encoded}", encoded),
+        ("{input_encoded}", encoded),
+        ("%LINK%", source),
+        ("{link}", source),
+        ("{input}", source),
+    )
+    out = template
+    replaced = False
+    for token, value in pairs:
+        if token in out:
+            out = out.replace(token, value)
+            replaced = True
+    return out if replaced else ""
 
 
 def _timeout_seconds(raw: Any, default: float) -> float:
@@ -416,16 +439,25 @@ def run_remote_decryptor(link: str) -> Dict[str, Any]:
     if not target:
         raise RuntimeError("happ_decryptor_remote_not_configured")
 
-    payload = json.dumps({"url": str(link).strip()}).encode("utf-8")
-    request = urllib.request.Request(
-        target,
-        data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "Accept": "application/json, text/plain;q=0.9, */*;q=0.8",
-        },
-        method="POST",
-    )
+    headers = {
+        "Accept": "application/json, text/plain;q=0.9, */*;q=0.8",
+    }
+    template_url = _remote_decryptor_template_url(target, link)
+    if template_url:
+        request = urllib.request.Request(
+            template_url,
+            headers=headers,
+            method="GET",
+        )
+    else:
+        payload = json.dumps({"url": str(link).strip()}).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+        request = urllib.request.Request(
+            target,
+            data=payload,
+            headers=headers,
+            method="POST",
+        )
     timeout = decryptor_timeout_seconds()
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:

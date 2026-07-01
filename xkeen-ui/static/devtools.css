@@ -1337,6 +1337,57 @@ body.devtools-page .dt-log-lines-input:focus {
     0 0 0 4px rgba(59, 130, 246, 0.12);
 }
 
+body.devtools-page .dt-env-inline-examples {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  color: rgba(191, 219, 254, 0.74);
+  font-size: calc(11px * var(--xk-font-scale));
+  line-height: 1.35;
+}
+
+body.devtools-page .dt-env-inline-examples-label {
+  color: rgba(148, 163, 184, 0.92);
+}
+
+body.devtools-page .dt-env-inline-example {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+body.devtools-page .dt-env-inline-example-link {
+  color: rgba(191, 219, 254, 0.88);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+body.devtools-page .dt-env-inline-example-link:hover {
+  color: #dbeafe;
+  text-decoration: underline;
+}
+
+body.devtools-page .dt-env-inline-example-fill {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: rgba(125, 211, 252, 0.92);
+  font: inherit;
+  cursor: pointer;
+}
+
+body.devtools-page .dt-env-inline-example-fill:hover {
+  color: #e0f2fe;
+  text-decoration: underline;
+}
+
+body.devtools-page .dt-env-inline-example-note {
+  color: rgba(148, 163, 184, 0.88);
+}
+
 body.devtools-page .dt-switch,
 body.devtools-page .dt-log-interval,
 body.devtools-page .dt-log-stats {
@@ -1632,6 +1683,24 @@ html[data-theme="light"] body.devtools-page .dt-env-group-count {
 
 html[data-theme="light"] body.devtools-page #dt-env-card tbody tr.dt-env-row td:first-child {
   color: #17243a;
+}
+
+html[data-theme="light"] body.devtools-page .dt-env-inline-examples-label,
+html[data-theme="light"] body.devtools-page .dt-env-inline-example-note {
+  color: rgba(71, 85, 105, 0.82);
+}
+
+html[data-theme="light"] body.devtools-page .dt-env-inline-example-link {
+  color: #3257a8;
+}
+
+html[data-theme="light"] body.devtools-page .dt-env-inline-example-link:hover,
+html[data-theme="light"] body.devtools-page .dt-env-inline-example-fill:hover {
+  color: #1d4ed8;
+}
+
+html[data-theme="light"] body.devtools-page .dt-env-inline-example-fill {
+  color: #2563eb;
 }
 
 html[data-theme="light"] body.devtools-page .dt-header-btn-theme {

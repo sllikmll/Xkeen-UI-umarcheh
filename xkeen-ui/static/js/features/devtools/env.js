@@ -209,7 +209,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   ENV_HELP.XKEEN_MIHOMO_HWID = 'Ручной override x-hwid для premium/HWID-подписок Mihomo. Обычно оставьте пустым: панель сама определит HWID роутера. Заполняйте только если провайдер уже привязал подписку к конкретному HWID или ожидает значение из кабинета/поддержки. Применяется при следующей проверке/генерации HWID-подписки без Restart UI.';
   ENV_HELP.XKEEN_HAPP_HELPER_CMD = 'Команда helper-дешифратора для Happ/INCY подписок. Если переменная пуста, панель попробует bundled helper `scripts/happ_transport_helper.py` автоматически. В команде можно использовать `%LINK%` как placeholder входной ссылки.';
   ENV_HELP.XKEEN_HAPP_DECRYPTOR_CMD = 'Команда внешнего decryptor для raw `happ://crypt...` deep-link. Если переменная пуста, панель попробует auto-detect drop-in decryptor в `xkeen-ui/bin` или `xkeen-ui/scripts`. В команде можно использовать `%LINK%` как placeholder входной ссылки.';
-  ENV_HELP.XKEEN_HAPP_DECRYPTOR_REMOTE_URL = 'Необязательный HTTPS endpoint для remote fallback расшифровки raw `happ://crypt...`. Панель отправит POST JSON вида `{ \"url\": \"happ://crypt...\" }` и будет ждать JSON с `decryptedUrl`/`url`/`result`. По умолчанию выключено: включайте только если осознанно доверяете внешнему сервису.';
+  ENV_HELP.XKEEN_HAPP_DECRYPTOR_REMOTE_URL = 'Необязательный HTTPS endpoint для remote fallback расшифровки raw `happ://crypt...`. Можно указать либо JSON API endpoint: панель отправит POST `{ \"url\": \"happ://crypt...\" }` и будет ждать JSON с `decryptedUrl`/`url`/`result`, либо URL-шаблон с `%LINK_ENCODED%`/`%LINK%`, который будет вызван через GET. По умолчанию выключено: включайте только если осознанно доверяете внешнему сервису.';
   ENV_HELP.XKEEN_HAPP_HELPER_TIMEOUT = 'Таймаут запуска Happ helper в секундах. По умолчанию 15. Применяется к следующей попытке импорта или обновления без Restart UI.';
   ENV_HELP.XKEEN_HAPP_DECRYPTOR_TIMEOUT = 'Таймаут запуска raw Happ decryptor в секундах. По умолчанию 45, потому что `crypt5` на роутере может считаться заметно дольше обычного helper. Применяется к следующей попытке импорта или обновления без Restart UI.';
   ENV_HELP.XKEEN_HAPP_HELPER_HWID = 'Необязательный ручной HWID для bundled Happ helper. Обычно оставьте пустым: helper возьмёт HWID роутера автоматически.';
@@ -223,6 +223,23 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   ENV_HELP.XKEEN_GEODAT_ALLOW_HTTP = 'Разрешить plain HTTP для установки xk-geodat по URL. По умолчанию 0 (только HTTPS).';
   ENV_HELP.XKEEN_GEODAT_ALLOW_CUSTOM_URLS = 'Разрешить установку xk-geodat с произвольных public URL вне allow-list. По умолчанию 0.';
   ENV_HELP.XKEEN_GEODAT_ALLOW_PRIVATE_HOSTS = 'Разрешить установку xk-geodat по URL с локальных/private host/IP. По умолчанию 0.';
+
+  const HAPP_REMOTE_URL_EXAMPLES = Object.freeze([
+    {
+      href: 'https://happy-decoder.cc/',
+      fillValue: 'https://happy-decoder.cc/p/%LINK_ENCODED%',
+      label: 'https://happy-decoder.cc/',
+      note: 'подставит рабочий proxy-шаблон для этого поля',
+      fillLabel: 'Подставить',
+    },
+    {
+      href: 'https://leeeet.dev/happ-decryptor/',
+      fillValue: '',
+      label: 'https://leeeet.dev/happ-decryptor/',
+      note: 'браузерный decryptor, не JSON API',
+      fillLabel: '',
+    },
+  ]);
 
 
   
@@ -842,6 +859,50 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     inp.style.width = '100%';
     inp.dataset.key = key;
     tdVal.appendChild(inp);
+    if (key === 'XKEEN_HAPP_DECRYPTOR_REMOTE_URL') {
+      const examples = document.createElement('div');
+      examples.className = 'dt-env-inline-examples';
+      const intro = document.createElement('span');
+      intro.className = 'dt-env-inline-examples-label';
+      intro.textContent = 'Примеры сервисов:';
+      examples.appendChild(intro);
+      for (const item of HAPP_REMOTE_URL_EXAMPLES) {
+        const row = document.createElement('span');
+        row.className = 'dt-env-inline-example';
+
+        const link = document.createElement('a');
+        link.className = 'dt-env-inline-example-link';
+        link.href = item.href;
+        link.target = '_blank';
+        link.rel = 'noreferrer noopener';
+        link.textContent = item.label;
+        link.title = item.href;
+        row.appendChild(link);
+
+        if (item.fillValue) {
+          const fillBtn = document.createElement('button');
+          fillBtn.type = 'button';
+          fillBtn.className = 'dt-env-inline-example-fill';
+          fillBtn.textContent = item.fillLabel || 'Подставить';
+          fillBtn.title = 'Подставить в поле совместимый endpoint без автосохранения';
+          fillBtn.addEventListener('click', () => {
+            inp.value = String(item.fillValue || '');
+            try { inp.focus(); } catch (e) {}
+          });
+          row.appendChild(fillBtn);
+        }
+
+        if (item.note) {
+          const note = document.createElement('span');
+          note.className = 'dt-env-inline-example-note';
+          note.textContent = item.note;
+          row.appendChild(note);
+        }
+
+        examples.appendChild(row);
+      }
+      tdVal.appendChild(examples);
+    }
 
     const tdAct = document.createElement('td');
     tdAct.style.whiteSpace = 'nowrap';
