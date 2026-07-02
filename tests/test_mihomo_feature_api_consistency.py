@@ -175,7 +175,8 @@ def test_mihomo_import_is_compact_and_surfaces_hwid_provider_warnings():
     import_src = _read("xkeen-ui/static/js/features/mihomo_import.js")
     css_src = _read("xkeen-ui/static/styles.css")
 
-    assert "mihomo-hwid-sub-btn" not in panel_src
+    assert 'id="mihomo-hwid-sub-btn"' in panel_src
+    assert "🧬 HWID" in panel_src
     assert "Mihomo Premium Import" in panel_src
     assert "Быстрый импорт без ручного YAML" not in panel_src
     assert "Сначала проверь превью" not in panel_src
