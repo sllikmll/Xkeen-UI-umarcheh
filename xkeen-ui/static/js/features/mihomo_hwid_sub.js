@@ -41,6 +41,8 @@ let mihomoHwidSubModuleApi = null;
     meta: 'mihomo-hwid-meta',
     tip: 'mihomo-hwid-tip',
     diag: 'mihomo-hwid-diag',
+    diagToggle: 'mihomo-hwid-diag-toggle',
+    diagBody: 'mihomo-hwid-diag-body',
     diagActive: 'mihomo-hwid-diag-active',
     diagActiveNote: 'mihomo-hwid-diag-active-note',
     diagSource: 'mihomo-hwid-diag-source',
@@ -52,6 +54,8 @@ let mihomoHwidSubModuleApi = null;
     diagHeaders: 'mihomo-hwid-diag-headers',
     diagResponse: 'mihomo-hwid-diag-response',
     diagCompare: 'mihomo-hwid-diag-compare',
+    diagCompareToggle: 'mihomo-hwid-diag-compare-toggle',
+    diagCompareBody: 'mihomo-hwid-diag-compare-body',
     diagCompareGrid: 'mihomo-hwid-diag-compare-grid',
     diagCompareRelations: 'mihomo-hwid-diag-compare-relations',
 
@@ -63,6 +67,11 @@ let mihomoHwidSubModuleApi = null;
     mode: 'mihomo-hwid-mode',
     template: 'mihomo-hwid-template',
   };
+
+  const COLLAPSE_PREFS = Object.freeze({
+    diag: { key: 'xkeen.mihomo.hwid.diag.open.v1', defaultOpen: false },
+    compare: { key: 'xkeen.mihomo.hwid.compare.open.v1', defaultOpen: false },
+  });
 
   let _inited = false;
   let _restartLogModulePromise = null;
@@ -97,6 +106,66 @@ let mihomoHwidSubModuleApi = null;
     if (!el) return;
     try { el.classList.toggle('hidden', !show); } catch (e) {}
     try { el.style.display = show ? '' : 'none'; } catch (e2) {}
+  }
+
+  function readCollapsePref(key, fallback) {
+    try {
+      const raw = String(localStorage.getItem(String(key || '')) || '').trim().toLowerCase();
+      if (raw === '1' || raw === 'true' || raw === 'open' || raw === 'expanded') return true;
+      if (raw === '0' || raw === 'false' || raw === 'closed' || raw === 'collapsed') return false;
+    } catch (e) {}
+    return !!fallback;
+  }
+
+  function writeCollapsePref(key, open) {
+    try {
+      if (!key) return;
+      localStorage.setItem(String(key), open ? '1' : '0');
+    } catch (e) {}
+  }
+
+  function applyCollapseState(section, toggle, body, open) {
+    if (!section || !toggle || !body) return;
+    const isOpen = !!open;
+    try { section.classList.toggle('is-collapsed', !isOpen); } catch (e) {}
+    try { body.hidden = !isOpen; } catch (e2) {}
+    try { toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false'); } catch (e3) {}
+    try {
+      const textNode = toggle.querySelector('.xk-hw-section-toggle-text');
+      if (textNode) {
+        textNode.textContent = isOpen
+          ? String(toggle.dataset.labelOpen || 'Свернуть')
+          : String(toggle.dataset.labelClosed || 'Развернуть');
+      }
+    } catch (e4) {}
+  }
+
+  function wireCollapseSection(sectionId, toggleId, bodyId, pref) {
+    const section = $(sectionId);
+    const toggle = $(toggleId);
+    const body = $(bodyId);
+    if (!section || !toggle || !body) return;
+    if (toggle.dataset && toggle.dataset.xkCollapseWired === '1') return;
+
+    let open = readCollapsePref(pref && pref.key, pref && pref.defaultOpen);
+    applyCollapseState(section, toggle, body, open);
+
+    toggle.addEventListener('click', (e) => {
+      try { e.preventDefault(); } catch (err) {}
+      open = !open;
+      writeCollapsePref(pref && pref.key, open);
+      applyCollapseState(section, toggle, body, open);
+      if (modalOpen()) {
+        try { layoutPreviewEditor(); } catch (err2) {}
+      }
+    });
+
+    if (toggle.dataset) toggle.dataset.xkCollapseWired = '1';
+  }
+
+  function wireCollapsibleSections() {
+    wireCollapseSection(IDS.diag, IDS.diagToggle, IDS.diagBody, COLLAPSE_PREFS.diag);
+    wireCollapseSection(IDS.diagCompare, IDS.diagCompareToggle, IDS.diagCompareBody, COLLAPSE_PREFS.compare);
   }
 
   function setStatus(msg, isErr) {
@@ -1485,6 +1554,7 @@ let mihomoHwidSubModuleApi = null;
 
     wireButton(IDS.btnProbe, () => doProbe());
     wireButton(IDS.btnInsert, () => doInsert());
+    wireCollapsibleSections();
 
     // MH-04: injected UI
     try {
