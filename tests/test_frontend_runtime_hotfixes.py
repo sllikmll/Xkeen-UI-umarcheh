@@ -28,9 +28,12 @@ def test_happ_deep_links_reach_backend_import_paths():
     outbounds = Path('xkeen-ui/static/js/features/outbounds.js').read_text(encoding='utf-8')
 
     assert 'function isBackendSubscriptionLink(value)' in mihomo_import
+    assert 'function formatPreviewSourceUri(uri)' in mihomo_import
     assert r"/^happ:\/\/crypt[0-9]*\//i.test(text)" in mihomo_import
+    assert r"raw.match(/^(happ:\/\/crypt[0-9]*\/)/i)" in mihomo_import
     assert "if (isBackendSubscriptionLink(line) && mode !== 'proxy')" in mihomo_import
     assert "Ожидается HTTPS‑подписка или Happ deep-link" in mihomo_import
+    assert "Xray-подписка: ${group.length} узлов из ${formatPreviewSourceUri(startUri)}" in mihomo_import
 
     assert "const isHappDeepLink = protocol === 'happ:'" in outbounds
     assert r"/^happ:\/\/crypt[0-9]*\//i.test(state.url)" in outbounds

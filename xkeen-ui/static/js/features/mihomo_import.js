@@ -509,6 +509,14 @@ let mihomoImportModuleApi = null;
     return Array.from(map.entries()).map(([uri, items]) => ({ uri, items }));
   }
 
+  function formatPreviewSourceUri(uri) {
+    const raw = String(uri || '').trim();
+    if (!raw) return '';
+    const happPrefixMatch = raw.match(/^(happ:\/\/crypt[0-9]*\/)/i);
+    if (happPrefixMatch) return happPrefixMatch[0];
+    return raw;
+  }
+
   function isConfigManagedXraySubscription(sub) {
     if (!sub || typeof sub !== 'object') return false;
     const source = String(sub.source || '').trim().toLowerCase();
@@ -2528,7 +2536,7 @@ let mihomoImportModuleApi = null;
           group.push(raw.split('\n').map((l) => (l ? '  ' + l : l)).join('\n'));
           i += 1;
         }
-        const header = `# proxies (Xray-подписка: ${group.length} узлов из ${startUri})`;
+        const header = `# proxies (Xray-подписка: ${group.length} узлов из ${formatPreviewSourceUri(startUri)})`;
         previewSections.push(`${header}\n${group.join('\n\n')}`);
         continue;
       }
@@ -2540,7 +2548,7 @@ let mihomoImportModuleApi = null;
           group.push(raw.split('\n').map((l) => (l ? '  ' + l : l)).join('\n'));
           i += 1;
         }
-        const header = `# proxies (HWID-подписка: ${group.length} узлов из ${startUri})`;
+        const header = `# proxies (HWID-подписка: ${group.length} узлов из ${formatPreviewSourceUri(startUri)})`;
         previewSections.push(`${header}\n${group.join('\n\n')}`);
         continue;
       }
