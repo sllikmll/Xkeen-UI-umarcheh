@@ -23,7 +23,7 @@ from services.io.atomic import _atomic_write_json, _atomic_write_text
 from services.mihomo_proxy_config import apply_proxy_insert
 from services.mihomo_xray_json import convert_subscription_text
 from services.url_policy import env_flag
-from services.xray_subscriptions import fetch_subscription_body
+from services.xray_subscriptions import fetch_subscription_body_for_xray as fetch_subscription_body
 from utils.fs import load_text
 
 
@@ -42,6 +42,19 @@ _SCHEDULER_STARTED = False
 
 RestartCallback = Callable[..., Any]
 SaveCallback = Callable[[str], Any]
+
+
+def _fetch_xray_subscription_body(url: str) -> Tuple[str, Dict[str, str], Dict[str, Any]]:
+    result = fetch_subscription_body(str(url or ""))
+    if not isinstance(result, tuple):
+        raise RuntimeError("unexpected_subscription_fetch_result")
+    if len(result) == 2:
+        body, headers = result
+        return str(body or ""), dict(headers or {}), {}
+    if len(result) == 3:
+        body, headers, meta = result
+        return str(body or ""), dict(headers or {}), dict(meta or {})
+    raise RuntimeError("unexpected_subscription_fetch_result")
 
 
 def subscription_state_path(ui_state_dir: str) -> str:
@@ -952,7 +965,7 @@ def _refresh_config_subscription(
         if parser == REFRESH_PARSER_MIHOMO_PROVIDER:
             new_blocks, skipped = _fetch_mihomo_provider_proxy_blocks(str(sub.get("url") or ""))
         else:
-            body, _headers = fetch_subscription_body(str(sub.get("url") or ""))
+            body, _headers, _meta = _fetch_xray_subscription_body(str(sub.get("url") or ""))
             proxies, skipped = convert_subscription_text(body, existing_names=existing_names)
             if not proxies:
                 raise RuntimeError("no_supported_proxies")
@@ -1081,7 +1094,7 @@ def refresh_subscription(
             )
 
         try:
-            body, _headers = fetch_subscription_body(str(sub.get("url") or ""))
+            body, _headers, _meta = _fetch_xray_subscription_body(str(sub.get("url") or ""))
             proxies, skipped = convert_subscription_text(
                 body,
                 existing_names=_existing_names_for_refresh(generator_state, skip_index=proxy_index),

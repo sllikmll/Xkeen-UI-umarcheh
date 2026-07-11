@@ -82,8 +82,12 @@ def test_parse_xray_json_with_inline_text(client):
 
 def test_parse_xray_json_url_fetched_through_fetcher(client):
     with patch(
-        "routes.mihomo._xray_fetch_subscription_body",
-        return_value=(_SAMPLE_XRAY_SUBSCRIPTION, {"content-type": "application/json"}),
+        "routes.mihomo._xray_fetch_subscription_body_raw",
+        return_value=(
+            _SAMPLE_XRAY_SUBSCRIPTION,
+            {"content-type": "application/json"},
+            {"fetch_mode": "happ_ua", "warnings": ["Used Happ User-Agent fallback."]},
+        ),
     ) as mock:
         r = client.post(
             "/api/mihomo/parse/xray-json",

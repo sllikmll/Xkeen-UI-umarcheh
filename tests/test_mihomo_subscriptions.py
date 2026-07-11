@@ -92,7 +92,11 @@ def test_refresh_subscription_replaces_managed_yaml_and_restarts(tmp_path, monke
     svc.sync_from_generator_state(str(tmp_path), state, config_text=current_config)
 
     new_body = _subscription_body("New Node", "2.2.2.2", "22222222-2222-2222-2222-222222222222")
-    monkeypatch.setattr(svc, "fetch_subscription_body", lambda url: (new_body, {}))
+    monkeypatch.setattr(
+        svc,
+        "fetch_subscription_body",
+        lambda url: (new_body, {}, {"fetch_mode": "happ_ua"}),
+    )
 
     restarts: list[str] = []
 
@@ -399,7 +403,11 @@ def test_refresh_config_subscription_replaces_imported_proxy_blocks(tmp_path, mo
     )
 
     new_body = _subscription_body("New Node", "2.2.2.2", "22222222-2222-2222-2222-222222222222")
-    monkeypatch.setattr(svc, "fetch_subscription_body", lambda url: (new_body, {}))
+    monkeypatch.setattr(
+        svc,
+        "fetch_subscription_body",
+        lambda url: (new_body, {}, {"fetch_mode": "happ_ua"}),
+    )
 
     restarts: list[str] = []
 

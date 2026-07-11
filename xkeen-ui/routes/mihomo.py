@@ -77,7 +77,7 @@ from services.mihomo_subscriptions import (
     update_subscription_settings as _mh_sub_update_subscription_settings,
 )
 from services.xray_subscriptions import (
-    fetch_subscription_body as _xray_fetch_subscription_body,
+    fetch_subscription_body_for_xray as _xray_fetch_subscription_body_raw,
     _happ_helper_error_message,
 )
 
@@ -93,6 +93,19 @@ from services.mihomo import (
     delete_profile_by_name as _mh_delete_profile_by_name,
     activate_profile as _mh_activate_profile,
 )
+
+
+def _xray_fetch_subscription_body(url: str) -> tuple[str, Dict[str, str]]:
+    result = _xray_fetch_subscription_body_raw(url)
+    if not isinstance(result, tuple):
+        raise RuntimeError("unexpected_subscription_fetch_result")
+    if len(result) == 2:
+        body, headers = result
+        return str(body or ""), dict(headers or {})
+    if len(result) == 3:
+        body, headers, _meta = result
+        return str(body or ""), dict(headers or {})
+    raise RuntimeError("unexpected_subscription_fetch_result")
 
 from services.mihomo_backups import (
     list_backups_for_profile as _mh_list_backups_for_profile,
