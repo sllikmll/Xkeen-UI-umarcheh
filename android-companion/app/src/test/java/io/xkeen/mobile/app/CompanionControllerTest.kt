@@ -236,6 +236,37 @@ class CompanionControllerTest {
     }
 
     @Test
+    fun coreTransportFailureIsExposedThroughDashboardDiagnosticsAndLogs() = runTest {
+        val failure = CompanionTransportException(
+            CompanionTransportFailure(
+                kind = CompanionTransportFailureKind.AuthenticationRequired,
+                userMessage = "Требуется вход в Xkeen UI.",
+                statusCode = 401,
+            ),
+        )
+        val controller = CompanionController(
+            initialState = CompanionUiState(phase = AppPhase.Ready),
+            dependencies = testDependencies(
+                coreStatusSource = object : CoreStatusSource {
+                    override suspend fun load(baseUrl: String): CoreStatus = throw failure
+                },
+            ),
+        )
+
+        controller.refreshCoreStatus()
+
+        assertEquals("Требуется вход в Xkeen UI.", controller.state.dashboard.statusSummary)
+        assertEquals("Требуется вход в Xkeen UI.", controller.state.dashboard.lastError)
+        assertEquals("Не удалось обновить состояние Xkeen UI", controller.state.dashboard.lastOperation)
+        assertEquals(
+            DiagnosticSeverity.Warning,
+            controller.state.diagnostics.first { it.label == "Сеть и доступ" }.severity,
+        )
+        assertEquals("transport", controller.state.logs.entries.first().source)
+        assertEquals("Требуется вход в Xkeen UI.", controller.state.logs.entries.first().message)
+    }
+
+    @Test
     fun refreshRoutingUsesWebPanelFragmentContractAndLoadsCurrentFile() = runTest {
         val source = FakeXrayConfigSource()
         val controller = CompanionController(

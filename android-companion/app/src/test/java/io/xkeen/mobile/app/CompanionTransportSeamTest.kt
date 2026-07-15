@@ -36,21 +36,21 @@ class CompanionTransportSeamTest {
         val coreSource = WebPanelCoreStatusSource(transport)
         val routingSource = WebPanelXrayConfigSource(transport)
 
-        val coreError = assertThrowsSuspend<CoreStatusException> {
+        val coreError = assertThrowsSuspend<CompanionTransportException> {
             coreSource.load("https://lab.lan:8443")
         }
-        val routingError = assertThrowsSuspend<XrayConfigException> {
+        val routingError = assertThrowsSuspend<CompanionTransportException> {
             routingSource.listFragments("https://lab.lan:8443")
         }
         val fragment = routingSource.loadFragment("https://lab.lan:8443", "05_routing.json")
 
         assertEquals(
-            "Xkeen UI вернул страницу входа. Подключите авторизованную сессию.",
-            coreError.message,
+            CompanionTransportFailureKind.AuthenticationRequired,
+            coreError.failure.kind,
         )
         assertEquals(
-            "Xkeen UI вернул страницу входа. Подключите авторизованную сессию.",
-            routingError.message,
+            CompanionTransportFailureKind.AuthenticationRequired,
+            routingError.failure.kind,
         )
         assertEquals("// from server\n{\"routing\":{\"rules\":[]}}", fragment.text)
         assertTrue(fragment.hasJsoncSidecar)
@@ -65,15 +65,7 @@ class CompanionTransportSeamTest {
             transport.requests.map { it.endpoint },
         )
         assertTrue(transport.requests.all { it.baseUrl == "https://lab.lan:8443" })
-        assertEquals("application/json", transport.requests.first().headers["Accept"])
-        assertEquals(
-            "application/json, text/plain;q=0.9",
-            transport.requests[1].headers["Accept"],
-        )
-        assertEquals(
-            "application/json, text/plain;q=0.9",
-            transport.requests[2].headers["Accept"],
-        )
+        assertTrue(transport.requests.all { it.headers.isEmpty() })
     }
 }
 
@@ -101,7 +93,9 @@ private class FakeCompanionHttpTransport(
 
     override suspend fun get(request: CompanionHttpRequest): CompanionHttpResponse {
         requests += request
-        return responses[request.endpoint]
-            ?: error("No fake transport response configured for ${request.endpoint}")
+        return requireSuccessfulCompanionResponse(
+            responses[request.endpoint]
+                ?: error("No fake transport response configured for ${request.endpoint}"),
+        )
     }
 }

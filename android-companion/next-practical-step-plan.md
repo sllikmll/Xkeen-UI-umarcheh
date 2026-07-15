@@ -107,13 +107,20 @@ cd android-companion
 - секреты не живут только в памяти процесса;
 - можно безопасно отличить обычное сохраненное подключение от доверенной восстанавливаемой сессии.
 
-## Этап 4. Единый transport и нормальная ошибка-семантика
+## Этап 4. Единый transport и нормальная ошибка-семантика — завершен 2026-07-15
 
 Что делаем:
 
 - Ввести один HTTP transport слой с нормализацией `baseUrl`, timeout, common headers и auth hooks.
 - Нормализовать ошибки `401`, `403`, `428`, HTML login page, offline и timeout в понятные app-level состояния.
 - Перевести существующие read-only запросы `core` и `routing` на этот единый client path.
+
+Сделано:
+
+- `CompanionHttpTransport` нормализует и проверяет `baseUrl`, использует единые headers, configurable timeout и auth hook с безопасным приоритетом над request headers.
+- `401`, `403`, `428`, HTML login page, offline и timeout превращаются в `CompanionTransportFailureKind`; `core` показывает ошибку в dashboard, diagnostics и logs, а `routing` — в своем retryable load state.
+- `WebPanelCoreStatusSource` и `WebPanelXrayConfigSource` больше не содержат собственной HTTP/HTML error-логики и получают только успешный не-HTML response.
+- Добавлены unit tests на URL/header contract, error classification и сквозное отображение transport failure в controller.
 
 Готово, когда:
 

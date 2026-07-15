@@ -85,32 +85,12 @@ internal class WebPanelXrayConfigSource(
         }
 
     private suspend fun request(baseUrl: String, endpoint: String): CompanionHttpResponse =
-        try {
-            val response = transport.get(
-                CompanionHttpRequest(
-                    baseUrl = baseUrl,
-                    endpoint = endpoint,
-                    headers = mapOf(
-                        "Accept" to "application/json, text/plain;q=0.9",
-                        "Cache-Control" to "no-cache",
-                    ),
-                ),
-            )
-            if (response.statusCode !in 200..299) {
-                throw XrayConfigException("HTTP ${response.statusCode} при загрузке конфигураций Xray.")
-            }
-            if (response.contentType.contains("text/html", ignoreCase = true)) {
-                throw XrayConfigException(
-                    "Xkeen UI вернул страницу входа. Подключите авторизованную сессию.",
-                )
-            }
-            response
-        } catch (error: CompanionTransportException) {
-            throw XrayConfigException(
-                error.message ?: "Не удалось выполнить запрос к Xkeen UI.",
-                error,
-            )
-        }
+        transport.get(
+            CompanionHttpRequest(
+                baseUrl = baseUrl,
+                endpoint = endpoint,
+            ),
+        )
 }
 
 internal class XrayConfigException(message: String, cause: Throwable? = null) :

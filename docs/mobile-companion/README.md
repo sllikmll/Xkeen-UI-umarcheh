@@ -16,6 +16,7 @@ Updated: 2026-07-15
 - текущий рабочий shell capability-aware и использует вкладки `Xray`, `Mihomo`, `Ports`, `Shell`, `Generator`;
 - наличие вкладок и drawer-разделов зависит от списка установленных ядер, который приходит из `GET /api/xkeen/core`;
 - первый реальный backend slice уже подключён для чтения: `GET /api/xkeen/core`, `GET /api/routing/fragments`, `GET /api/routing?file=...`;
+- все существующие read-only вызовы проходят через единый Android transport с безопасной нормализацией base URL, timeout/common headers/auth hook и типизированными состояниями auth, setup, offline и timeout;
 - список подключений, базовый metadata state и последний выбранный узел уже переживают перезапуск приложения через app-private storage;
 - самый глубокий модуль сейчас это `Routing Xray`: он уже читает реальные routing-документы и даёт локальный editor-flow поверх них;
 - secure storage session-материала уже готов, но реальный auth/session bootstrap, automatic restore, сервисные POST-действия, запись routing draft и большая часть не-Xray модулей всё ещё остаются незавершёнными.

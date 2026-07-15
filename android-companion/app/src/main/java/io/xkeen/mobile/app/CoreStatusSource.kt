@@ -14,34 +14,14 @@ internal interface CoreStatusSource {
 internal class WebPanelCoreStatusSource(
     private val transport: CompanionHttpTransport = HttpUrlConnectionCompanionTransport(),
 ) : CoreStatusSource {
-    override suspend fun load(baseUrl: String): CoreStatus =
-        try {
-            val response = transport.get(
-                CompanionHttpRequest(
-                    baseUrl = baseUrl,
-                    endpoint = "/api/xkeen/core",
-                    headers = mapOf(
-                        "Accept" to "application/json",
-                        "Cache-Control" to "no-cache",
-                    ),
-                ),
-            )
-            if (response.statusCode !in 200..299) {
-                throw CoreStatusException("HTTP ${response.statusCode} при загрузке списка ядер.")
-            }
-            if (response.contentType.contains("text/html", ignoreCase = true)) {
-                throw CoreStatusException(
-                    "Xkeen UI вернул страницу входа. Подключите авторизованную сессию.",
-                )
-            }
-
-            parseCoreStatus(response.body)
-        } catch (error: CompanionTransportException) {
-            throw CoreStatusException(
-                error.message ?: "Не удалось выполнить запрос к Xkeen UI.",
-                error,
-            )
-        }
+    override suspend fun load(baseUrl: String): CoreStatus = parseCoreStatus(
+        transport.get(
+            CompanionHttpRequest(
+                baseUrl = baseUrl,
+                endpoint = "/api/xkeen/core",
+            ),
+        ).body,
+    )
 }
 
 internal class CoreStatusException(message: String, cause: Throwable? = null) :

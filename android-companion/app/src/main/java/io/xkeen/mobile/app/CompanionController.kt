@@ -184,7 +184,13 @@ internal class CompanionController(
         val result = runCatching {
             dependencies.coreStatusSource.load(state.dashboard.endpoint)
         }
-        result.onSuccess(::applyCoreStatus)
+        result.onSuccess { coreStatus ->
+            applyCoreStatus(coreStatus)
+            state = state.copy(
+                dashboard = state.dashboard.copy(lastError = null),
+            )
+        }
+        result.onFailure(::applyCoreStatusLoadFailure)
     }
 
     fun requestServiceAction(action: ServiceAction) {
@@ -598,6 +604,33 @@ internal class CompanionController(
             ),
         )
     }
+
+    private fun applyCoreStatusLoadFailure(error: Throwable) {
+        val message = error.toCompanionLoadMessage(
+            fallback = "Не удалось обновить состояние Xkeen UI.",
+        )
+        val severity = when ((error as? CompanionTransportException)?.failure?.kind) {
+            CompanionTransportFailureKind.AuthenticationRequired,
+            CompanionTransportFailureKind.AccessDenied,
+            CompanionTransportFailureKind.SetupRequired,
+            -> DiagnosticSeverity.Warning
+
+            else -> DiagnosticSeverity.Error
+        }
+        state = state.copy(
+            dashboard = state.dashboard.copy(
+                statusSummary = message,
+                lastOperation = "Не удалось обновить состояние Xkeen UI",
+                lastError = message,
+            ),
+            diagnostics = state.diagnostics.replaceDiagnostic(
+                label = "Сеть и доступ",
+                status = message,
+                severity = severity,
+            ),
+            logs = recordLog("transport", LogLevel.Warning, message),
+        )
+    }
 }
 
 internal fun ConnectionDraft.canBeSaved(): Boolean {
@@ -673,8 +706,14 @@ private fun List<RoutingDocument>.replaceDocument(updated: RoutingDocument): Lis
 private fun List<Connection>.replaceConnection(updated: Connection): List<Connection> =
     map { connection -> if (connection.id == updated.id) updated else connection }
 
-private fun Throwable.toRoutingLoadMessage(): String =
-    message?.takeIf { it.isNotBlank() } ?: "Не удалось загрузить конфигурации с Xkeen UI."
+private fun Throwable.toRoutingLoadMessage(): String = toCompanionLoadMessage(
+    fallback = "Не удалось загрузить конфигурации с Xkeen UI.",
+)
+
+private fun Throwable.toCompanionLoadMessage(fallback: String): String =
+    (this as? CompanionTransportException)?.failure?.userMessage
+        ?: message?.takeIf { it.isNotBlank() }
+        ?: fallback
 
 private fun joinRemotePath(directory: String, filename: String): String =
     if (directory.isBlank()) filename else "${directory.trimEnd('/')}/$filename"

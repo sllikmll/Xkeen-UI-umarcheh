@@ -40,8 +40,8 @@ Android companion-приложение для Xkeen-UI. Каталог `android-
 - `GET /api/xkeen/core` загружает список установленных ядер и автоматически скрывает недоступные вкладки и drawer-секции.
 - `GET /api/routing/fragments` загружает список Xray routing-документов.
 - `GET /api/routing?file=...` загружает содержимое выбранного routing-документа.
-- Эти read-only запросы уже идут через общий `CompanionHttpTransport`, поэтому `Core` и `Routing Xray` больше не держат разрозненный HTTP-код.
-- Если backend вместо JSON возвращает HTML-страницу логина, приложение показывает явную ошибку transport/auth, а не пытается тихо разобрать неверный ответ.
+- Эти read-only запросы идут через единый `CompanionHttpTransport`: он нормализует безопасный `baseUrl`, добавляет common headers, применяет timeout и оставляет seam для session auth headers.
+- `401`, `403`, `428`, HTML login page, offline и timeout переводятся в типизированные app-level ошибки. `Core` отражает их в dashboard, diagnostics и logs, а `Routing Xray` — в retryable load state.
 
 ## Архитектурный seam
 
@@ -122,6 +122,5 @@ cd android-companion
 
 ## Следующий практический шаг
 
-- Ввести единый transport с нормализацией `baseUrl`, timeout, common headers и app-level ошибками `401/403/428`, HTML login page, offline и timeout.
 - Довести `Pair/Login` до реального auth/session transport и trusted session restore поверх уже готового storage.
 - Заменить demo-адаптеры `ServiceActionsPort`, `RoutingWritePort` и `LogsPort` на backend-backed реализации.
