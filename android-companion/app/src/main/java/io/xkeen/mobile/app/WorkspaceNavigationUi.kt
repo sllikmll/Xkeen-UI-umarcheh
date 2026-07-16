@@ -145,7 +145,12 @@ internal fun WorkspaceNavigationFrame(
             availableCores = state.dashboard.availableCores,
             operation = state.serviceOperation,
             onDismiss = {
-                if (!state.serviceOperation.isPending) showCoreDialog = false
+                if (!state.serviceOperation.isPending) {
+                    showCoreDialog = false
+                    if (state.serviceOperation.targetCore != null) {
+                        controller.dismissServiceOperationResult()
+                    }
+                }
             },
             onApply = { core ->
                 scope.launch {

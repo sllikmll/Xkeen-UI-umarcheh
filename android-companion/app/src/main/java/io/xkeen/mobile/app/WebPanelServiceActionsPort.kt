@@ -1,5 +1,6 @@
 package io.xkeen.mobile.app
 
+import kotlinx.coroutines.delay
 import org.json.JSONObject
 
 /**
@@ -10,7 +11,15 @@ import org.json.JSONObject
  */
 internal class WebPanelServiceActionsPort(
     private val transport: CompanionHttpTransport,
+    private val confirmationAttempts: Int = 16,
+    private val confirmationDelayMillis: Long = 1_000,
+    private val retryDelay: suspend (Long) -> Unit = { delay(it) },
 ) : ServiceActionsPort {
+    init {
+        require(confirmationAttempts > 0) { "confirmationAttempts must be positive" }
+        require(confirmationDelayMillis >= 0) { "confirmationDelayMillis must not be negative" }
+    }
+
     override suspend fun switchCore(baseUrl: String, core: String): CoreSwitchResult {
         val targetCore = canonicalCoreName(core)
             ?: throw ServiceActionException("Недопустимое ядро: $core.")
@@ -23,9 +32,11 @@ internal class WebPanelServiceActionsPort(
         )
         requireAcceptedServiceCommand(response.body, "переключение ядра")
 
-        val snapshot = load(baseUrl)
-        if (
-            snapshot.serviceState != ServiceState.Running ||
+        val snapshot = awaitConfirmedSnapshot(baseUrl) { current ->
+            current.serviceState == ServiceState.Running &&
+                current.activeCore.equals(targetCore, ignoreCase = true)
+        }
+        if (snapshot.serviceState != ServiceState.Running ||
             !snapshot.activeCore.equals(targetCore, ignoreCase = true)
         ) {
             throw ServiceActionException(
@@ -57,13 +68,15 @@ internal class WebPanelServiceActionsPort(
         )
         requireAcceptedServiceCommand(response.body, action.label.lowercase())
 
-        val snapshot = load(baseUrl)
         val expectedState = when (action) {
             ServiceAction.Start,
             ServiceAction.Restart,
             -> ServiceState.Running
 
             ServiceAction.Stop -> ServiceState.Stopped
+        }
+        val snapshot = awaitConfirmedSnapshot(baseUrl) { current ->
+            current.serviceState == expectedState
         }
         if (snapshot.serviceState != expectedState) {
             throw ServiceActionException(
@@ -114,6 +127,19 @@ internal class WebPanelServiceActionsPort(
             activeCore = activeCore,
             availableCores = coreStatus.availableCores,
         )
+    }
+
+    private suspend fun awaitConfirmedSnapshot(
+        baseUrl: String,
+        isConfirmed: (ConfirmedServiceSnapshot) -> Boolean,
+    ): ConfirmedServiceSnapshot {
+        var snapshot = load(baseUrl)
+        for (attempt in 1 until confirmationAttempts) {
+            if (isConfirmed(snapshot)) return snapshot
+            retryDelay(confirmationDelayMillis)
+            snapshot = load(baseUrl)
+        }
+        return snapshot
     }
 }
 

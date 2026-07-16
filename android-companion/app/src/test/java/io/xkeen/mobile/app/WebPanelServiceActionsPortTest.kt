@@ -71,6 +71,46 @@ class WebPanelServiceActionsPortTest {
     }
 
     @Test
+    fun coreSwitchWaitsForXrayToLeaveTransientStoppedState() = runTest {
+        val transport = ServiceFakeTransport(
+            responses = mapOf(
+                RequestKey("POST", "/api/xkeen/core") to jsonResponse(
+                    """{"ok":true,"core":"xray","restarted":true}""",
+                ),
+                RequestKey("GET", "/api/xkeen/core") to jsonResponse(
+                    """{"ok":true,"cores":["xray","mihomo"],"currentCore":"xray"}""",
+                ),
+            ),
+            responseSequences = mapOf(
+                RequestKey("GET", "/api/xkeen/status") to listOf(
+                    jsonResponse(
+                        """{"ok":true,"running":false,"status":"stopped","core":"xray"}""",
+                    ),
+                    jsonResponse(
+                        """{"ok":true,"running":true,"status":"running","core":"xray"}""",
+                    ),
+                ),
+            ),
+        )
+        val delays = mutableListOf<Long>()
+
+        val result = WebPanelServiceActionsPort(
+            transport = transport,
+            confirmationAttempts = 3,
+            confirmationDelayMillis = 250,
+            retryDelay = { delays += it },
+        ).switchCore("https://node.lan", "Xray")
+
+        assertEquals(ServiceState.Running, result.snapshot.serviceState)
+        assertEquals("Xray", result.snapshot.activeCore)
+        assertEquals(listOf(250L), delays)
+        assertEquals(
+            2,
+            transport.requestKeys.count { it == RequestKey("GET", "/api/xkeen/status") },
+        )
+    }
+
+    @Test
     fun acceptedCommandWithMismatchedConfirmedStateFails() = runTest {
         val transport = ServiceFakeTransport(
             responses = mapOf(
@@ -111,8 +151,10 @@ private data class RequestKey(val method: String, val endpoint: String)
 
 private class ServiceFakeTransport(
     private val responses: Map<RequestKey, CompanionHttpResponse>,
+    private val responseSequences: Map<RequestKey, List<CompanionHttpResponse>> = emptyMap(),
 ) : CompanionHttpTransport {
     val requests = mutableListOf<Pair<String, CompanionHttpRequest>>()
+    private val sequenceIndexes = mutableMapOf<RequestKey, Int>()
     val requestKeys: List<RequestKey>
         get() = requests.map { RequestKey(it.first, it.second.endpoint) }
 
@@ -124,8 +166,16 @@ private class ServiceFakeTransport(
 
     private fun respond(method: String, request: CompanionHttpRequest): CompanionHttpResponse {
         requests += method to request
+        val key = RequestKey(method, request.endpoint)
+        val sequence = responseSequences[key]
+        val sequencedResponse = sequence?.let { items ->
+            require(items.isNotEmpty()) { "Empty response sequence for $method ${request.endpoint}" }
+            val index = sequenceIndexes.getOrDefault(key, 0)
+            sequenceIndexes[key] = index + 1
+            items[index.coerceAtMost(items.lastIndex)]
+        }
         return requireSuccessfulCompanionResponse(
-            responses[RequestKey(method, request.endpoint)]
+            sequencedResponse ?: responses[key]
                 ?: error("No response for $method ${request.endpoint}"),
         )
     }

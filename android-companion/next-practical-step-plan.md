@@ -176,6 +176,13 @@ Post-stage editor UX hardening 2026-07-16:
 - Если write завершается ошибкой, controller по возможности перечитывает service/core snapshot с сервера, но не превращает этот refresh в ложный success исходной операции.
 - Добавлены unit tests на endpoint/payload contract, parsing, mismatch между принятым POST и runtime state, pending/repeat guard, success/failure и server-backed dashboard refresh.
 
+Device follow-up 2026-07-16:
+
+- Исправлена гонка Mihomo → Xray: первый status reread мог вернуть переходное `stopped / Xray`, хотя перезапуск успешно завершался следом. `WebPanelServiceActionsPort` теперь делает bounded polling server snapshot до 16 попыток с интервалом 1 секунду и публикует success только после `running` с выбранным ядром.
+- Core dialog остаётся единственной поверхностью pending/failure для переключения ядра, поэтому одна ошибка больше не дублируется одновременно в modal и глобальном banner.
+- Глобальный success banner получил непрозрачный dark-green container и контрастный текст вместо наложения полупрозрачного зелёного слоя на редактор.
+- Добавлен regression test переходного `stopped / Xray -> running / Xray`.
+
 Что делаем:
 
 - Заменить локальные `start`, `stop`, `restart` и `switchCore` на реальные backend-вызовы.

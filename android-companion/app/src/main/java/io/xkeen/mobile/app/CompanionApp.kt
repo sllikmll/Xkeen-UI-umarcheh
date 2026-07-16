@@ -1472,18 +1472,21 @@ private fun ServiceOperationBanner(
     modifier: Modifier = Modifier,
 ) {
     if (operation.phase == ServiceOperationPhase.Idle) return
+    // Core selection already owns pending/failure feedback while its modal is open.  Keeping the
+    // global surface for the eventual success avoids rendering the same error twice.
+    if (operation.targetCore != null && operation.phase != ServiceOperationPhase.Success) return
 
     val isFailure = operation.phase == ServiceOperationPhase.Failure
     val isSuccess = operation.phase == ServiceOperationPhase.Success
     val containerColor = when {
         isFailure -> MaterialTheme.colorScheme.errorContainer
-        isSuccess -> WebPanelPalette.Success.copy(alpha = 0.20f)
+        isSuccess -> WebPanelPalette.SuccessContainer
         else -> MaterialTheme.colorScheme.secondaryContainer
     }
-    val contentColor = if (isFailure) {
-        MaterialTheme.colorScheme.onErrorContainer
-    } else {
-        WebPanelPalette.TextStrong
+    val contentColor = when {
+        isFailure -> MaterialTheme.colorScheme.onErrorContainer
+        isSuccess -> WebPanelPalette.OnSuccessContainer
+        else -> WebPanelPalette.TextStrong
     }
     val title = when (operation.phase) {
         ServiceOperationPhase.Idle -> return

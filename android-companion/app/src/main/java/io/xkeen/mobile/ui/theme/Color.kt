@@ -45,6 +45,8 @@ internal object WebPanelPalette {
     val Muted = Color(0xFF94A3B8)
     val MutedDeep = Color(0xFF64748B)
     val Success = Color(0xFF4ADE80)
+    val SuccessContainer = Color(0xFF14532D)
+    val OnSuccessContainer = Color(0xFFDCFCE7)
     val Warning = Color(0xFFFBBF24)
     val Error = Color(0xFFF87171)
 }
