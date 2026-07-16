@@ -1,6 +1,6 @@
 # Xkeen Mobile Companion Next Practical Step Plan
 
-Status: stages 1-6 completed, stage 7 next
+Status: stages 1-7 completed, stage 8 next
 Updated: 2026-07-16
 
 ## Зачем нужен этот план
@@ -190,6 +190,20 @@ Post-stage editor UX hardening 2026-07-16:
 
 ## Этап 7. Routing Xray: сначала реальный validate
 
+Статус: реализация и пакет готовы 2026-07-16; ожидается повторная приемка на реальном узле после обновления backend
+
+Детальная точка приемки: [stage-7-closure-checklist.md](stage-7-closure-checklist.md).
+
+Что сделано:
+
+- Добавлен versioned, authenticated и CSRF-protected `POST /api/mobile/v1/xray/routing/validate`; он принимает имя выбранного fragment и raw JSONC draft, работает во temporary confdir и не выполняет persistent save/restart/DAT-asset sync.
+- Backend использует тот же temporary-confdir Xray preflight, что и существующий routing save, но domain-invalid syntax/semantic/preflight result возвращает как HTTP `200` с `data.valid = false` и structured diagnostics.
+- Production Android composition получила `RoutingValidationPort` / `WebPanelRoutingValidationPort` с отдельным `90 s` action transport; `validate` теперь выполняется из coroutine и делает реальный round-trip.
+- `RoutingValidation` разделяет local JSONC syntax, server и transport diagnostics (`source`, `severity`, `code`, message, optional hint/phase/path/line/column); активная editor surface показывает их раздельно.
+- Добавлены `Validating`, repeat guard и stale-result guard: новый draft или другой документ не могут получить поздний результат старого запроса.
+- Добавлены backend contract и Android unit tests для payload/parsing, syntax/preflight diagnostics, CSRF/auth, body limit, `401` fallback и stale/repeat behavior.
+- Первый device smoke-test обнаружил rollout mismatch: новый APK обращался к старому Xkeen UI, поэтому сервер вернул `404`. Актуальный `xkeen-ui-routing.tar.gz` пересобран с validate endpoint; Android отдельно распознаёт такой `404` как `validation_endpoint_unavailable` и предлагает обновить backend.
+
 Что делаем:
 
 - Подключить серверную валидацию для выбранного routing-документа.
@@ -200,6 +214,15 @@ Post-stage editor UX hardening 2026-07-16:
 
 - кнопка `validate` делает реальный round-trip;
 - ответ сервера отражается в `RoutingValidation`, а не подменяется локальной эвристикой.
+
+Что считаем закрытым:
+
+- [x] Кнопка `validate` делает authenticated CSRF real round-trip для выбранного routing-документа.
+- [x] Локальные syntax issues не подменяют backend ответ и остаются отдельным structured source в UI.
+- [x] Server diagnostics отражаются в `RoutingValidation`, включая machine-readable code и доступную location/hint metadata.
+- [x] Ошибка сети, timeout и невалидный ответ не публикуют ложный success; `401` возвращает к стандартному `Pair/Login` flow этапа 5.
+- [x] Backend и Android verification пройдены 2026-07-16.
+- [ ] После установки согласованных backend-архива и APK реальный узел возвращает server-confirmed validation result вместо `404`.
 
 ## Этап 8. Routing Xray: затем save/apply и conflict handling
 

@@ -103,12 +103,14 @@ internal fun RoutingWorkspaceScreen(
         DocumentToolbar(
             document = selectedDocument,
             documents = routing.documents,
+            validation = routing.validation,
+            isValidationInFlight = routing.isValidationInFlight,
             onOpenDocumentPicker = {
                 focusManager.clearFocus(force = true)
                 showDocumentPicker.value = true
             },
             onEdit = controller::enterRoutingEditMode,
-            onValidate = controller::validateRouting,
+            onValidate = { scope.launch { controller.validateRouting() } },
             onRevert = controller::revertRoutingDraft,
             onSave = controller::saveRouting,
             onApply = controller::requestRoutingApply,
@@ -131,6 +133,10 @@ internal fun RoutingWorkspaceScreen(
                 )
             }
         }
+        RoutingValidationDiagnosticsPanel(
+            validation = routing.validation,
+            isValidationInFlight = routing.isValidationInFlight,
+        )
         EditorStatusBar(
             document = selectedDocument,
             validation = routing.validation,
@@ -238,6 +244,8 @@ private fun DocumentLoadMessage(
 private fun DocumentToolbar(
     document: RoutingDocument,
     documents: List<RoutingDocument>,
+    validation: RoutingValidation,
+    isValidationInFlight: Boolean,
     onOpenDocumentPicker: () -> Unit,
     onEdit: () -> Unit,
     onValidate: () -> Unit,
@@ -282,7 +290,13 @@ private fun DocumentToolbar(
                 )
             }
             EditorToolbarButton(Icons.Outlined.Edit, "Редактировать", onEdit)
-            EditorToolbarButton(Icons.AutoMirrored.Outlined.FactCheck, "Проверить", onValidate)
+            EditorToolbarButton(
+                icon = Icons.AutoMirrored.Outlined.FactCheck,
+                description = if (isValidationInFlight) "Проверка выполняется" else "Проверить",
+                onClick = onValidate,
+                accent = isValidationInFlight,
+                enabled = !isValidationInFlight,
+            )
             EditorToolbarButton(Icons.Outlined.SettingsBackupRestore, "Откатить", onRevert)
             EditorToolbarButton(
                 icon = Icons.Outlined.Save,
@@ -425,6 +439,7 @@ private fun EditorToolbarButton(
     description: String,
     onClick: () -> Unit,
     accent: Boolean = false,
+    enabled: Boolean = true,
 ) {
     val shape = RoundedCornerShape(10.dp)
     val accentColor = WebPanelPalette.Border
@@ -461,13 +476,15 @@ private fun EditorToolbarButton(
                 ),
                 shape = shape,
             )
-            .clickable(onClick = onClick),
+            .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = description,
-            tint = if (accent) accentColor else WebPanelPalette.TextBlue,
+            tint = if (accent) accentColor else WebPanelPalette.TextBlue.copy(
+                alpha = if (enabled) 1f else 0.38f,
+            ),
             modifier = Modifier.size(19.dp),
         )
     }
@@ -735,6 +752,114 @@ private fun String.jsonKeywordAt(index: Int): String? =
     }
 
 @Composable
+private fun RoutingValidationDiagnosticsPanel(
+    validation: RoutingValidation,
+    isValidationInFlight: Boolean,
+) {
+    val diagnostics = validation.diagnostics
+    if (!isValidationInFlight && diagnostics.isEmpty()) return
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(WebPanelPalette.Surface)
+            .border(1.dp, WebPanelPalette.Border.copy(alpha = 0.32f))
+            .padding(horizontal = 10.dp, vertical = 7.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        if (isValidationInFlight) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(14.dp),
+                    strokeWidth = 2.dp,
+                    color = WebPanelPalette.TextBlue,
+                )
+                Text(
+                    text = if (validation.isPending) {
+                        validation.message
+                    } else {
+                        "Завершаем проверку предыдущего черновика…"
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = WebPanelPalette.Text,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        if (diagnostics.isNotEmpty()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 116.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(7.dp),
+            ) {
+                diagnostics.forEach { diagnostic ->
+                    RoutingDiagnosticRow(diagnostic)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RoutingDiagnosticRow(diagnostic: RoutingDiagnostic) {
+    val sourceLabel = when (diagnostic.source) {
+        RoutingDiagnosticSource.LocalSyntax -> "ЛОКАЛЬНО"
+        RoutingDiagnosticSource.Server -> "XRAY"
+        RoutingDiagnosticSource.Transport -> "СЕТЬ"
+    }
+    val severityColor = when (diagnostic.severity) {
+        RoutingDiagnosticSeverity.Info -> WebPanelPalette.TextBlue
+        RoutingDiagnosticSeverity.Warning -> WebPanelPalette.Warning
+        RoutingDiagnosticSeverity.Error -> WebPanelPalette.Error
+    }
+    val metadata = listOfNotNull(
+        diagnostic.code?.let { "код: $it" },
+        diagnostic.phase?.let { "этап: $it" },
+        diagnostic.locationLabel,
+    ).joinToString(" · ")
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Text(
+            text = sourceLabel,
+            style = MaterialTheme.typography.labelSmall,
+            color = severityColor,
+            fontWeight = FontWeight.Bold,
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = diagnostic.message,
+                style = MaterialTheme.typography.bodySmall,
+                color = WebPanelPalette.Text,
+            )
+            if (metadata.isNotBlank()) {
+                Text(
+                    text = metadata,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = WebPanelPalette.Muted,
+                )
+            }
+            diagnostic.hint?.let { hint ->
+                Text(
+                    text = hint,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = WebPanelPalette.Muted,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun EditorStatusBar(
     document: RoutingDocument,
     validation: RoutingValidation,
@@ -743,6 +868,7 @@ private fun EditorStatusBar(
     val statusText = when {
         document.isLoading -> "Загрузка с Xkeen UI…"
         document.loadError != null -> document.loadError
+        validation.state == RoutingValidationState.Validating -> validation.message
         validation.state == RoutingValidationState.Invalid -> validation.message
         validation.state == RoutingValidationState.Valid -> validation.message
         document.hasUnsavedChanges -> "Изменения не сохранены"
@@ -756,6 +882,7 @@ private fun EditorStatusBar(
     }
     val statusColor = when (validation.state) {
         RoutingValidationState.Invalid -> WebPanelPalette.Error
+        RoutingValidationState.Validating -> WebPanelPalette.TextBlue
         RoutingValidationState.Valid -> WebPanelPalette.Success
         RoutingValidationState.Dirty -> WebPanelPalette.Warning
         RoutingValidationState.Idle -> WebPanelPalette.Muted

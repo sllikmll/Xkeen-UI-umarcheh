@@ -7,7 +7,10 @@ they do not need to parse HTML login/setup pages or emulate browser forms.
 
 from __future__ import annotations
 
-from flask import Flask, jsonify, request, session
+import json
+from typing import Any
+
+from flask import Flask, current_app, jsonify, request, session
 from werkzeug.security import check_password_hash
 
 from services.auth_rate_limit import (
@@ -22,9 +25,137 @@ from services.auth_setup import (
     _is_logged_in,
     auth_is_configured,
 )
+from services.request_limits import (
+    PayloadTooLargeError,
+    get_routing_save_max_bytes,
+    read_request_bytes_limited,
+)
+from utils.jsonc import strip_json_comments_text
 
 
 MOBILE_API_PREFIX = "/api/mobile/v1"
+MOBILE_XRAY_ROUTING_VALIDATE_PATH = f"{MOBILE_API_PREFIX}/xray/routing/validate"
+
+
+def _mobile_xray_routing_validation_dependencies() -> dict[str, Any]:
+    """Load the existing Xray preflight dependencies on demand.
+
+    Mobile session routes are registered before the regular routing blueprint.
+    Delaying these imports keeps that registration order intact, while making
+    the mobile endpoint use exactly the same temporary-confdir preflight as
+    ``POST /api/routing``.
+    """
+
+    from routes.routing.config import _run_xray_preflight
+    from services.routing.templates import _paths_for_routing
+    from services.xray_config_files import (
+        ROUTING_FILE,
+        ROUTING_FILE_RAW,
+        XRAY_CONFIGS_DIR,
+        XRAY_CONFIGS_DIR_REAL,
+    )
+
+    return {
+        "run_preflight": _run_xray_preflight,
+        "paths_for_routing": _paths_for_routing,
+        "routing_file": ROUTING_FILE,
+        "routing_file_raw": ROUTING_FILE_RAW,
+        "xray_configs_dir": XRAY_CONFIGS_DIR,
+        "xray_configs_dir_real": XRAY_CONFIGS_DIR_REAL,
+    }
+
+
+def _is_mobile_routing_document_name(value: str) -> bool:
+    """Accept only a fragment basename supported by the mobile contract."""
+
+    name = str(value or "").strip()
+    if not name or len(name) > 255 or "\x00" in name:
+        return False
+    if "/" in name or "\\" in name:
+        return False
+    return name.lower().endswith((".json", ".jsonc"))
+
+
+def _mobile_routing_diagnostic(
+    *,
+    code: str,
+    message: str,
+    path: str | None = None,
+    line: int | None = None,
+    column: int | None = None,
+    severity: str = "error",
+    hint: str | None = None,
+    phase: str | None = None,
+) -> dict[str, Any]:
+    """Create the intentionally small, stable diagnostic shape for Android."""
+
+    diagnostic: dict[str, Any] = {
+        "source": "server",
+        "severity": severity,
+        "code": code,
+        "message": message,
+    }
+    if path:
+        diagnostic["path"] = path
+    if line is not None and line > 0:
+        diagnostic["line"] = int(line)
+    if column is not None and column > 0:
+        diagnostic["column"] = int(column)
+    if hint:
+        diagnostic["hint"] = str(hint)[:4000]
+    if phase:
+        diagnostic["phase"] = str(phase)
+    return diagnostic
+
+
+def _mobile_preflight_diagnostic_code(preflight: dict[str, Any]) -> str:
+    phase = str(preflight.get("phase") or "").strip()
+    error = str(preflight.get("error") or "").strip().lower()
+
+    if phase == "routing_semantic_validate":
+        return "routing_semantic_validate"
+    if bool(preflight.get("timed_out")):
+        return "xray_test_timeout"
+    if error == "xray binary not found":
+        return "xray_binary_not_found"
+    if error == "xray config dir not found":
+        return "xray_config_dir_not_found"
+    if phase == "xray_test":
+        return "xray_test_failed"
+    return "xray_preflight_failed"
+
+
+def _mobile_preflight_message(preflight: dict[str, Any]) -> str:
+    """Prefer the user-facing preflight explanation over command output."""
+
+    for key in ("summary", "hint"):
+        value = preflight.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()[:4000]
+    return "Серверная проверка конфигурации Xray не пройдена."
+
+
+def _read_mobile_routing_validation_request() -> dict[str, Any]:
+    """Read JSON safely both with and without the global request-size hook."""
+
+    max_bytes = get_routing_save_max_bytes()
+    cached = getattr(request, "_cached_data", None)
+    if isinstance(cached, (bytes, bytearray)):
+        raw = bytes(cached)
+        if len(raw) > max_bytes:
+            raise PayloadTooLargeError(max_bytes=max_bytes, actual=len(raw))
+    else:
+        raw = read_request_bytes_limited(request, max_bytes=max_bytes)
+
+    try:
+        decoded = raw.decode("utf-8")
+        data = json.loads(decoded)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("invalid JSON request body") from exc
+
+    if not isinstance(data, dict):
+        raise ValueError("JSON request body must be an object")
+    return data
 
 
 def register_mobile_routes(app: Flask) -> None:
@@ -160,6 +291,170 @@ def register_mobile_routes(app: Flask) -> None:
                     "user": username,
                     "csrf_token": csrf_token,
                 },
+            }
+        )
+
+    @app.post(MOBILE_XRAY_ROUTING_VALIDATE_PATH)
+    def mobile_xray_routing_validate():
+        """Validate an unsaved Xray routing draft without changing runtime state.
+
+        Syntax errors and Xray preflight failures are both successful transport
+        responses with ``data.valid == false``.  This lets the Android editor
+        render server diagnostics instead of treating an invalid draft as a
+        network failure.  Authentication and CSRF are enforced by the global
+        auth guard before this handler is reached.
+        """
+
+        if not request.is_json:
+            return error(
+                "invalid_request",
+                "Ожидается JSON-запрос с полями document и content.",
+                400,
+            )
+
+        try:
+            data = _read_mobile_routing_validation_request()
+        except PayloadTooLargeError as exc:
+            return error(
+                "payload_too_large",
+                "Черновик routing превышает допустимый размер.",
+                413,
+                max_bytes=int(exc.max_bytes),
+            )
+        except ValueError:
+            return error(
+                "invalid_request",
+                "Тело запроса должно быть корректным JSON-объектом.",
+                400,
+            )
+
+        document = data.get("document")
+        content = data.get("content")
+        if not isinstance(document, str) or not _is_mobile_routing_document_name(document):
+            return error(
+                "invalid_document",
+                "Поле document должно содержать имя Xray JSON/JSONC-фрагмента.",
+                400,
+            )
+        if not isinstance(content, str):
+            return error(
+                "invalid_request",
+                "Поле content должно содержать текст routing-документа.",
+                400,
+            )
+
+        document = document.strip()
+        try:
+            dependencies = _mobile_xray_routing_validation_dependencies()
+            sel_main, _sel_raw, _sel_raw_legacy = dependencies["paths_for_routing"](
+                dependencies["routing_file"],
+                dependencies["routing_file_raw"],
+                dependencies["xray_configs_dir"],
+                dependencies["xray_configs_dir_real"],
+                document,
+            )
+        except Exception:
+            # Do not silently fall back to the default fragment: this endpoint
+            # must validate the document the mobile editor actually selected.
+            return error(
+                "invalid_document",
+                "Выбранный routing-документ недоступен для проверки.",
+                400,
+            )
+
+        try:
+            cleaned = strip_json_comments_text(content)
+            config = json.loads(cleaned)
+        except json.JSONDecodeError as exc:
+            message = "Сервер не смог разобрать JSON/JSONC. Исправьте синтаксис и повторите проверку."
+            return response(
+                {
+                    "valid": False,
+                    "message": message,
+                    "diagnostics": [
+                        _mobile_routing_diagnostic(
+                            code="invalid_json",
+                            message=message,
+                            path=document,
+                            line=exc.lineno,
+                            column=exc.colno,
+                        )
+                    ],
+                }
+            )
+        except Exception:
+            message = "Сервер не смог разобрать JSON/JSONC. Исправьте синтаксис и повторите проверку."
+            return response(
+                {
+                    "valid": False,
+                    "message": message,
+                    "diagnostics": [
+                        _mobile_routing_diagnostic(
+                            code="invalid_json",
+                            message=message,
+                            path=document,
+                        )
+                    ],
+                }
+            )
+
+        try:
+            preflight = dependencies["run_preflight"](
+                xray_configs_dir_real=dependencies["xray_configs_dir_real"],
+                sel_main=sel_main,
+                obj=config,
+                # The test process is already pointed at the managed DAT directory through
+                # XRAY_LOCATION_ASSET.  Unlike save preflight, mobile validate must not mutate
+                # /opt/sbin DAT symlinks as a side effect.
+                sync_dat_assets=False,
+            )
+            if not isinstance(preflight, dict):
+                raise TypeError("unexpected preflight response")
+        except Exception:
+            try:
+                current_app.logger.exception("mobile.xray_routing_validate.preflight_failed")
+            except Exception:
+                pass
+            message = "Не удалось выполнить серверную проверку Xray. Повторите попытку позже."
+            return response(
+                {
+                    "valid": False,
+                    "message": message,
+                    "diagnostics": [
+                        _mobile_routing_diagnostic(
+                            code="server_validation_error",
+                            message=message,
+                            path=document,
+                        )
+                    ],
+                }
+            )
+
+        if preflight.get("ok"):
+            return response(
+                {
+                    "valid": True,
+                    "message": "Серверная проверка конфигурации Xray пройдена.",
+                    "diagnostics": [],
+                }
+            )
+
+        message = _mobile_preflight_message(preflight)
+        hint = preflight.get("hint")
+        phase = preflight.get("phase")
+        return response(
+            {
+                "valid": False,
+                "message": message,
+                "diagnostics": [
+                    _mobile_routing_diagnostic(
+                        code=_mobile_preflight_diagnostic_code(preflight),
+                        message=message,
+                        path=document,
+                        hint=hint if isinstance(hint, str) else None,
+                        phase=phase if isinstance(phase, str) else None,
+                    )
+                ],
             }
         )
 

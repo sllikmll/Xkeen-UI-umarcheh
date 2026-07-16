@@ -1,5 +1,10 @@
 package io.xkeen.mobile.app
 
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -543,6 +548,213 @@ class CompanionControllerTest {
     }
 
     @Test
+    fun validateRoutingUsesServerResultAndKeepsStructuredDiagnostics() = runTest {
+        val server = FakeRoutingValidationPort(
+            RoutingServerValidation(
+                valid = false,
+                message = "Xray отклонил outboundTag.",
+                diagnostics = listOf(
+                    RoutingDiagnostic(
+                        source = RoutingDiagnosticSource.Server,
+                        severity = RoutingDiagnosticSeverity.Error,
+                        code = "routing_semantic_validate",
+                        message = "outboundTag не найден",
+                        line = 9,
+                        column = 17,
+                    ),
+                ),
+            ),
+        )
+        val controller = CompanionController(
+            initialState = CompanionUiState(phase = AppPhase.Ready),
+            dependencies = testDependencies(routingValidation = server),
+        )
+
+        controller.validateRouting()
+
+        assertEquals("https://lab.lan:8443", server.requestedBaseUrl)
+        assertEquals("05_routing.json", server.requestedDocument?.title)
+        assertEquals(RoutingValidationState.Invalid, controller.state.routing.validation.state)
+        assertEquals("Xray отклонил outboundTag.", controller.state.routing.validation.message)
+        assertEquals(1, controller.state.routing.validation.serverDiagnostics.size)
+        assertEquals(
+            RoutingDiagnosticSource.Server,
+            controller.state.routing.validation.serverDiagnostics.single().source,
+        )
+        assertEquals(9, controller.state.routing.validation.serverDiagnostics.single().line)
+    }
+
+    @Test
+    fun validateRoutingKeepsLocalSyntaxIssuesSeparateFromServerDiagnostics() = runTest {
+        val server = FakeRoutingValidationPort(
+            RoutingServerValidation(
+                valid = false,
+                message = "Сервер не смог разобрать JSONC.",
+                diagnostics = listOf(
+                    RoutingDiagnostic(
+                        source = RoutingDiagnosticSource.Server,
+                        severity = RoutingDiagnosticSeverity.Error,
+                        code = "invalid_json",
+                        message = "Ожидалась закрывающая скобка.",
+                        line = 2,
+                        column = 1,
+                    ),
+                ),
+            ),
+        )
+        val controller = CompanionController(
+            initialState = CompanionUiState(phase = AppPhase.Ready),
+            dependencies = testDependencies(routingValidation = server),
+        )
+        controller.updateRoutingDraft("{\n  \"routing\": {\n")
+
+        controller.validateRouting()
+
+        val validation = controller.state.routing.validation
+        assertEquals(RoutingValidationState.Invalid, validation.state)
+        assertEquals(1, validation.localSyntaxIssues.size)
+        assertEquals(RoutingDiagnosticSource.LocalSyntax, validation.localSyntaxIssues.single().source)
+        assertEquals(1, validation.serverDiagnostics.size)
+        assertEquals(RoutingDiagnosticSource.Server, validation.serverDiagnostics.single().source)
+    }
+
+    @Test
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun validateRoutingDoesNotPublishAStaleServerResultOrStartASecondRequest() = runTest {
+        val deferredResult = CompletableDeferred<RoutingServerValidation>()
+        val port = object : RoutingValidationPort {
+            var requests = 0
+
+            override suspend fun validate(
+                baseUrl: String,
+                document: RoutingDocument,
+            ): RoutingServerValidation {
+                requests += 1
+                return deferredResult.await()
+            }
+        }
+        val controller = CompanionController(
+            initialState = CompanionUiState(phase = AppPhase.Ready),
+            dependencies = testDependencies(routingValidation = port),
+        )
+
+        val firstRequest = launch { controller.validateRouting() }
+        runCurrent()
+        assertEquals(RoutingValidationState.Validating, controller.state.routing.validation.state)
+        assertTrue(controller.state.routing.isValidationInFlight)
+        controller.updateRoutingDraft("{\"routing\":{\"rules\":[ ]}}\n// newer draft")
+        controller.validateRouting()
+        assertEquals(1, port.requests)
+
+        deferredResult.complete(
+            RoutingServerValidation(
+                valid = true,
+                message = "Старый черновик подтвержден.",
+                diagnostics = emptyList(),
+            ),
+        )
+        advanceUntilIdle()
+        firstRequest.join()
+
+        assertEquals(RoutingValidationState.Dirty, controller.state.routing.validation.state)
+        assertFalse(controller.state.routing.isValidationInFlight)
+        assertEquals(
+            "{\"routing\":{\"rules\":[ ]}}\n// newer draft",
+            controller.state.routing.documents.first().draftContent,
+        )
+    }
+
+    @Test
+    fun validateRoutingKeepsEndpointCompatibilityCodeForTheUi() = runTest {
+        val controller = CompanionController(
+            initialState = CompanionUiState(phase = AppPhase.Ready),
+            dependencies = testDependencies(
+                routingValidation = object : RoutingValidationPort {
+                    override suspend fun validate(
+                        baseUrl: String,
+                        document: RoutingDocument,
+                    ): RoutingServerValidation = throw RoutingValidationException(
+                        message = "Обновите Xkeen UI на роутере.",
+                        diagnosticCode = "validation_endpoint_unavailable",
+                    )
+                },
+            ),
+        )
+
+        controller.validateRouting()
+
+        val diagnostic = controller.state.routing.validation.serverDiagnostics.single()
+        assertEquals(RoutingDiagnosticSource.Transport, diagnostic.source)
+        assertEquals("validation_endpoint_unavailable", diagnostic.code)
+        assertEquals("Обновите Xkeen UI на роутере.", diagnostic.message)
+    }
+
+    @Test
+    fun validateRoutingExpiresOnlyTheSelectedSessionAfter401() = runTest {
+        val connection = Connection(
+            id = "validate-expired-node",
+            name = "Узел проверки",
+            baseUrl = "https://validate.lan",
+            status = ConnectionStatus.Configured,
+            lastSeen = "Готово",
+        )
+        val sessionMaterials = InMemorySessionMaterialStore(
+            listOf(
+                StoredSessionMaterial(
+                    connectionId = connection.id,
+                    material = SessionMaterial(cookieHeader = "session=expired", csrfToken = "csrf"),
+                    trustedForRestore = true,
+                ),
+            ),
+        )
+        val controller = CompanionController(
+            initialState = CompanionUiState(
+                phase = AppPhase.Ready,
+                connections = listOf(connection),
+                selectedConnectionId = connection.id,
+                dashboard = demoDashboardState().copy(endpoint = connection.baseUrl),
+            ),
+            dependencies = testDependencies(
+                connections = InMemoryConnectionsPort(
+                    StoredConnections(listOf(connection), connection.id),
+                ),
+                session = MobileSessionPort(
+                    sessionMaterials,
+                    object : CompanionHttpTransport {
+                        override suspend fun get(request: CompanionHttpRequest): CompanionHttpResponse =
+                            error("Not used while expiring a validation session")
+
+                        override suspend fun post(request: CompanionHttpRequest): CompanionHttpResponse =
+                            error("Not used while expiring a validation session")
+
+                        override suspend fun delete(request: CompanionHttpRequest): CompanionHttpResponse =
+                            error("Not used while expiring a validation session")
+                    },
+                ),
+                routingValidation = object : RoutingValidationPort {
+                    override suspend fun validate(
+                        baseUrl: String,
+                        document: RoutingDocument,
+                    ): RoutingServerValidation = throw CompanionTransportException(
+                        CompanionTransportFailure(
+                            kind = CompanionTransportFailureKind.AuthenticationRequired,
+                            userMessage = "Требуется вход в Xkeen UI.",
+                            statusCode = 401,
+                        ),
+                    )
+                },
+            ),
+        )
+
+        controller.validateRouting()
+
+        assertEquals(AppPhase.PairLogin, controller.state.phase)
+        assertEquals(ConnectionStatus.NeedsAuth, controller.state.connections.single().status)
+        assertNull(sessionMaterials.load(connection.id))
+        assertEquals("Сессия на Xkeen UI истекла. Войдите снова.", controller.state.sessionMessage)
+    }
+
+    @Test
     fun saveRoutingUsesRoutingWritePortResult() {
         val original = demoRoutingState().documents.first()
         val updated = original.copy(
@@ -583,6 +795,7 @@ private fun testDependencies(
     connections: ConnectionsPort = InMemoryConnectionsPort(),
     session: SessionPort = DemoSessionPort(),
     serviceActions: ServiceActionsPort = DemoServiceActionsPort(),
+    routingValidation: RoutingValidationPort = FakeRoutingValidationPort(),
     routingWrites: RoutingWritePort? = null,
     logs: LogsPort? = null,
     journal: CompanionJournalPort = FakeJournalPort(),
@@ -592,6 +805,7 @@ private fun testDependencies(
         connections = connections,
         session = session,
         serviceActions = serviceActions,
+        routingValidation = routingValidation,
         routingWrites = routingWrites ?: DemoRoutingWritePort(effectiveJournal),
         logs = logs ?: DemoLogsPort(effectiveJournal),
         journal = effectiveJournal,
@@ -635,6 +849,26 @@ private class FakeXrayConfigSource : XrayConfigSource {
                 usesJsoncSidecar = false,
             )
         }
+    }
+}
+
+private class FakeRoutingValidationPort(
+    private val result: RoutingServerValidation = RoutingServerValidation(
+        valid = true,
+        message = "Validated",
+        diagnostics = emptyList(),
+    ),
+) : RoutingValidationPort {
+    var requestedBaseUrl: String? = null
+    var requestedDocument: RoutingDocument? = null
+
+    override suspend fun validate(
+        baseUrl: String,
+        document: RoutingDocument,
+    ): RoutingServerValidation {
+        requestedBaseUrl = baseUrl
+        requestedDocument = document
+        return result
     }
 }
 

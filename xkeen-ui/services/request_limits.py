@@ -221,7 +221,10 @@ def classify_json_request_max_bytes(path: str, env: Optional[Mapping[str, Any]] 
     if not p:
         return get_json_body_max_bytes(env)
 
-    if p == "/api/routing":
+    if p in (
+        "/api/routing",
+        "/api/mobile/v1/xray/routing/validate",
+    ):
         return get_routing_save_max_bytes(env)
 
     if p.startswith("/api/local/") or p.startswith("/api/github/"):

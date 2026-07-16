@@ -17,17 +17,16 @@ Updated: 2026-07-16
 - `Connections` с ручным добавлением, повторным выбором и редактированием инстанса по `name` и `baseUrl`;
 - `Pair/Login` как отдельная фаза приложения;
 - Реальный alpha session flow: `/api/mobile/v1/bootstrap`, login/logout, Keystore-only cookie+CSRF storage, server-validated restore в `Ready` и explicit fallback в `Pair/Login` для отсутствующей, истекшей или невалидной сессии;
-- `Ready`-workspace с компактной верхней панелью, confirm-based `start` / `stop` / `restart` и кнопкой `Core`;
+- `Ready`-workspace с компактной верхней панелью, confirm-based server-backed `start` / `stop` / `restart` и кнопкой `Core`;
 - capability-aware нижняя навигация `Xray`, `Mihomo`, `Ports`, `Shell`, `Generator`;
 - capability-aware drawer с разделами под каждую рабочую зону;
 - read-only интеграция `GET /api/xkeen/core`;
 - read-only интеграция `GET /api/routing/fragments` и `GET /api/routing?file=...`;
-- полноэкранный `Routing Xray` editor-flow с JSON/JSONC подсветкой, номерами строк, свайпами между документами и локальными действиями `edit`, `validate`, `revert`, `save`, `apply`;
+- полноэкранный `Routing Xray` editor-flow с JSON/JSONC подсветкой, номерами строк, свайпами между документами, real server-backed `validate` и действиями `edit`, `revert`, `save`, `apply`;
 - интерактивные demo-поверхности `Shell -> Команды` и `Shell -> Терминал`.
 
 Что пока сознательно не завершено:
 
-- backend-backed `start`, `stop`, `restart` и `Core` switch;
 - backend-backed `Routing Xray` write/apply flow;
 - настоящий logs streaming, PTY transport и reconnect behavior;
 - большая часть Mihomo, Ports и Generator модулей.
@@ -101,12 +100,14 @@ Updated: 2026-07-16
 - загрузка удалённого содержимого выбранного документа;
 - JSON/JSONC подсветка и номера строк;
 - длинные горизонтальные свайпы между документами;
-- локальные действия `edit`, `validate`, `revert`, `save`, `apply`;
+- `POST /api/mobile/v1/xray/routing/validate` с real temporary-confdir Xray preflight без persistent save/restart/DAT-asset-sync side effect;
+- отдельные local syntax, server и transport diagnostics с source/severity/code/location metadata;
+- `Validating`, repeat guard и защита от позднего результата для измененного draft;
+- действия `edit`, `validate`, `revert`, `save`, `apply`;
 - fallback на локальные demo-данные, если backend-чтение недоступно.
 
 Что ещё не подключено:
 
-- серверная валидация;
 - серверный preview/diff;
 - сохранение и применение через backend write-endpoint'ы;
 - conflict detection поверх реального session/version state.
@@ -131,6 +132,7 @@ Updated: 2026-07-16
 - `ready`
 - `pending action confirm`
 - `routing loading`
+- `routing validating`
 - `routing validation failed`
 - `transport/auth error`
 
@@ -142,9 +144,9 @@ Updated: 2026-07-16
 
 - onboarding через `Connections` и `Pair/Login`;
 - ready-workspace с capability-aware навигацией;
-- safe actions `start` / `stop` / `restart` на уровне UI-flow;
+- server-confirmed safe actions `start` / `stop` / `restart`;
 - первый реальный backend read-slice для ядер и `Routing Xray`;
-- первый editor-like модуль с локальной валидацией и управлением draft state;
+- первый editor-like модуль с server-backed Xray validate, structured diagnostics и управлением draft state;
 - persisted connections с повторным выбором и безопасным редактированием.
 
 Следующий рубеж теперь не в добавлении новых экранов как таковых, а в write-safe backend operations и real logs/terminal transport.

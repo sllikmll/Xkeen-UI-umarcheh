@@ -137,8 +137,26 @@ enum class RoutingMode {
 enum class RoutingValidationState {
     Idle,
     Dirty,
+    Validating,
     Valid,
     Invalid,
+}
+
+/**
+ * Identifies where a routing diagnostic was produced.  Local syntax feedback is deliberately
+ * kept separate from the server's Xray/preflight result so the UI never presents a client-side
+ * guess as a confirmed validation result.
+ */
+enum class RoutingDiagnosticSource {
+    LocalSyntax,
+    Server,
+    Transport,
+}
+
+enum class RoutingDiagnosticSeverity {
+    Info,
+    Warning,
+    Error,
 }
 
 enum class DiagnosticSeverity {
@@ -234,11 +252,43 @@ data class RoutingDocument(
         get() = savedDraftContent != publishedContent
 }
 
+data class RoutingDiagnostic(
+    val source: RoutingDiagnosticSource,
+    val severity: RoutingDiagnosticSeverity,
+    val code: String? = null,
+    val message: String,
+    val hint: String? = null,
+    val phase: String? = null,
+    val line: Int? = null,
+    val column: Int? = null,
+    val path: String? = null,
+) {
+    val locationLabel: String?
+        get() = when {
+            line != null && column != null -> "строка $line, столбец $column"
+            line != null -> "строка $line"
+            path != null -> path
+            else -> null
+        }
+}
+
 data class RoutingValidation(
     val state: RoutingValidationState = RoutingValidationState.Idle,
     val message: String = "Откройте конфиг и выполните проверку перед применением.",
+    val localSyntaxIssues: List<RoutingDiagnostic> = emptyList(),
+    val serverDiagnostics: List<RoutingDiagnostic> = emptyList(),
+    /**
+     * Compatibility notes used by the still-demo save/apply flow.  New validation code must use
+     * the structured source-specific lists above instead of putting backend output here.
+     */
     val details: List<String> = emptyList(),
-)
+) {
+    val diagnostics: List<RoutingDiagnostic>
+        get() = localSyntaxIssues + serverDiagnostics
+
+    val isPending: Boolean
+        get() = state == RoutingValidationState.Validating
+}
 
 data class RoutingPreview(
     val headline: String,
@@ -252,6 +302,7 @@ data class RoutingState(
     val mode: RoutingMode = RoutingMode.Read,
     val validation: RoutingValidation = RoutingValidation(),
     val preview: RoutingPreview? = null,
+    val isValidationInFlight: Boolean = false,
     val remoteDirectory: String? = null,
     val isRefreshing: Boolean = false,
     val hasAttemptedRemoteLoad: Boolean = false,

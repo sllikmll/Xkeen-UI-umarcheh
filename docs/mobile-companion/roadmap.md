@@ -16,7 +16,8 @@ Updated: 2026-07-16
 - Уже подключен per-connection secure storage session material: AES-GCM payload с ключом Android Keystore, encrypted trusted-restore marker и очистка выбранного record при logout. Обычный `Configured` node не является trusted session.
 - Этап 5 закрыт: real alpha session slice включает `/api/mobile/v1/bootstrap`, login и logout, `MobileSessionPort`, cookie+CSRF auth hook, server-validated trusted restore, явный `Pair/Login` fallback и обработку `401` из `Ready`; backend contract и Android unit/build verification green.
 - Этап 6 закрыт: service actions и core switch backend-backed, CSRF-protected и server-confirmed; UI имеет pending/success/failure и repeat guard.
-- Главные оставшиеся работы Phase 2 — backend-backed routing validate/save/apply и реальный logs/terminal transport.
+- Реализация и пакет этапа 7 готовы: `Routing Xray validate` использует versioned mobile endpoint, temporary-confdir Xray preflight с отключенным DAT-asset sync, structured server diagnostics и repeat/stale guard без persistent save/restart side effect. Закрытие ожидает повторного device smoke-test после согласованного обновления backend и APK.
+- Главные оставшиеся работы Phase 2 — backend-backed routing save/apply/conflict handling и реальный logs/terminal transport.
 
 ## Phase 0 - Discovery and scope freeze
 
@@ -90,15 +91,16 @@ Updated: 2026-07-16
 - Уже сделано: реализован real alpha auth/session layer с backend bootstrap, login/logout и server-side validation trusted cookie+CSRF session.
 - Уже сделано: этап 5 закрыт с явным `Launching -> Pair/Login` fallback при отсутствии/повреждении trusted material и green Android unit suite.
 - Уже сделано: этап 6 закрыл реальные `start/stop/restart/core` POST-вызовы, server reread runtime/core state и явный action lifecycle.
+- Уже сделано: этап 7 закрыл real Xray routing validate через `POST /api/mobile/v1/xray/routing/validate`; local JSONC syntax feedback отделен от authoritative server diagnostics.
 - Еще осталось: закрыть reconnect behavior.
-- Еще осталось: довести backend-backed routing `validate/save/apply`, logs transport и terminal transport.
+- Еще осталось: довести backend-backed routing `save/apply` с conflict handling, logs transport и terminal transport.
 - Еще осталось: проверить подход к оберткам над open-source editor/log/terminal компонентами без ранней жесткой привязки.
 
 ### Exit criteria
 
 - Приложение собирается и запускается на целевых Android-устройствах.
 - Можно добавить Xkeen-UI инстанс и дойти до состояния `Ready` без браузерного fallback.
-- Этапы 5 и 6 закрыты по [session closure checklist](../../android-companion/stage-5-closure-checklist.md) и [service actions closure checklist](../../android-companion/stage-6-closure-checklist.md).
+- Этапы 5, 6 и 7 закрыты по [session closure checklist](../../android-companion/stage-5-closure-checklist.md), [service actions closure checklist](../../android-companion/stage-6-closure-checklist.md) и [routing validate closure checklist](../../android-companion/stage-7-closure-checklist.md).
 - Сессия и данные подключения переживают перезапуск приложения корректно.
 - Базовые состояния UI выглядят предсказуемо и не требуют web fallback.
 
@@ -115,7 +117,8 @@ Persistence данных подключения, secure storage, session flow и
 - Ready workspace summary slice: сводка статуса, capabilities, core/runtime indicators.
 - Готово: service actions slice — `start`, `stop`, `restart` и core switch с подтверждением, backend round-trip и server-confirmed result.
 - Logs slice: просмотр live/log history с фильтрацией и надежным reconnect behavior.
-- Routing Xray slice: список routing entry points, active document state, `validate`, `preview`, `save`, `apply` для ограниченного безопасного сценария поверх уже работающего read/edit baseline.
+- Готово: Routing Xray `validate` slice — selected document, raw JSONC round-trip, real Xray preflight и structured diagnostics.
+- Routing Xray дальше: controlled server `preview`, `save`, `apply` и conflict handling поверх уже работающего read/edit/validate baseline.
 - Read-only diagnostics slice там, где это повышает предсказуемость быстрых действий.
 - Подготовка UX и contract foundations для следующих routing/editor модулей без попытки сразу повторить desktop layout.
 

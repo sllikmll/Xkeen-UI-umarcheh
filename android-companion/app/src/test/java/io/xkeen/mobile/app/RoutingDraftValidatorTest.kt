@@ -6,8 +6,9 @@ import org.junit.Test
 
 class RoutingDraftValidatorTest {
     @Test
-    fun `valid draft passes validation`() {
+    fun `valid JSONC does not create a local syntax issue`() {
         val draft = """
+            // Comments are accepted in routing JSONC.
             {
               "routing": {
                 "rules": [
@@ -20,26 +21,26 @@ class RoutingDraftValidatorTest {
             }
         """.trimIndent()
 
-        val result = validateRoutingDraft(draft)
+        val issues = collectLocalRoutingSyntaxIssues(draft)
 
-        assertEquals(RoutingValidationState.Valid, result.state)
-        assertTrue(result.details.contains("routing object found"))
+        assertTrue(issues.isEmpty())
     }
 
     @Test
-    fun `invalid draft reports structural problems`() {
+    fun `invalid JSONC produces a structured local syntax issue`() {
         val draft = """
             {
               "routing": {
-                "comment": "TODO_INVALID"
+                "comment": "unfinished"
             }
         """.trimIndent()
 
-        val result = validateRoutingDraft(draft)
+        val issues = collectLocalRoutingSyntaxIssues(draft)
 
-        assertEquals(RoutingValidationState.Invalid, result.state)
-        assertTrue(result.details.contains("No rules block found."))
-        assertTrue(result.details.contains("Brace count does not match."))
-        assertTrue(result.details.contains("Draft still contains TODO_INVALID marker."))
+        assertEquals(1, issues.size)
+        assertEquals(RoutingDiagnosticSource.LocalSyntax, issues.single().source)
+        assertEquals(RoutingDiagnosticSeverity.Error, issues.single().severity)
+        assertEquals("invalid_json_syntax", issues.single().code)
+        assertTrue(issues.single().message.contains("JSON/JSONC"))
     }
 }

@@ -300,8 +300,19 @@ def _geodata_failure_hint(stderr: str, stdout: str) -> str:
     )
 
 
-def _run_xray_preflight(*, xray_configs_dir_real: str, sel_main: str, obj: Any) -> Dict[str, Any]:
-    """Validate Xray configs with edited fragment injected into a temp confdir."""
+def _run_xray_preflight(
+    *,
+    xray_configs_dir_real: str,
+    sel_main: str,
+    obj: Any,
+    sync_dat_assets: bool = True,
+) -> Dict[str, Any]:
+    """Validate Xray configs with an edited fragment injected into a temp confdir.
+
+    ``sync_dat_assets`` keeps the historical save-path behavior by default.  Read-only callers
+    such as mobile validate disable it because preflight already receives ``XRAY_LOCATION_ASSET``
+    pointing at the managed DAT directory and must not create/update runtime symlinks.
+    """
     xray_bin = '/opt/sbin/xray' if os.path.exists('/opt/sbin/xray') else 'xray'
     confdir = xray_configs_dir_real or os.environ.get('XRAY_CONFDIR') or '/opt/etc/xray/configs'
     test_timeout = _xray_test_timeout_seconds()
@@ -347,20 +358,21 @@ def _run_xray_preflight(*, xray_configs_dir_real: str, sel_main: str, obj: Any) 
             asset_dir = os.environ.get('XRAY_ASSET_DIR') or '/opt/sbin'
             preflight_env, preflight_cwd = _xray_test_env_and_cwd(dat_dir=dat_dir, asset_dir=asset_dir)
 
-            try:
-                ensure_xray_dat_assets(
-                    dat_dir=dat_dir,
-                    asset_dir=asset_dir,
-                    log=lambda line: _core_log('info', line),
-                )
-            except Exception as exc:
-                _core_log(
-                    'warning',
-                    'routing.preflight.xray_assets_failed',
-                    dat_dir=dat_dir if 'dat_dir' in locals() else '',
-                    asset_dir=asset_dir if 'asset_dir' in locals() else '',
-                    err=str(exc),
-                )
+            if sync_dat_assets:
+                try:
+                    ensure_xray_dat_assets(
+                        dat_dir=dat_dir,
+                        asset_dir=asset_dir,
+                        log=lambda line: _core_log('info', line),
+                    )
+                except Exception as exc:
+                    _core_log(
+                        'warning',
+                        'routing.preflight.xray_assets_failed',
+                        dat_dir=dat_dir if 'dat_dir' in locals() else '',
+                        asset_dir=asset_dir if 'asset_dir' in locals() else '',
+                        err=str(exc),
+                    )
 
             cmd = [xray_bin, '-test', '-confdir', tmpdir]
             cmd_text = ' '.join(cmd)

@@ -929,6 +929,7 @@ private fun RoutingScreen(
 ) {
     val routing = state.routing
     val selectedDocument = routing.documents.firstOrNull { it.id == routing.selectedDocumentId } ?: return
+    val scope = rememberCoroutineScope()
     val filteredDocuments = routing.documents.filter { document ->
         routing.searchQuery.isBlank() ||
             document.title.contains(routing.searchQuery, ignoreCase = true) ||
@@ -991,7 +992,12 @@ private fun RoutingScreen(
                 columns = 3,
                 actions = listOf(
                     GridAction("Править", Icons.Outlined.Edit, onClick = controller::enterRoutingEditMode),
-                    GridAction("Проверить", Icons.AutoMirrored.Outlined.FactCheck, onClick = controller::validateRouting),
+                    GridAction(
+                        "Проверить",
+                        Icons.AutoMirrored.Outlined.FactCheck,
+                        onClick = { scope.launch { controller.validateRouting() } },
+                        enabled = !routing.isValidationInFlight,
+                    ),
                     GridAction("Превью", Icons.Outlined.Preview, onClick = controller::previewRouting),
                     GridAction(
                         label = "Сохранить",
@@ -1925,6 +1931,12 @@ private fun validationChip(state: RoutingValidationState): StatusChipModel =
             "изменен",
             MaterialTheme.colorScheme.tertiaryContainer,
             MaterialTheme.colorScheme.onTertiaryContainer,
+        )
+
+        RoutingValidationState.Validating -> StatusChipModel(
+            "проверка",
+            MaterialTheme.colorScheme.primaryContainer,
+            MaterialTheme.colorScheme.onPrimaryContainer,
         )
 
         RoutingValidationState.Valid -> StatusChipModel(

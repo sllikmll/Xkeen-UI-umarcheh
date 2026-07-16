@@ -11,7 +11,7 @@ Updated: 2026-07-16
 
 ## Краткий вывод
 
-Текущий backend уже дает почти все необходимые доменные возможности, а Android-клиент переиспользует read-only и service-control endpoint'ы напрямую. Для auth/session уже есть минимальный versioned namespace `/api/mobile/v1`, но агрегированного ready/actions контракта всё еще нет. Главные проблемы теперь в смешанной гранулярности endpoint'ов, неоднородном формате ответов и отсутствии единой модели долгих операций.
+Текущий backend уже дает почти все необходимые доменные возможности, а Android-клиент переиспользует read-only и service-control endpoint'ы напрямую. Для auth/session и первого routing validate slice уже есть versioned namespace `/api/mobile/v1`, но агрегированного ready/actions контракта всё еще нет. Главные проблемы теперь в смешанной гранулярности endpoint'ов, неоднородном формате ответов и отсутствии единой модели долгих операций.
 
 Рекомендуемое направление: оставить существующие web endpoints как есть и добавить тонкий adapter layer наподобие `/api/mobile/v1/*`, который агрегирует текущие сервисы в мобильные use cases.
 
@@ -19,14 +19,15 @@ Updated: 2026-07-16
 
 Этот gap analysis теперь опирается на уже существующий Android baseline в `android-companion/`. На стороне клиента уже есть рабочий Compose shell с фазами `Launching`, `Connections`, `Pair/Login`, `Ready`, capability-aware вкладками `Xray`, `Mihomo`, `Ports`, `Shell`, `Generator` и контекстными drawer-разделами.
 
-Клиент больше не является demo-only: подключены auth/session bootstrap, read-only запросы `GET /api/xkeen/core`, `GET /api/routing/fragments`, `GET /api/routing?file=...` и реальные service actions через `POST /api/xkeen/start`, `POST /api/xkeen/stop`, `POST /api/restart`, `POST /api/xkeen/core`. После write Android перечитывает `/api/xkeen/status` и `/api/xkeen/core` и публикует success только при совпадении подтвержденного runtime state. Routing validate/write, logs и terminal пока не опираются на полноценный mobile contract.
+Клиент больше не является demo-only: подключены auth/session bootstrap, read-only запросы `GET /api/xkeen/core`, `GET /api/routing/fragments`, `GET /api/routing?file=...`, real service actions через `POST /api/xkeen/start`, `POST /api/xkeen/stop`, `POST /api/restart`, `POST /api/xkeen/core` и real routing validate через `POST /api/mobile/v1/xray/routing/validate`. После service write Android перечитывает `/api/xkeen/status` и `/api/xkeen/core` и публикует success только при совпадении подтвержденного runtime state. Routing write, logs и terminal пока не опираются на полноценный mobile contract.
 
 Это делает backend gap очень конкретным: следующий рабочий шаг не в новых экранах, а в доведении текущего shell до реального mobile contract со следующими минимальными slices:
 
 - закрыто: `bootstrap` и alpha session bootstrap/login/restore;
 - частично закрыто compatibility adapter'ом: safe service actions; агрегированный ready-workspace/action contract всё еще нужен;
+- закрыто для первого safe editor slice: selected Xray routing `validate` с JSONC syntax/preflight diagnostics;
 - logs history/live transport с reconnect semantics;
-- `Routing Xray` document, `validate`, `preview`, `save`, `apply` flow.
+- `Routing Xray` document, server preview, save, apply и conflict flow.
 
 ## Что уже можно переиспользовать
 
@@ -36,7 +37,7 @@ Updated: 2026-07-16
 | Capabilities | `GET /api/capabilities` | Хорошая база для feature gating | Сохранить и встроить в mobile bootstrap/dashboard |
 | Service control | `GET /api/xkeen/status`, `GET /api/xkeen/core`, `GET /api/cores/status`, `GET /api/cores/versions`, `GET /api/cores/updates`, `POST /api/xkeen/start`, `POST /api/xkeen/stop`, `POST /api/xkeen/core`, `POST /api/restart`, `POST /api/restart-xkeen` | Quick actions уже используются Android-клиентом через единый port и server reread | Сохранить compatibility adapter; позже обернуть в агрегированный ready summary/action contract с operation semantics |
 | Logs and streams | `GET /api/xray-logs`, `GET /api/xray-logs/status`, `GET /api/restart-log`, `POST /api/ws-token`, `/ws/xray-logs`, `/ws/xray-logs2`, `/ws/devtools-logs` | Пригодно частично, но потоковая модель заточена под web | Вынести мобильный streaming contract и единый reconnect-friendly protocol |
-| Xray routing workflows | Xray routing/config endpoints и связанные backend services | Высокая ценность для первого editor-like mobile модуля; read-only fragments/content уже переиспользуются, но current shape все еще web-oriented | Вынести отдельные mobile use cases для `Routing Xray`: documents, validate, preview, save, apply, conflict detection |
+| Xray routing workflows | `GET /api/routing/fragments`, `GET /api/routing?file=...`, `POST /api/mobile/v1/xray/routing/validate` и existing Xray preflight services | Высокая ценность для первого editor-like mobile модуля; documents и real validate уже переиспользуются через mobile contract, write shape всё еще web-oriented | Сохранить validate contract; добавить отдельные mobile use cases для preview, save, apply и conflict detection |
 | Mihomo workflows | Группы `/api/mihomo/profiles*`, `/api/mihomo/subscriptions*`, `/api/mihomo/generate*`, `/api/mihomo/backups*` | Полезная логика есть, но слишком широкая поверхность | Для V1 выделить quick profile/status actions, затем отдельными slices переносить `Routing Mihomo` и части `Mihomo Generator` |
 | Backups | `GET /api/backups`, `POST /api/backup`, `POST /api/restore`, `POST /api/delete-backup` и related endpoints | Полезно, но рискованно для мобильного UX | Перенести в V1.1 или пускать в V1 только после отдельного safety gate |
 | UI settings | `GET/PATCH /api/ui-settings` | Ограниченно полезно | Использовать только если реально нужен мобильный app-level toggle |
@@ -104,13 +105,14 @@ Updated: 2026-07-16
 
 ### 6. Editor semantics gap
 
-Если в приложении появляется `Routing Xray`, а затем `Routing Mihomo` и части `Mihomo Generator`, нам недостаточно просто "отдать файл и принять файл обратно". Мобильному редактору нужны stateful сценарии: drafts, validation, preview, conflict detection и apply semantics.
+Если в приложении появляется `Routing Xray`, а затем `Routing Mihomo` и части `Mihomo Generator`, нам недостаточно просто "отдать файл и принять файл обратно". Первый stateful validate slice уже реализован, но мобильному редактору всё ещё нужны server preview, conflict detection и apply semantics.
 
 Что нужно:
 
 - Документированная модель `draft` и `published` состояния.
-- Endpoints для `validate`, `preview`, `save`, `apply`.
-- Семантические diagnostics, а не только raw syntax errors.
+- Уже готово: CSRF-protected `validate` endpoint с `200 / valid: false` для domain-invalid JSONC/preflight и structured diagnostics.
+- Остались endpoints для `preview`, `save`, `apply`.
+- Сохранить семантические diagnostics, а не только raw syntax errors.
 - Явный способ сообщать о конфликте версий или внешних изменениях файла.
 
 ### 7. Terminal and file safety gap
@@ -179,7 +181,7 @@ Updated: 2026-07-16
 - `POST /api/mobile/v1/logs/stream-token` или альтернативный streaming bootstrap
 - `GET /api/mobile/v1/xray/routing/cards`
 - `GET /api/mobile/v1/xray/routing/documents/{id}`
-- `POST /api/mobile/v1/xray/routing/validate`
+- `POST /api/mobile/v1/xray/routing/validate` — реализован: selected fragment + raw JSONC, temporary-confdir Xray preflight, no persistent config/DAT-asset write
 - `POST /api/mobile/v1/xray/routing/preview`
 - `PUT /api/mobile/v1/xray/routing/documents/{id}`
 - `POST /api/mobile/v1/xray/routing/apply`

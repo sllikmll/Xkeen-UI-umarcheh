@@ -485,6 +485,40 @@ def test_run_xray_preflight_refreshes_xray_dat_assets_before_check(tmp_path, mon
     assert calls[1][3] == str(dat_dir)
 
 
+def test_run_xray_preflight_read_only_mode_does_not_sync_xray_dat_assets(tmp_path, monkeypatch):
+    confdir = tmp_path / "configs"
+    confdir.mkdir()
+    (confdir / "00_base.json").write_text('{"log":{}}\n', encoding="utf-8")
+
+    dat_dir = tmp_path / "dat"
+    asset_dir = tmp_path / "asset"
+    dat_dir.mkdir()
+    asset_dir.mkdir()
+    monkeypatch.setenv("XRAY_DAT_DIR", str(dat_dir))
+    monkeypatch.setenv("XRAY_ASSET_DIR", str(asset_dir))
+
+    def fail_if_assets_are_synced(**_kwargs):
+        raise AssertionError("read-only preflight must not alter DAT asset links")
+
+    def fake_run(cmd, capture_output, text, timeout, check, **kwargs):
+        assert kwargs.get("cwd") == str(dat_dir)
+        assert kwargs.get("env", {}).get("XRAY_LOCATION_ASSET") == str(dat_dir)
+        return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(routing_config, "ensure_xray_dat_assets", fail_if_assets_are_synced)
+    monkeypatch.setattr(routing_config.subprocess, "run", fake_run)
+
+    result = routing_config._run_xray_preflight(
+        xray_configs_dir_real=str(confdir),
+        sel_main=str(confdir / "03_routing.json"),
+        obj={"routing": {"rules": []}},
+        sync_dat_assets=False,
+    )
+
+    assert result["ok"] is True
+    assert result["asset_dir"] == str(dat_dir)
+
+
 def test_run_xray_preflight_geodata_failure_explains_dat_asset_lookup(tmp_path, monkeypatch):
     confdir = tmp_path / "configs"
     dat_dir = tmp_path / "dat"

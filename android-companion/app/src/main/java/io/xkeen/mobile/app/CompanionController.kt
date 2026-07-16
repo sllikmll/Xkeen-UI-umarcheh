@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CancellationException
+import org.json.JSONObject
 
 internal class CompanionController(
     initialState: CompanionUiState = CompanionUiState(),
@@ -11,6 +12,19 @@ internal class CompanionController(
 ) {
     var state by mutableStateOf(initialState)
         private set
+
+    /**
+     * A controller-owned guard remains active even if an edit or document switch changes the
+     * visible validation state from [RoutingValidationState.Validating] to [RoutingValidationState.Dirty].
+     */
+    private var activeRoutingValidationRequest: RoutingValidationRequest? = null
+
+    private data class RoutingValidationRequest(
+        val documentId: String,
+        val draftContent: String,
+        val connectionId: String?,
+        val endpoint: String,
+    )
 
     suspend fun finishLaunch() {
         if (state.phase != AppPhase.Launching) return
@@ -305,7 +319,25 @@ internal class CompanionController(
     fun requestRoutingApply() {
         val document = selectedRoutingDocument() ?: return
         when {
-            state.routing.validation.state != RoutingValidationState.Valid -> validateRouting()
+            state.routing.isValidationInFlight || state.routing.validation.isPending -> return
+
+            state.routing.validation.state != RoutingValidationState.Valid -> {
+                if (state.routing.validation.state in setOf(
+                        RoutingValidationState.Idle,
+                        RoutingValidationState.Dirty,
+                    )
+                ) {
+                    state = state.copy(
+                        routing = state.routing.copy(
+                            validation = state.routing.validation.copy(
+                                state = RoutingValidationState.Dirty,
+                                message = "Перед применением выполните проверку на сервере.",
+                            ),
+                        ),
+                    )
+                }
+            }
+
             document.hasUnsavedChanges -> {
                 state = state.copy(
                     routing = state.routing.copy(
@@ -561,20 +593,122 @@ internal class CompanionController(
         )
     }
 
-    fun validateRouting() {
+    suspend fun validateRouting() {
         val document = selectedRoutingDocument() ?: return
+        if (
+            !document.isLoaded ||
+            state.routing.isValidationInFlight ||
+            activeRoutingValidationRequest != null
+        ) {
+            return
+        }
+
+        val request = RoutingValidationRequest(
+            documentId = document.id,
+            draftContent = document.draftContent,
+            connectionId = state.selectedConnectionId,
+            endpoint = state.dashboard.endpoint,
+        )
+        activeRoutingValidationRequest = request
+        val localSyntaxIssues = collectLocalRoutingSyntaxIssues(request.draftContent)
         state = state.copy(
             routing = state.routing.copy(
-                validation = validateRoutingDraft(document.draftContent),
+                isValidationInFlight = true,
+                validation = RoutingValidation(
+                    state = RoutingValidationState.Validating,
+                    message = "Проверяем ${document.title} на сервере Xkeen UI…",
+                    localSyntaxIssues = localSyntaxIssues,
+                ),
             ),
         )
+
+        try {
+            val result = dependencies.routingValidation.validate(
+                baseUrl = request.endpoint,
+                document = document,
+            )
+            if (!isCurrentRoutingValidationRequest(request)) {
+                return
+            }
+            val confirmedValid = result.valid && result.diagnostics.none {
+                it.severity == RoutingDiagnosticSeverity.Error
+            }
+            val finalState = if (confirmedValid) {
+                RoutingValidationState.Valid
+            } else {
+                RoutingValidationState.Invalid
+            }
+            state = state.copy(
+                routing = state.routing.copy(
+                    validation = RoutingValidation(
+                        state = finalState,
+                        message = result.message,
+                        localSyntaxIssues = localSyntaxIssues,
+                        serverDiagnostics = result.diagnostics,
+                    ),
+                ),
+                logs = recordLog(
+                    source = "routing",
+                    level = if (confirmedValid) LogLevel.Info else LogLevel.Warning,
+                    message = if (confirmedValid) {
+                        "Сервер подтвердил routing-конфиг ${document.title}"
+                    } else {
+                        "Сервер отклонил routing-конфиг ${document.title}"
+                    },
+                ),
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            if (!isCurrentRoutingValidationRequest(request)) {
+                return
+            }
+            if (returnToLoginForExpiredSession(error)) return
+            val message = error.toRoutingValidationMessage()
+            state = state.copy(
+                routing = state.routing.copy(
+                    validation = RoutingValidation(
+                        state = RoutingValidationState.Invalid,
+                        message = message,
+                        localSyntaxIssues = localSyntaxIssues,
+                        serverDiagnostics = listOf(
+                            RoutingDiagnostic(
+                                source = RoutingDiagnosticSource.Transport,
+                                severity = RoutingDiagnosticSeverity.Error,
+                                code = (error as? RoutingValidationException)?.diagnosticCode
+                                    ?: "validation_request_failed",
+                                message = message,
+                            ),
+                        ),
+                    ),
+                ),
+                logs = recordLog("routing", LogLevel.Warning, message),
+            )
+        } finally {
+            if (activeRoutingValidationRequest === request) {
+                activeRoutingValidationRequest = null
+                if (state.routing.isValidationInFlight) {
+                    state = state.copy(
+                        routing = state.routing.copy(isValidationInFlight = false),
+                    )
+                }
+            }
+        }
     }
 
     fun previewRouting() {
         val document = selectedRoutingDocument() ?: return
-        val validation = validateRoutingDraft(document.draftContent)
-        state = state.copy(routing = state.routing.copy(validation = validation))
-        if (validation.state != RoutingValidationState.Valid) {
+        if (state.routing.validation.state != RoutingValidationState.Valid) {
+            if (!state.routing.isValidationInFlight && !state.routing.validation.isPending) {
+                state = state.copy(
+                    routing = state.routing.copy(
+                        validation = state.routing.validation.copy(
+                            state = RoutingValidationState.Dirty,
+                            message = "Перед превью выполните проверку на сервере.",
+                        ),
+                    ),
+                )
+            }
             return
         }
 
@@ -872,6 +1006,12 @@ internal class CompanionController(
     private fun selectedRoutingDocument(): RoutingDocument? =
         state.routing.documents.firstOrNull { it.id == state.routing.selectedDocumentId }
 
+    private fun isCurrentRoutingValidationRequest(request: RoutingValidationRequest): Boolean =
+        state.selectedConnectionId == request.connectionId &&
+            state.dashboard.endpoint == request.endpoint &&
+            state.routing.selectedDocumentId == request.documentId &&
+            state.routing.documents.firstOrNull { it.id == request.documentId }?.draftContent == request.draftContent
+
     private fun applyCoreStatus(coreStatus: CoreStatus) {
         val availableCores = coreStatus.availableCores
         val activeCore = coreStatus.currentCore
@@ -952,39 +1092,118 @@ private fun preferredCoreTab(activeCore: String, availableCores: List<String>): 
         else -> MainTab.More
     }
 
-fun validateRoutingDraft(draft: String): RoutingValidation {
-    val details = mutableListOf<String>()
-
-    if (!draft.contains("\"routing\"")) {
-        details += "No routing object found."
-    }
-    if (!draft.contains("\"rules\"")) {
-        details += "No rules block found."
-    }
-    if (draft.count { it == '{' } != draft.count { it == '}' }) {
-        details += "Brace count does not match."
-    }
-    if (draft.contains("TODO_INVALID")) {
-        details += "Draft still contains TODO_INVALID marker."
-    }
-
-    return if (details.isEmpty()) {
-        RoutingValidation(
-            state = RoutingValidationState.Valid,
-            message = "Проверка пройдена. Можно открывать превью и сохранять.",
-            details = listOf(
-                "routing object found",
-                "rules block found",
-                "basic JSON structure looks valid",
+/**
+ * Fast local syntax feedback only.  It is intentionally never used to decide whether a routing
+ * document is valid: Xray/preflight diagnostics from [RoutingValidationPort] remain authoritative.
+ */
+internal fun collectLocalRoutingSyntaxIssues(draft: String): List<RoutingDiagnostic> {
+    if (draft.isBlank()) {
+        return listOf(
+            RoutingDiagnostic(
+                source = RoutingDiagnosticSource.LocalSyntax,
+                severity = RoutingDiagnosticSeverity.Error,
+                code = "empty_document",
+                message = "Документ пуст: сервер всё равно выполнит проверку, но Xray-конфиг должен быть JSON-объектом.",
             ),
         )
-    } else {
-        RoutingValidation(
-            state = RoutingValidationState.Invalid,
-            message = "Исправьте ${details.size} пункт(а) перед применением.",
-            details = details,
+    }
+
+    val cleaned = stripJsoncCommentsForLocalSyntax(draft)
+    return try {
+        // JSONObject deliberately enforces an object root, which is the required Xray config
+        // shape.  Comments are stripped first because loaded routing fragments may be JSONC.
+        JSONObject(cleaned)
+        emptyList()
+    } catch (error: Exception) {
+        val location = error.message?.let { message ->
+            localJsonSyntaxLocation(draft, message)
+        }
+        listOf(
+            RoutingDiagnostic(
+                source = RoutingDiagnosticSource.LocalSyntax,
+                severity = RoutingDiagnosticSeverity.Error,
+                code = "invalid_json_syntax",
+                message = "Локально обнаружен некорректный JSON/JSONC: " +
+                    (error.message?.substringBefore(" at character")?.trim()
+                        ?.takeIf(String::isNotBlank)
+                        ?: "проверьте синтаксис."),
+                line = location?.first,
+                column = location?.second,
+            ),
         )
     }
+}
+
+private fun stripJsoncCommentsForLocalSyntax(source: String): String = buildString(source.length) {
+    var index = 0
+    var inString = false
+    var escaped = false
+    while (index < source.length) {
+        val character = source[index]
+        if (inString) {
+            append(character)
+            when {
+                escaped -> escaped = false
+                character == '\\' -> escaped = true
+                character == '"' -> inString = false
+            }
+            index += 1
+            continue
+        }
+
+        when {
+            character == '"' -> {
+                inString = true
+                append(character)
+                index += 1
+            }
+
+            character == '#' -> {
+                while (index < source.length && source[index] != '\n') {
+                    append(if (source[index] == '\r') '\r' else ' ')
+                    index += 1
+                }
+            }
+
+            character == '/' && source.getOrNull(index + 1) == '/' -> {
+                while (index < source.length && source[index] != '\n') {
+                    append(if (source[index] == '\r') '\r' else ' ')
+                    index += 1
+                }
+            }
+
+            character == '/' && source.getOrNull(index + 1) == '*' -> {
+                while (index < source.length) {
+                    val closesComment = source[index] == '*' && source.getOrNull(index + 1) == '/'
+                    append(if (source[index] == '\n' || source[index] == '\r') source[index] else ' ')
+                    index += 1
+                    if (closesComment && index < source.length) {
+                        append(' ')
+                        index += 1
+                        break
+                    }
+                }
+            }
+
+            else -> {
+                append(character)
+                index += 1
+            }
+        }
+    }
+}
+
+private fun localJsonSyntaxLocation(source: String, errorMessage: String): Pair<Int, Int>? {
+    val characterIndex = Regex("(?:at character|at)\\s+(\\d+)")
+        .find(errorMessage)
+        ?.groupValues
+        ?.getOrNull(1)
+        ?.toIntOrNull()
+        ?.coerceIn(0, source.length)
+        ?: return null
+    val before = source.take(characterIndex)
+    return (before.count { it == '\n' } + 1) to
+        (characterIndex - (before.lastIndexOf('\n') + 1) + 1)
 }
 
 internal fun buildRoutingPreview(document: RoutingDocument): RoutingPreview {
@@ -1010,6 +1229,10 @@ private fun List<Connection>.replaceConnection(updated: Connection): List<Connec
 
 private fun Throwable.toRoutingLoadMessage(): String = toCompanionLoadMessage(
     fallback = "Не удалось загрузить конфигурации с Xkeen UI.",
+)
+
+private fun Throwable.toRoutingValidationMessage(): String = toCompanionLoadMessage(
+    fallback = "Не удалось получить результат проверки с Xkeen UI. Повторите попытку.",
 )
 
 private fun Throwable.toCompanionLoadMessage(fallback: String): String =
