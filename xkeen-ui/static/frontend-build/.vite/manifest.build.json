@@ -52,16 +52,12 @@
       "_yaml_schema-CZjJUoY_.js"
     ]
   },
-  "_command_job-Bbo7RRj0.js": {
-    "file": "assets/command_job-Bbo7RRj0.js",
-    "name": "command_job"
-  },
   "_confirm_modal-CnYbqZBX.js": {
     "file": "assets/confirm_modal-CnYbqZBX.js",
     "name": "confirm_modal"
   },
-  "_devtools.screen.bootstrap-CsFL8z2b.js": {
-    "file": "assets/devtools.screen.bootstrap-CsFL8z2b.js",
+  "_devtools.screen.bootstrap-D7H_yMhB.js": {
+    "file": "assets/devtools.screen.bootstrap-D7H_yMhB.js",
     "name": "devtools.screen.bootstrap",
     "imports": [
       "_tooltips_auto-__Hf4obk.js",
@@ -151,25 +147,32 @@
       "_xkeen_runtime-CDKqGwJo.js"
     ]
   },
-  "_mihomo_generator.screen.bootstrap-eLDd4EOF.js": {
-    "file": "assets/mihomo_generator.screen.bootstrap-eLDd4EOF.js",
-    "name": "mihomo_generator.screen.bootstrap",
+  "_mihomo_generator-CUTampS3.js": {
+    "file": "assets/mihomo_generator-CUTampS3.js",
+    "name": "mihomo_generator",
     "imports": [
       "_preload-helper-C13WNAN7.js",
+      "_mihomo_runtime-CQPO5_rr.js",
+      "_xkeen_runtime-CDKqGwJo.js"
+    ],
+    "dynamicImports": [
+      "_restart_log-F7RBORHJ.js"
+    ]
+  },
+  "_mihomo_generator.screen.bootstrap-BwCtbHP9.js": {
+    "file": "assets/mihomo_generator.screen.bootstrap-BwCtbHP9.js",
+    "name": "mihomo_generator.screen.bootstrap",
+    "imports": [
       "_tooltips_auto-__Hf4obk.js",
       "_feature_access-CAajRwvQ.js",
-      "_mihomo_runtime-CQPO5_rr.js",
+      "_mihomo_generator-CUTampS3.js",
       "_xkeen_runtime-CDKqGwJo.js",
       "_codemirror6.shared-C2_V1B1S.js",
       "_editor.shared-C1J4Hpr6.js",
       "_editor_monaco.shared-BNt4y2hN.js",
       "_confirm_modal-CnYbqZBX.js",
       "_spinner_fetch-DtfhuZqp.js",
-      "_command_job-Bbo7RRj0.js",
       "_helpers-CSy6f5UM.js"
-    ],
-    "dynamicImports": [
-      "_restart_log-F7RBORHJ.js"
     ]
   },
   "_mihomo_hwid_sub-Cvnpxj3C.js": {
@@ -248,8 +251,8 @@
       "_xkeen_runtime-CDKqGwJo.js"
     ]
   },
-  "_panel.screen.bootstrap-C42j5dKi.js": {
-    "file": "assets/panel.screen.bootstrap-C42j5dKi.js",
+  "_panel.screen.bootstrap-P23z2d8u.js": {
+    "file": "assets/panel.screen.bootstrap-P23z2d8u.js",
     "name": "panel.screen.bootstrap",
     "imports": [
       "_preload-helper-C13WNAN7.js",
@@ -257,6 +260,7 @@
       "_feature_access-CAajRwvQ.js",
       "_file_manager-CexfN3g_.js",
       "_local_io-B2DpIdab.js",
+      "_mihomo_generator-CUTampS3.js",
       "_mihomo_panel-DyQwyFUP.js",
       "_routing-Bxv7EMdb.js",
       "_routing_cards_namespace-Bdk12Xcz.js",
@@ -267,7 +271,6 @@
       "_editor.shared-C1J4Hpr6.js",
       "_confirm_modal-CnYbqZBX.js",
       "_shared_primitives-8ud0BXRn.js",
-      "_command_job-Bbo7RRj0.js",
       "_helpers-CSy6f5UM.js"
     ],
     "dynamicImports": [
@@ -398,8 +401,8 @@
       "_xkeen_runtime-CDKqGwJo.js"
     ]
   },
-  "_top_level_panel_mihomo.shared-hx5f8vhl.js": {
-    "file": "assets/top_level_panel_mihomo.shared-hx5f8vhl.js",
+  "_top_level_panel_mihomo.shared-DEy5Lhu-.js": {
+    "file": "assets/top_level_panel_mihomo.shared-DEy5Lhu-.js",
     "name": "top_level_panel_mihomo.shared",
     "imports": [
       "_preload-helper-C13WNAN7.js",
@@ -407,10 +410,10 @@
       "_xkeen_runtime-CDKqGwJo.js"
     ],
     "dynamicImports": [
-      "_panel.screen.bootstrap-C42j5dKi.js",
+      "_panel.screen.bootstrap-P23z2d8u.js",
       "_backups.screen.bootstrap-B70C0lzQ.js",
-      "_mihomo_generator.screen.bootstrap-eLDd4EOF.js",
-      "_devtools.screen.bootstrap-CsFL8z2b.js",
+      "_mihomo_generator.screen.bootstrap-BwCtbHP9.js",
+      "_devtools.screen.bootstrap-D7H_yMhB.js",
       "_xkeen.screen.bootstrap-BKJC3Mmc.js"
     ]
   },
@@ -705,13 +708,13 @@
     ]
   },
   "js/pages/backups.entry.js": {
-    "file": "assets/backups-o1pC5ZLV.js",
+    "file": "assets/backups-BmSv8av8.js",
     "name": "backups",
     "src": "js/pages/backups.entry.js",
     "isEntry": true,
     "imports": [
       "_backups.screen.bootstrap-B70C0lzQ.js",
-      "_top_level_panel_mihomo.shared-hx5f8vhl.js"
+      "_top_level_panel_mihomo.shared-DEy5Lhu-.js"
     ]
   },
   "js/pages/backups.screen.bootstrap.js": {
@@ -733,22 +736,22 @@
     ]
   },
   "js/pages/devtools.entry.js": {
-    "file": "assets/devtools-hhSeTjLy.js",
+    "file": "assets/devtools-emq3a0Tu.js",
     "name": "devtools",
     "src": "js/pages/devtools.entry.js",
     "isEntry": true,
     "imports": [
-      "_devtools.screen.bootstrap-CsFL8z2b.js",
-      "_top_level_panel_mihomo.shared-hx5f8vhl.js"
+      "_devtools.screen.bootstrap-D7H_yMhB.js",
+      "_top_level_panel_mihomo.shared-DEy5Lhu-.js"
     ]
   },
   "js/pages/devtools.screen.bootstrap.js": {
-    "file": "assets/devtools.screen.bootstrap-C6h1JL-s.js",
+    "file": "assets/devtools.screen.bootstrap-BbA6WFvg.js",
     "name": "devtools.screen.bootstrap",
     "src": "js/pages/devtools.screen.bootstrap.js",
     "isDynamicEntry": true,
     "imports": [
-      "_devtools.screen.bootstrap-CsFL8z2b.js"
+      "_devtools.screen.bootstrap-D7H_yMhB.js"
     ]
   },
   "js/pages/editor_monaco.shared.js": {
@@ -770,32 +773,32 @@
     ]
   },
   "js/pages/mihomo_generator.entry.js": {
-    "file": "assets/mihomo_generator-B95Ccn4u.js",
+    "file": "assets/mihomo_generator-BpADeROc.js",
     "name": "mihomo_generator",
     "src": "js/pages/mihomo_generator.entry.js",
     "isEntry": true,
     "imports": [
-      "_mihomo_generator.screen.bootstrap-eLDd4EOF.js",
-      "_top_level_panel_mihomo.shared-hx5f8vhl.js"
+      "_mihomo_generator.screen.bootstrap-BwCtbHP9.js",
+      "_top_level_panel_mihomo.shared-DEy5Lhu-.js"
     ]
   },
   "js/pages/mihomo_generator.screen.bootstrap.js": {
-    "file": "assets/mihomo_generator.screen.bootstrap-BxWMjSXn.js",
+    "file": "assets/mihomo_generator.screen.bootstrap-DKnnim8Z.js",
     "name": "mihomo_generator.screen.bootstrap",
     "src": "js/pages/mihomo_generator.screen.bootstrap.js",
     "isDynamicEntry": true,
     "imports": [
-      "_mihomo_generator.screen.bootstrap-eLDd4EOF.js"
+      "_mihomo_generator.screen.bootstrap-BwCtbHP9.js"
     ]
   },
   "js/pages/panel.entry.js": {
-    "file": "assets/panel-o09G-hgc.js",
+    "file": "assets/panel-51gB4rt1.js",
     "name": "panel",
     "src": "js/pages/panel.entry.js",
     "isEntry": true,
     "imports": [
-      "_panel.screen.bootstrap-C42j5dKi.js",
-      "_top_level_panel_mihomo.shared-hx5f8vhl.js"
+      "_panel.screen.bootstrap-P23z2d8u.js",
+      "_top_level_panel_mihomo.shared-DEy5Lhu-.js"
     ]
   },
   "js/pages/panel.mihomo.bundle.js": {
@@ -822,12 +825,12 @@
     ]
   },
   "js/pages/panel.screen.bootstrap.js": {
-    "file": "assets/panel.screen.bootstrap-CmkM-zD8.js",
+    "file": "assets/panel.screen.bootstrap-aCoq-5Ua.js",
     "name": "panel.screen.bootstrap",
     "src": "js/pages/panel.screen.bootstrap.js",
     "isDynamicEntry": true,
     "imports": [
-      "_panel.screen.bootstrap-C42j5dKi.js"
+      "_panel.screen.bootstrap-P23z2d8u.js"
     ]
   },
   "js/pages/terminal.lazy.entry.js": {
@@ -844,12 +847,12 @@
     ]
   },
   "js/pages/xkeen.entry.js": {
-    "file": "assets/xkeen-BKz1GdL1.js",
+    "file": "assets/xkeen-Df1dweXx.js",
     "name": "xkeen",
     "src": "js/pages/xkeen.entry.js",
     "isEntry": true,
     "imports": [
-      "_top_level_panel_mihomo.shared-hx5f8vhl.js",
+      "_top_level_panel_mihomo.shared-DEy5Lhu-.js",
       "_xkeen.screen.bootstrap-BKJC3Mmc.js"
     ]
   },

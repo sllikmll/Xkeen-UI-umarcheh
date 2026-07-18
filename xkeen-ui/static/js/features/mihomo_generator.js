@@ -63,7 +63,9 @@ let mihomoGeneratorModuleApi = null;
       try {
         return !!(
           getXkeenPageName() === 'mihomo_generator' ||
-          document.body?.classList.contains('mihomo-generator-page')
+          getXkeenPageName() === 'panel' ||
+          document.body?.classList.contains('mihomo-generator-page') ||
+          !!document.querySelector('.mihomo-generator-embedded')
         );
       } catch (e) {
         return false;

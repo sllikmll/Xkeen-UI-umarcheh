@@ -11,11 +11,14 @@ let layoutPrefsModuleApi = null;
   const TAB_DEFS = Object.freeze([
     { key: 'view:routing', label: 'Роутинг Xray' },
     { key: 'view:mihomo', label: 'Роутинг Mihomo' },
+    { key: 'view:mihomo-selectors', label: 'Маршрутизация' },
+    { key: 'view:mihomo-connections', label: 'Соединения' },
+    { key: 'view:geodat', label: 'DAT GeoIP / GeoSite' },
     { key: 'view:xkeen', label: 'Порты и Исключения' },
     { key: 'view:xray-logs', label: 'Логи Xray онлайн' },
     { key: 'view:commands', label: 'Команды' },
     { key: 'view:files', label: 'Файлы' },
-    { key: 'id:top-tab-mihomo-generator', label: 'Mihomo Генератор' },
+    { key: 'view:mihomo-generator', label: 'Mihomo Генератор' },
     { key: 'id:top-tab-donate', label: '💰 Донат' },
   ]);
 

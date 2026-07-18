@@ -1,0 +1,357 @@
+<div class="mihomo-generator-embedded">
+  <div class="container container-wide mihomo-generator-embedded-container">
+    <div class="generator-layout">
+      <!-- LEFT CARD -->
+      <div class="card generator-card generator-card--source">
+        <div class="xk-gen-lead generator-lead">
+          <div class="xk-gen-lead-icon">🧩</div>
+          <div style="min-width:0;flex:1;">
+            <div class="xk-gen-kicker">Mihomo generator</div>
+            <div class="xk-gen-lead-title">Исходные данные</div>
+          </div>
+          <div class="xk-gen-summary generator-head-pill">input / providers / proxies</div>
+        </div>
+
+        <div class="generator-sections">
+          <div class="xk-gen-panel generator-section-panel">
+            <div class="generator-section-head">
+              <div>
+                <div class="xk-gen-kicker">Источник</div>
+                <div class="generator-section-title">Профиль и подписки</div>
+              </div>
+              <div class="generator-section-badge">proxy-providers</div>
+            </div>
+
+            <div class="generator-field-card">
+              <label for="profileSelect">Профиль</label>
+              <select id="profileSelect">
+                <option value="router_custom">Роутер (кастомные провайдеры)</option>
+                <option value="router_zkeen">Роутер (базы ZKeen)</option>
+              </select>
+            </div>
+
+            <div class="generator-field-card">
+              <label>Подписки (proxy-providers)</label>
+              <div id="subscriptionsList" class="subscriptions-list"></div>
+              <button type="button" id="addSubscriptionBtn" class="btn btn-ghost btn-xs" data-tooltip="Добавить новую подписку (proxy-provider).">
+                + Добавить подписку
+              </button>
+              <div class="hint xk-card-desc">
+                Подписки будут заполнены в proxy-providers как: proxy-sub, proxy-sub-2, proxy-sub-3, ...
+                Если подписок больше 5 — дополнительные proxy-providers будут добавлены автоматически.
+              </div>
+            </div>
+
+            <div class="generator-field-card" id="mihomoManagedSubscriptionsBlock" hidden>
+              <label>Автообновление Xray-JSON</label>
+              <div id="mihomoManagedSubscriptionsList" class="mihomo-managed-sub-list"></div>
+              <div class="generator-action-row">
+                <button type="button" id="reloadMihomoManagedSubsBtn" class="btn btn-ghost btn-xs" data-tooltip="Обновить список управляемых Xray-JSON подписок.">
+                  Обновить список
+                </button>
+                <button type="button" id="refreshMihomoManagedDueBtn" class="btn btn-ghost btn-xs" data-tooltip="Запустить обновление подписок, у которых подошло время.">
+                  Обновить due
+                </button>
+              </div>
+              <div class="hint xk-card-desc">
+                Интервал можно задать сразу после конвертации; плановое обновление включится после применения конфига без ручной правки предпросмотра.
+              </div>
+            </div>
+          </div>
+
+          <div class="xk-gen-panel generator-section-panel">
+            <div class="generator-section-head">
+              <div>
+                <div class="xk-gen-kicker">Шаблон</div>
+                <div class="generator-section-title">Группы и rule-пакеты</div>
+              </div>
+              <div class="generator-section-badge">rules / groups</div>
+            </div>
+
+            <div class="generator-field-card">
+              <label for="defaultGroupsInput">Группы по умолчанию для узлов</label>
+              <input id="defaultGroupsInput" type="text" value="Заблок. сервисы" placeholder="Заблок. сервисы,YouTube">
+              <div class="hint xk-card-desc">
+                Если у узла не заданы свои группы, будут использованы эти.
+              </div>
+            </div>
+
+            <div class="generator-rule-groups-card">
+              <div class="generator-rule-groups-head">
+                <label>Пакеты групп и правил</label>
+                <label class="generator-checkbox-meta">
+                  <input id="ruleGroupsSelectAll" type="checkbox">
+                  Отметить всё
+                </label>
+              </div>
+              <div id="ruleGroupsList" class="rule-groups-grid"></div>
+            </div>
+          </div>
+
+          <div class="xk-gen-panel generator-section-panel">
+            <div class="generator-section-head">
+              <div>
+                <div class="xk-gen-kicker">Наполнение</div>
+                <div class="generator-section-title">Узлы и быстрые действия</div>
+              </div>
+              <div class="generator-section-badge">proxies</div>
+            </div>
+
+            <div class="generator-action-block" style="padding:12px;">
+              <label>Узлы (proxies)</label>
+              <div id="proxiesList" class="proxies-list"></div>
+              <div class="generator-action-row">
+                <button type="button" id="addProxyBtn" class="btn btn-ghost btn-xs" data-tooltip="Добавить новый узел (proxy) вручную.">
+                  + Добавить узел
+                </button>
+                <button type="button" id="bulkImportBtn" class="btn btn-ghost btn-xs" title="Вставьте список ссылок (vless/trojan/vmess/ss/hysteria2/hy2/tailscale) и/или https подписок">
+                  📥 Импорт списка
+                </button>
+                <button type="button" id="normalizeProxiesBtn" class="btn btn-ghost btn-xs" title="Заполнить пустые имена/группы и нормализовать текущие узлы по шаблонам из импорта">
+                  ✨ Нормализовать
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT CARD -->
+      <div class="card generator-card generator-card--preview">
+        <div class="xk-gen-panel generator-preview-shell">
+          <div class="preview-head-top">
+            <div class="preview-head-copy">
+              <div class="xk-gen-kicker">YAML / preview editor</div>
+              <h2>Предпросмотр</h2>
+              <div id="stateSummary" class="preview-head-meta">
+                Профиль: router_custom · Rule-групп: 0 · Подписок: 0 · Прокси: 0
+              </div>
+            </div>
+            <!-- Toolbar (Поиск/Фулскрин/и т.д.) будет подключён к CodeMirror и вставлен сюда -->
+            <div id="previewToolbarHost" class="preview-toolbar-host">
+              <div class="xk-editor-engine" id="mihomo-preview-engine">
+                <span class="xk-editor-engine-label">Редактор</span>
+                <select id="mihomo-preview-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора (общая настройка)">
+                  <option value="codemirror">CodeMirror</option>
+                  <option value="monaco">Monaco</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <textarea id="previewTextarea" style="display:none;"></textarea>
+          <div id="previewMonaco" class="xk-monaco-editor xk-monaco-editor--modal hidden"></div>
+          <div class="hint xk-card-desc generator-preview-hint">
+            Режим <strong>Редактирование</strong> позволяет вручную править YAML перед сохранением и применением на роутере.
+          </div>
+
+          <div class="status-bar generator-statusbar">
+            <div id="statusMessage" class="status-message">
+              Скелет загружен. Включите «Редактирование» для ручных правок.
+            </div>
+            <div class="status-actions">
+              <label class="edit-toggle">
+                <input type="checkbox" id="editToggle">
+                Редактирование
+              </label>
+              <button type="button" id="generateBtn" class="btn btn-primary btn-icon" title="Сгенерировать/обновить предпросмотр" aria-label="Сгенерировать предпросмотр">
+                ⚙️
+              </button>
+              <button type="button" id="resetPreviewBtn" class="btn btn-icon" title="Сбросить предпросмотр к состоянию по умолчанию" aria-label="Сбросить предпросмотр" data-tooltip="Сбросить предпросмотр к состоянию по умолчанию">
+                ↺
+              </button>
+              <button type="button" id="copyBtn" class="btn" title="Копировать в буфер обмена">
+                📋
+              </button>
+              <button type="button" id="saveBtn" class="btn" title="Скачать config.yaml">
+                💾
+              </button>
+              <button type="button" id="validateBtn" class="btn" title="Проверить config.yaml через mihomo -t">
+                🩺
+              </button>
+              <button type="button" id="applyBtn" class="btn" title="Сохранить и применить на роутере">
+                🚀
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="validation-log-panel">
+          <div class="validation-log-header">
+            Лог проверки mihomo
+            <button type="button" id="clearValidationLogBtn" class="btn" style="float:right;" data-tooltip="Очистить окно лога проверки.">
+              Очистить
+            </button>
+          </div>
+          <div id="validationLog" class="validation-log"></div>
+        </div>
+
+	<!-- Modularization scaffold (no behavior changes yet) -->
+
+<div id="mihomoResultModal" class="modal hidden" data-kind="info" data-modal-dismiss="mihomo-result">
+  <div class="modal-content" role="dialog" aria-modal="true" aria-label="Результат операций генератора Mihomo">
+    <div class="modal-header mihomo-result-modal-header">
+      <div class="mihomo-result-titlebox">
+        <div id="mihomoResultModalKicker" class="mihomo-result-modal-kicker">Mihomo / result</div>
+        <span id="mihomoResultModalTitle" class="modal-title">Результат операции</span>
+        <div id="mihomoResultModalSubtitle" class="mihomo-result-modal-subtitle">Подробности проверки, предпросмотра и применения конфигурации отображаются в одном окне.</div>
+      </div>
+      <button type="button" class="modal-close" data-dismiss="mihomo-result">×</button>
+    </div>
+    <div class="modal-body mihomo-result-modal-body">
+      <section class="mihomo-result-lead">
+        <div id="mihomoResultModalIcon" class="mihomo-result-lead-icon">MH</div>
+        <div class="mihomo-result-lead-copy">
+          <div id="mihomoResultModalLeadTitle" class="mihomo-result-lead-title">Mihomo сообщает результат операции</div>
+          <p id="mihomoResultModalLeadDesc" class="mihomo-result-lead-desc">Если генератор нашёл ошибки или предупреждения, они будут показаны ниже вместе с логом и подсказками.</p>
+        </div>
+        <div id="mihomoResultModalBadge" class="mihomo-result-state-badge">Инфо</div>
+      </section>
+
+      <div id="mihomoResultGrid" class="mihomo-result-grid" data-has-log="0">
+        <section class="mihomo-result-panel mihomo-result-panel--main">
+          <div class="mihomo-result-overview">
+            <div class="mihomo-result-overview-header">
+              <div class="mihomo-result-overview-title">Сводка</div>
+            </div>
+            <div id="mihomoResultSummaryWrap" class="mihomo-result-block" style="display:none;">
+              <div id="mihomoResultSummary" class="mihomo-result-summary"></div>
+            </div>
+            <div id="mihomoResultMetaWrap" class="mihomo-result-meta-grid" style="display:none;"></div>
+          </div>
+          <div id="mihomoResultWarningsWrap" class="mihomo-result-block" style="display:none;">
+            <div class="mihomo-result-block-title">Предупреждения</div>
+            <div id="mihomoResultWarnings"></div>
+          </div>
+          <div id="mihomoResultErrorsWrap" class="mihomo-result-block" style="display:none;">
+            <div class="mihomo-result-block-title">Ошибки</div>
+            <div id="mihomoResultErrors"></div>
+          </div>
+        </section>
+
+        <section id="mihomoResultSidePanel" class="mihomo-result-panel mihomo-result-panel--side" style="display:none;">
+          <div id="mihomoResultLogWrap" class="mihomo-result-log-shell" style="display:none;">
+            <div class="mihomo-result-block-title">Лог / детали</div>
+            <div id="mihomoResultModalLog" class="mihomo-result-terminal"></div>
+          </div>
+        </section>
+      </div>
+    </div>
+    <div class="modal-actions mihomo-result-footer">
+      <div class="mihomo-result-footer-actions">
+        <button type="button" id="mihomoResultJumpBtn" class="btn" style="display:none;">Перейти к ошибке</button>
+        <button type="button" id="mihomoResultCopyBtn" class="btn">Скопировать детали</button>
+      </div>
+      <button type="button" class="btn btn-primary" data-dismiss="mihomo-result">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<div id="bulkImportModal" class="modal hidden bulk-import-premium-modal" data-modal-dismiss="bulk-import" data-modal-remember="0" data-modal-noresize="1" data-modal-nopos="1" data-modal-nodrag="1" data-modal-backdrop-close="0">
+  <div class="modal-content">
+    <div class="modal-header bulk-import-modal-header">
+      <div class="bulk-import-modal-titlebox">
+        <div class="bulk-import-modal-kicker">Mihomo / bulk import</div>
+        <div class="bulk-import-header-help">Ссылки, HTTPS-подписки и Xray-JSON URL. Xray-JSON будет конвертирован в YAML-узлы.</div>
+      </div>
+      <button type="button" class="modal-close" data-dismiss="bulk-import">×</button>
+    </div>
+    <div class="modal-body bulk-import-modal-body">
+      <div class="bulk-import-layout">
+        <section class="bulk-import-panel bulk-import-panel--source">
+          <div class="bulk-import-panel-head">
+            <div class="bulk-import-panel-title">Источник импорта</div>
+          </div>
+
+          <textarea id="bulkImportTextarea" class="bulk-import-textarea" rows="5" placeholder="vless://...
+https://sub.example.com/...
+trojan://...
+My node | vless://... | YouTube,HK"></textarea>
+
+          <div class="bulk-import-supported">
+            <span class="bulk-import-chip">vless://</span>
+            <span class="bulk-import-chip">trojan://</span>
+            <span class="bulk-import-chip">vmess://</span>
+            <span class="bulk-import-chip">ss://</span>
+            <span class="bulk-import-chip">hysteria2://</span>
+            <span class="bulk-import-chip">hy2://</span>
+            <span class="bulk-import-chip">tailscale://</span>
+            <span class="bulk-import-chip">https://</span>
+          </div>
+
+          <div class="bulk-import-option-row">
+            <label class="bulk-import-check">
+              <input id="bulkImportToSubscriptions" type="checkbox" checked>
+              HTTPS-строки добавлять в «Подписки»
+            </label>
+            <label class="bulk-import-check">
+              <input id="bulkImportDedup" type="checkbox" checked>
+              Игнорировать дубли
+            </label>
+            <label class="bulk-import-check">
+              <input id="bulkImportClearExisting" type="checkbox">
+              Очистить текущие узлы перед импортом
+            </label>
+          </div>
+
+          <details class="bulk-import-advanced">
+            <summary>Дополнительно: шаблоны и GEO</summary>
+            <div class="bulk-import-advanced-body">
+              <div class="bulk-import-subgrid">
+                <div class="bulk-import-card">
+                  <div class="bulk-import-card-head">
+                    <div>
+                      <div class="bulk-import-card-title">Шаблоны заполнения</div>
+                    </div>
+                  </div>
+                  <div class="bulk-import-field-grid">
+                    <div>
+                      <label for="bulkImportNameTemplate" class="bulk-import-field-label">Шаблон имени</label>
+                      <input id="bulkImportNameTemplate" type="text" class="input" placeholder="{name}" value="{name}">
+                    </div>
+                    <div>
+                      <label for="bulkImportGroupsTemplate" class="bulk-import-field-label">Шаблон групп</label>
+                      <input id="bulkImportGroupsTemplate" type="text" class="input" placeholder="например: {geo},Заблок. сервисы">
+                    </div>
+                  </div>
+                  <div class="bulk-import-minihelp">
+                    Переменные: <code>{name}</code>, <code>{type}</code>, <code>{host}</code>, <code>{port}</code>, <code>{geo}</code>, <code>{flag}</code>, <code>{region}</code>, <code>{region_group}</code>, <code>{group}</code>, <code>{groups}</code>, <code>{tags}</code>, <code>{index}</code>
+                  </div>
+                </div>
+
+                <div class="bulk-import-card">
+                  <div class="bulk-import-card-head">
+                    <div>
+                      <div class="bulk-import-card-title">GEO-группы</div>
+                    </div>
+                  </div>
+                  <div class="bulk-import-check-grid">
+                    <label class="bulk-import-check">
+                      <input id="bulkImportAutoGeo" type="checkbox">
+                      Определять GEO по имени/хосту
+                    </label>
+                    <label class="bulk-import-check">
+                      <input id="bulkImportAutoRegionGroup" type="checkbox">
+                      Добавлять региональную группу
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </details>
+
+          <div id="bulkImportSummary" class="bulk-import-summary">Вставьте список, чтобы увидеть сводку импорта.</div>
+        </section>
+      </div>
+    </div>
+    <div class="bulk-import-actions">
+      <div class="bulk-import-actions-main">
+        <button type="button" class="btn" data-dismiss="bulk-import">Отмена</button>
+        <button type="button" id="bulkImportApplyBtn" class="btn btn-primary">Импортировать</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+  </div>
+</div>

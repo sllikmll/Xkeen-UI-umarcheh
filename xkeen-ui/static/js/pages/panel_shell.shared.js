@@ -1194,14 +1194,6 @@ import { wireTopLevelNavigation } from './top_level_nav.shared.js';
     scheduleRoutingInteractionRecovery();
     wirePanelTerminalLazyOpen();
     initPanelTerminalCapabilityButtons();
-    try {
-      const genReload = document.getElementById('mihomo-generator-reload-btn');
-      const genFrame = document.getElementById('mihomo-generator-frame');
-      if (genReload && genFrame && !(genReload.dataset && genReload.dataset.xkWired === '1')) {
-        genReload.addEventListener('click', () => { try { genFrame.src = genFrame.src; } catch (e) {} });
-        if (genReload.dataset) genReload.dataset.xkWired = '1';
-      }
-    } catch (e) {}
 
     try {
       const url = new URL(window.location.href);

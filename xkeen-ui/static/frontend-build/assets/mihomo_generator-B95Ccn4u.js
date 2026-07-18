@@ -1,1 +1,0 @@
-import{n as e,t}from"./top_level_panel_mihomo.shared-hx5f8vhl.js";import{t as n}from"./mihomo_generator.screen.bootstrap-eLDd4EOF.js";e({initialScreen:`mihomo_generator`,bootstrap(){return n()}}).then(()=>{try{t()}catch(e){try{console.error(`[XKeen] panel/mihomo screen registration failed`,e)}catch{}}});

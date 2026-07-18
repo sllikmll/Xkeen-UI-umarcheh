@@ -1,0 +1,1 @@
+import{n as e,t}from"./top_level_panel_mihomo.shared-DEy5Lhu-.js";import{t as n}from"./xkeen.screen.bootstrap-BKJC3Mmc.js";e({initialScreen:`xkeen`,bootstrap(){return n()}}).then(()=>{try{t()}catch(e){try{console.error(`[XKeen] canonical top-level screen registration failed`,e)}catch{}}});

@@ -1,1 +1,0 @@
-import{n as e,t}from"./top_level_panel_mihomo.shared-hx5f8vhl.js";import{t as n}from"./panel.screen.bootstrap-C42j5dKi.js";e({initialScreen:`panel`,async bootstrap(){await n()},onError(e){console.error(`[XKeen] panel feature bundle bootstrap failed`,e)}}).then(()=>{try{t()}catch(e){try{console.error(`[XKeen] panel/mihomo screen registration failed`,e)}catch{}}});

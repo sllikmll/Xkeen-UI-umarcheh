@@ -7,6 +7,7 @@
   <meta name="csrf-token" content="{{ csrf_token }}">
 
   {% include '_top_level_host_head_assets.html' %}
+  <script src="{{ url_for('static', filename='jsonlint/jsonlint.min.js') }}"></script>
   {% include '_codemirror6_importmap.html' %}
 
   {% set panel_page_config = frontend_page_config(
@@ -58,6 +59,7 @@
     window.XKeen.pageConfig = pageConfig;
   </script>
   <script src="{{ url_for('static', filename='js/ui/sections.js', v='20260101c') }}"></script>
+  {% include '_mihomo_generator_embedded_styles.html' %}
   <!-- Editor payload is lazy-loaded by js/runtime/lazy_runtime.js + js/ui/editor_engine.js. -->
   {% include '_top_level_host_theme_bootstrap.html' %}
 <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260609b') }}">
@@ -210,7 +212,7 @@
           Роутинг Mihomo
         </button>
         <button class="top-tab-btn xk-top-tab xk-top-tab-mihomo-selectors" data-view="mihomo-selectors" data-xk-section="mihomo-selectors">
-          Селекторы
+          Маршрутизация
         </button>
         <button class="top-tab-btn xk-top-tab xk-top-tab-mihomo-connections" data-view="mihomo-connections" data-xk-section="mihomo-connections">
           Соединения
@@ -1106,8 +1108,7 @@
   <section class="card xk-mihomo-selectors-card">
     <div class="commands-header">
       <div>
-        <div class="commands-title">Селекторы Mihomo</div>
-        <div class="commands-subtitle">Runtime-выбор групп из Mihomo API без отдельного Zashboard на 9090/ui.</div>
+        <div class="commands-title">Маршрутизация Mihomo</div>
       </div>
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <span id="mihomo-selectors-status" class="status" style="margin:0;">Загрузка…</span>
@@ -1298,16 +1299,7 @@
 </div>
 
 <div id="view-mihomo-generator" class="view-section" style="display:none;" data-xk-section="mihomo-generator">
-  <section class="card xk-mihomo-generator-shell">
-    <div class="commands-header">
-      <div>
-        <div class="commands-title">Mihomo Генератор</div>
-        <div class="commands-subtitle">Генератор открыт внутри единой панели — шапка и вкладки остаются на месте.</div>
-      </div>
-      <button type="button" class="btn-secondary" id="mihomo-generator-reload-btn">⟳ Обновить</button>
-    </div>
-    <iframe id="mihomo-generator-frame" class="xk-generator-frame" src="{{ url_for('mihomo_generator_page') }}?embedded=1" title="Mihomo Генератор"></iframe>
-  </section>
+  {% include '_mihomo_generator_embedded_body.html' %}
 </div>
 
 <div id="view-xkeen" class="view-section" style="display:none;" data-xk-section="xkeen">

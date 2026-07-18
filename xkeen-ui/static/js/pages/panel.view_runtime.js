@@ -5,6 +5,7 @@ import { initMihomoPanel, onShowMihomoPanel } from '../features/mihomo_panel.js'
 import { initMihomoSelectorsPanel, onShowMihomoSelectorsPanel } from '../features/mihomo_selectors.js';
 import { initMihomoConnectionsPanel, onShowMihomoConnectionsPanel } from '../features/mihomo_connections.js';
 import { initMihomoSubscriptionsButton } from '../features/mihomo_subscriptions.js';
+import { initMihomoGenerator, getMihomoGeneratorApi } from '../features/mihomo_generator.js';
 import {
   getXkeenStateValue,
   hasXkeenXrayCore,
@@ -102,6 +103,14 @@ export function applyPanelViewRuntime(name) {
     });
   }
 
+  if (viewName === 'mihomo-generator') {
+    initViewOnce('mihomo-generator', () => {
+      initMihomoGenerator();
+    }).catch((error) => {
+      try { console.error('[XKeen] view init failed:', viewName, error); } catch (e) {}
+    });
+  }
+
   if (viewName === 'xkeen') {
     initViewOnce('xkeen', async () => {
       const ready = await ensurePanelLazyFeature('xkeenTexts');
@@ -153,6 +162,13 @@ export function applyPanelViewRuntime(name) {
 
   if (viewName === 'mihomo-connections') {
     safe(() => onShowMihomoConnectionsPanel({ reason: 'tab' }));
+  }
+
+  if (viewName === 'mihomo-generator') {
+    safe(() => {
+      const api = getMihomoGeneratorApi();
+      if (api && typeof api.activate === 'function') api.activate({ reason: 'tab' });
+    });
   }
 
   if (viewName === 'xkeen') {
