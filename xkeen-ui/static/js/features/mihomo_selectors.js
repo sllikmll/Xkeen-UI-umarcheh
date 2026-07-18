@@ -1,7 +1,9 @@
 let initialized = false;
 let loading = false;
 let lastData = null;
+let viewMode = 'tiles';
 
+const VIEW_MODE_KEY = 'xkeen.mihomo.selectors.viewMode';
 const SELECTOR_TYPES = new Set(['Selector', 'Fallback', 'URLTest', 'LoadBalance']);
 const NO_DELAY_TYPES = new Set(['Reject', 'RejectDrop', 'Dns', 'Pass', 'Relay', 'Compatible']);
 
@@ -184,22 +186,40 @@ async function selectProxy(selector, name) {
   await loadSelectors();
 }
 
-function renderSelectors(data) {
-  const list = $('mihomo-selectors-list');
-  if (!list) return;
-  const selectors = Array.isArray(data.selectors) ? data.selectors : [];
-  const nodes = Array.isArray(data.nodes) ? data.nodes : [];
-  const nodesByName = new Map();
-  [...selectors, ...nodes].forEach((p) => nodesByName.set(String(p.name || ''), p));
+function selectorOptionLabel(nodesByName, name) {
+  const p = nodesByName.get(name) || {};
+  const type = p.type ? String(p.type) : '';
+  const delay = delayText(p.delay);
+  const alive = p.alive === false ? 'offline' : (p.alive === true ? 'online' : '');
+  const bits = [name];
+  if (delay !== 'ping') bits.push(delay);
+  if (type) bits.push(type);
+  if (alive) bits.push(alive);
+  return bits.join(' · ');
+}
 
-  setText('mihomo-selectors-summary', `Групп: ${selectors.length} · узлов/служебных proxy: ${nodes.length} · controller: ${data.controller || 'n/a'}`);
+function setViewMode(mode) {
+  viewMode = mode === 'list' ? 'list' : 'tiles';
+  try { window.localStorage.setItem(VIEW_MODE_KEY, viewMode); } catch (e) {}
+  document.querySelectorAll('[data-view-mode]').forEach((btn) => {
+    const active = String(btn.getAttribute('data-view-mode') || '') === viewMode;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+  if (lastData) renderSelectors(lastData);
+}
 
-  if (!selectors.length) {
-    list.innerHTML = '<div class="status">Mihomo API ответил, но selector-группы не найдены.</div>';
-    return;
+function loadViewModePreference() {
+  try {
+    const saved = String(window.localStorage.getItem(VIEW_MODE_KEY) || '').trim();
+    viewMode = saved === 'list' ? 'list' : 'tiles';
+  } catch (e) {
+    viewMode = 'tiles';
   }
+}
 
-  list.innerHTML = selectors.map((sel) => {
+function renderTiles(selectors, nodesByName) {
+  return selectors.map((sel) => {
     const name = String(sel.name || '');
     const now = String(sel.now || '');
     const all = Array.isArray(sel.all) ? sel.all.map(String) : [];
@@ -220,7 +240,40 @@ function renderSelectors(data) {
         <div class="xk-proxy-grid">${options}</div>
       </article>`;
   }).join('');
+}
 
+function renderListMode(selectors, nodesByName) {
+  return `
+    <div class="xk-selector-list-mode">
+      ${selectors.map((sel) => {
+        const name = String(sel.name || '');
+        const now = String(sel.now || '');
+        const all = Array.isArray(sel.all) ? sel.all.map(String) : [];
+        const current = nodesByName.get(now) || {};
+        const currentDelay = delayBadge(now, current.delay, isDelayCapable(current));
+        const opts = all.map((item) => {
+          const selected = item === now ? ' selected' : '';
+          return `<option value="${esc(item)}"${selected}>${esc(selectorOptionLabel(nodesByName, item))}</option>`;
+        }).join('');
+        return `
+          <article class="xk-selector-row">
+            <div class="xk-selector-row-title">
+              <div class="xk-selector-title">${esc(name)}</div>
+              <div class="xk-selector-sub">${esc(sel.type || '')}</div>
+            </div>
+            <select class="xk-selector-select" data-selector-select="${esc(name)}" aria-label="Выбор proxy для ${esc(name)}">
+              ${opts}
+            </select>
+            <div class="xk-selector-row-current" title="Текущий выбранный proxy">
+              <span>${esc(now || '—')}</span>
+              ${now ? currentDelay : ''}
+            </div>
+          </article>`;
+      }).join('')}
+    </div>`;
+}
+
+function bindSelectorEvents(list) {
   list.querySelectorAll('.xk-proxy-choice').forEach((btn) => {
     btn.addEventListener('click', (event) => {
       if (event.target && event.target.closest && event.target.closest('[data-delay-proxy]')) return;
@@ -229,6 +282,20 @@ function renderSelectors(data) {
       if (!selector || !proxy || btn.classList.contains('active')) return;
       selectProxy(selector, proxy).catch((error) => {
         setText('mihomo-selectors-status', 'Ошибка: ' + error.message);
+      });
+    });
+  });
+
+  list.querySelectorAll('[data-selector-select]').forEach((select) => {
+    select.addEventListener('change', () => {
+      const selector = select.getAttribute('data-selector-select') || '';
+      const proxy = select.value || '';
+      if (!selector || !proxy) return;
+      select.disabled = true;
+      selectProxy(selector, proxy).catch((error) => {
+        setText('mihomo-selectors-status', 'Ошибка: ' + error.message);
+      }).finally(() => {
+        select.disabled = false;
       });
     });
   });
@@ -246,6 +313,32 @@ function renderSelectors(data) {
       if (event.key === 'Enter' || event.key === ' ') handler(event);
     });
   });
+}
+
+function renderSelectors(data) {
+  const list = $('mihomo-selectors-list');
+  if (!list) return;
+  const selectors = Array.isArray(data.selectors) ? data.selectors : [];
+  const nodes = Array.isArray(data.nodes) ? data.nodes : [];
+  const nodesByName = new Map();
+  [...selectors, ...nodes].forEach((p) => nodesByName.set(String(p.name || ''), p));
+
+  setText('mihomo-selectors-summary', `Групп: ${selectors.length} · узлов/служебных proxy: ${nodes.length} · controller: ${data.controller || 'n/a'}`);
+  document.querySelectorAll('[data-view-mode]').forEach((btn) => {
+    const active = String(btn.getAttribute('data-view-mode') || '') === viewMode;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+
+  if (!selectors.length) {
+    list.className = 'xk-selectors-list';
+    list.innerHTML = '<div class="status">Mihomo API ответил, но selector-группы не найдены.</div>';
+    return;
+  }
+
+  list.className = viewMode === 'list' ? 'xk-selectors-list xk-selectors-list-compact' : 'xk-selectors-list';
+  list.innerHTML = viewMode === 'list' ? renderListMode(selectors, nodesByName) : renderTiles(selectors, nodesByName);
+  bindSelectorEvents(list);
 }
 
 export async function loadSelectors() {
@@ -306,6 +399,11 @@ async function saveManual() {
 export function initMihomoSelectorsPanel() {
   if (initialized) return;
   initialized = true;
+  loadViewModePreference();
+  document.querySelectorAll('[data-view-mode]').forEach((btn) => {
+    btn.addEventListener('click', () => setViewMode(btn.getAttribute('data-view-mode') || 'tiles'));
+  });
+  setViewMode(viewMode);
   const refresh = $('mihomo-selectors-refresh-btn');
   if (refresh) refresh.addEventListener('click', () => loadSelectors());
   const pingAllBtn = $('mihomo-selectors-ping-all-btn');

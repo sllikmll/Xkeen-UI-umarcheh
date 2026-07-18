@@ -1217,7 +1217,13 @@
 
     <div class="xk-selector-layout">
       <div class="xk-selector-main">
-        <div id="mihomo-selectors-summary" class="status" style="margin:0 0 10px 0;"></div>
+        <div class="xk-selector-toolbar">
+          <div id="mihomo-selectors-summary" class="status" style="margin:0;"></div>
+          <div class="xk-view-toggle" role="group" aria-label="Вид селекторов">
+            <button type="button" class="xk-view-toggle-btn active" id="mihomo-selectors-view-tiles" data-view-mode="tiles">▦ Плитки</button>
+            <button type="button" class="xk-view-toggle-btn" id="mihomo-selectors-view-list" data-view-mode="list">☰ Списки</button>
+          </div>
+        </div>
         <div id="mihomo-selectors-list" class="xk-selectors-list"></div>
       </div>
 
