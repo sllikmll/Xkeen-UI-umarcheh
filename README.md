@@ -170,10 +170,36 @@ sh install.sh
 - ставит `Flask`;
 - по возможности ставит `gevent/gevent-websocket` для WebSocket-сценариев;
 - ставит `lftp` для файлового менеджера;
+- ставит/проверяет standalone `Mihomo` core вместе с UI;
+- создаёт стандартный layout `/opt/etc/mihomo` и symlink `config.yaml -> profiles/default.yaml`;
+- создаёт `/opt/etc/mihomo/restart-mihomo.sh` и прописывает его в env панели;
 - регистрирует сервис `/opt/etc/init.d/S99xkeen-ui-umarcheh001`;
 - выбирает свободный порт: `8088`, затем `8091`, затем диапазон `8100-8199`;
 - очищает устаревшие файлы в `static/frontend-build` при обновлении;
 - может предложить установить `xk-geodat`.
+
+### Unified Xkeen UI + Mihomo
+
+По умолчанию `install.sh` устанавливает панель и сразу поднимает Mihomo. Бинарник берётся из релизов:
+
+1. сначала из форка `sllikmll/mihomo`;
+2. если в форке нет release assets — из upstream `MetaCubeX/mihomo`.
+
+Полезные переменные:
+
+```sh
+# отключить установку Mihomo core
+XKEEN_INSTALL_MIHOMO=0 sh install.sh
+
+# принудительно переустановить бинарник Mihomo
+XKEEN_INSTALL_MIHOMO_FORCE=1 sh install.sh
+
+# взять бинарник из конкретного репозитория/тега/URL
+XKEEN_MIHOMO_REPO=sllikmll/mihomo XKEEN_MIHOMO_TAG=v1.19.29 sh install.sh
+XKEEN_MIHOMO_ASSET_URL=https://example/mihomo-linux-arm64.gz sh install.sh
+```
+
+Installer не перетирает существующий `/opt/etc/mihomo/profiles/default.yaml`; если конфига нет — создаёт минимальный DIRECT-конфиг с `external-controller: 0.0.0.0:9090`.
 
 ## Установка xk-geodat
 

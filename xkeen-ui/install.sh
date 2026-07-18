@@ -1599,6 +1599,24 @@ if [ -f "$SRC_DIR/scripts/install_xk_geodat.sh" ]; then
   sh "$SRC_DIR/scripts/install_xk_geodat.sh" || true
 fi
 
+# --- Unified Mihomo core install ---
+# По умолчанию свежая установка/апгрейд ставит standalone Mihomo вместе с UI.
+# Отключить можно явно: XKEEN_INSTALL_MIHOMO=0 sh install.sh
+if [ "${XKEEN_INSTALL_MIHOMO:-1}" != "0" ]; then
+  if [ -f "$UI_DIR/scripts/install_mihomo_core.sh" ]; then
+    echo "[*] Устанавливаю/проверяю Mihomo core для unified Xkeen UI..."
+    chmod +x "$UI_DIR/scripts/install_mihomo_core.sh" 2>/dev/null || true
+    if ! sh "$UI_DIR/scripts/install_mihomo_core.sh"; then
+      echo "[!] Mihomo core установить не удалось. Панель продолжит установку, но вкладки Mihomo будут работать только если core поставлен вручную."
+      echo "    Повторить: sh $UI_DIR/scripts/install_mihomo_core.sh"
+    fi
+  else
+    echo "[!] install_mihomo_core.sh не найден в архиве, пропускаю установку Mihomo core."
+  fi
+else
+  echo "[*] XKEEN_INSTALL_MIHOMO=0 — пропускаю установку Mihomo core."
+fi
+
 # --- Init-скрипт ---
 
 echo "[*] Создаю init-скрипт $INIT_SCRIPT..."
