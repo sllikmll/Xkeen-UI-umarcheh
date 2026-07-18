@@ -2,6 +2,7 @@ import { getLogsShellApi, activateLogsShellView, deactivateLogsShellView } from 
 import { getConfigShellApi, activateRoutingConfigView } from './config_shell.shared.js';
 import { ensurePanelLazyFeature, getPanelLazyRuntimeApi } from './panel.lazy_bindings.runtime.js';
 import { initMihomoPanel, onShowMihomoPanel } from '../features/mihomo_panel.js';
+import { initMihomoSelectorsPanel, onShowMihomoSelectorsPanel } from '../features/mihomo_selectors.js';
 import {
   getXkeenStateValue,
   hasXkeenXrayCore,
@@ -82,6 +83,14 @@ export function applyPanelViewRuntime(name) {
     });
   }
 
+  if (viewName === 'mihomo-selectors') {
+    initViewOnce('mihomo-selectors', () => {
+      initMihomoSelectorsPanel();
+    }).catch((error) => {
+      try { console.error('[XKeen] view init failed:', viewName, error); } catch (e) {}
+    });
+  }
+
   if (viewName === 'xkeen') {
     initViewOnce('xkeen', async () => {
       const ready = await ensurePanelLazyFeature('xkeenTexts');
@@ -125,6 +134,10 @@ export function applyPanelViewRuntime(name) {
 
   if (viewName === 'mihomo') {
     safe(() => onShowMihomoPanel({ reason: 'tab' }));
+  }
+
+  if (viewName === 'mihomo-selectors') {
+    safe(() => onShowMihomoSelectorsPanel({ reason: 'tab' }));
   }
 
   if (viewName === 'xkeen') {

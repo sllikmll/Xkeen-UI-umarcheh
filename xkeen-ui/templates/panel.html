@@ -209,6 +209,9 @@
         <button class="top-tab-btn xk-top-tab xk-top-tab-mihomo" data-view="mihomo" data-xk-section="mihomo">
           Роутинг Mihomo
         </button>
+        <button class="top-tab-btn xk-top-tab xk-top-tab-mihomo-selectors" data-view="mihomo-selectors" data-xk-section="mihomo-selectors">
+          Селекторы
+        </button>
         {% endif %}
         <button class="top-tab-btn xk-top-tab xk-top-tab-xkeen" data-view="xkeen" data-xk-section="xkeen">
           Порты и Исключения
@@ -1196,6 +1199,50 @@
     <pre class="log-block" data-xk-restart-log="1"></pre>
   </section>
 </div>
+
+{% if has_mihomo %}
+<div id="view-mihomo-selectors" class="view-section" style="display:none;" data-xk-section="mihomo-selectors">
+  <section class="card xk-mihomo-selectors-card">
+    <div class="commands-header">
+      <div>
+        <div class="commands-title">Селекторы Mihomo</div>
+        <div class="commands-subtitle">Runtime-выбор групп из Mihomo API без отдельного Zashboard на 9090/ui.</div>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <span id="mihomo-selectors-status" class="status" style="margin:0;">Загрузка…</span>
+        <button type="button" class="btn-secondary" id="mihomo-selectors-refresh-btn">⟳ Обновить</button>
+      </div>
+    </div>
+
+    <div class="xk-selector-layout">
+      <div class="xk-selector-main">
+        <div id="mihomo-selectors-summary" class="status" style="margin:0 0 10px 0;"></div>
+        <div id="mihomo-selectors-list" class="xk-selectors-list"></div>
+      </div>
+
+      <aside class="xk-manual-list-panel">
+        <div class="xk-manual-list-head">
+          <div>
+            <div class="commands-title" style="font-size:16px;">Ручной список</div>
+            <div id="mihomo-manual-path" class="commands-subtitle">/opt/etc/mihomo/rules/manual-proxy.yaml</div>
+          </div>
+          <button type="button" class="btn-secondary" id="mihomo-manual-load-btn">⟳</button>
+        </div>
+        <textarea id="mihomo-manual-editor" class="terminal-input xk-manual-editor" spellcheck="false" placeholder="payload:\n  - DOMAIN-SUFFIX,example.com\n  - DOMAIN,exact.example.com\n  - DOMAIN-KEYWORD,spotify"></textarea>
+        <div class="xk-manual-list-actions">
+          <button type="button" class="btn-primary" id="mihomo-manual-save-btn">💾 Сохранить</button>
+          <button type="button" class="btn-secondary" id="mihomo-manual-normalize-btn">✨ Нормализовать</button>
+        </div>
+        <div id="mihomo-manual-status" class="status" style="margin:8px 0 0 0;"></div>
+        <div class="status" style="margin:8px 0 0 0; opacity:.75;">
+          После сохранения список используется rule-provider <b>manual-proxy</b>. Если меняешь только домены — обычно достаточно обновить/перезапустить Mihomo.
+        </div>
+      </aside>
+    </div>
+  </section>
+</div>
+{% endif %}
+
 <div id="view-xkeen" class="view-section" style="display:none;" data-xk-section="xkeen">
   <!-- XKeen: порты и исключения -->
       <section class="card commands-card">

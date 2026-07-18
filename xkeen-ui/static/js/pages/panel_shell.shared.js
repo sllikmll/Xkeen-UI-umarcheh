@@ -526,6 +526,7 @@ import { wireTopLevelNavigation } from './top_level_nav.shared.js';
     return {
       routing: document.getElementById('view-routing'),
       mihomo: document.getElementById('view-mihomo'),
+      'mihomo-selectors': document.getElementById('view-mihomo-selectors'),
       xkeen: document.getElementById('view-xkeen'),
       'xray-logs': document.getElementById('view-xray-logs'),
       commands: document.getElementById('view-commands'),
