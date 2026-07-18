@@ -1,264 +1,216 @@
-# Xkeen UI
+# Xkeen UI Unified
 
-`Xkeen UI` — веб-панель для роутеров Keenetic с Entware, Xray, Mihomo и XKeen.
+**Xkeen UI Unified** — форк панели `umarcheh001/Xkeen-UI`, собранный под сценарий “одна панель для Keenetic + Entware + Mihomo”.
 
-Это уже не "лёгкая минимальная панель" из ранних версий проекта. Сейчас `Xkeen UI` — это единый интерфейс для управления конфигами, сервисами, логами, файлами, DAT-файлами и вспомогательными инструментами вокруг Xray/Mihomo.
+Главная идея простая: не держать отдельно Python-панель на `8088` и Zashboard/Mihomo UI на `9090/ui`. Всё основное управление Mihomo собрано в одной панели:
 
-> Панель рассчитана на локальную сеть. Не публикуйте её напрямую в интернет без отдельной защиты доступа.
+- редактирование активного `config.yaml`;
+- runtime-селекторы Mihomo;
+- плиточный и компактный списочный режим выбора серверов;
+- обновление ping по одному узлу или сразу по всем;
+- редактор ручного списка `manual-proxy.yaml`;
+- установка standalone Mihomo core вместе с UI.
 
-## Что умеет
+> Панель рассчитана на локальную сеть. Не публикуйте её напрямую в интернет без отдельной авторизации/прокси-защиты. Интернету нельзя давать руль от роутера — он и так плохо себя ведёт.
 
-- Xray: редакторы `routing / inbounds / outbounds`, поддержка `json/jsonc`, Xray subscriptions, observatory/leastPing workflow, schema-assist, preflight-проверка, backups и snapshots.
-- Mihomo: профили, шаблоны, импорт/экспорт, генератор конфигов, запуск Mihomo UI.
-- Команды и терминал: каталог команд XKeen, shell/PTY-терминал, live-логи.
-- Файлы: двухпанельный файловый менеджер, upload/download, архивы, права, checksum, корзина.
-- Remote FS: SFTP/FTP/FTPS через `lftp`.
-- DAT: управление `GeoIP / GeoSite`, просмотр содержимого и интеграция с `xk-geodat`.
-- DevTools: локальные UI-настройки, диагностика, self-update и сервисные переключатели.
+---
 
-## Локальные редакторы
+## Скриншоты
 
-В панели используются два локальных движка редактора:
+### Роутинг Mihomo
 
-- `CodeMirror 6`
-- `Monaco`
+![Роутинг Mihomo](docs/screenshots/xkeen-routing-mihomo.png)
 
-Оба поставляются прямо в релизе панели, через локальные `static/vendor` и `static/frontend-build`. Для работы редакторов роутеру не нужны CDN и не нужен Node.js.
+### Селекторы плитками
 
-Переключение движка доступно в основных редакторах панели, включая:
+![Селекторы Mihomo — плитки](docs/screenshots/xkeen-selectors-tiles.png)
 
-- главный JSON-редактор Xray;
-- Routing Mihomo;
-- редактор в файловом менеджере;
-- Mihomo Generator;
-- preview-редакторы и часть модальных окон.
+### Селекторы списком
 
-Если кратко:
+![Селекторы Mihomo — списком](docs/screenshots/xkeen-selectors-list.png)
 
-- `CodeMirror` обычно удобен как более простой и быстрый встроенный редактор;
-- `Monaco` полезен там, где нужен более "IDE-подобный" режим работы.
+---
 
-## Schema-assist в редакторах
+## Репозитории
 
-В основных редакторах панели работает локальный schema-driven UX без внешних CDN:
+| Что | Репозиторий |
+|---|---|
+| Unified UI | [`sllikmll/Xkeen-UI-umarcheh`](https://github.com/sllikmll/Xkeen-UI-umarcheh) |
+| Mihomo fork | [`sllikmll/mihomo`](https://github.com/sllikmll/mihomo) |
+| UI upstream | [`umarcheh001/Xkeen-UI`](https://github.com/umarcheh001/Xkeen-UI) |
+| Старый XKeen UI источник фич | [`zxc-rv/XKeen-UI`](https://github.com/zxc-rv/XKeen-UI) |
+| Mihomo upstream | [`MetaCubeX/mihomo`](https://github.com/MetaCubeX/mihomo) |
 
-- Xray: JSON Schema для `routing`, `inbounds`, `outbounds` и полного конфига;
-- Mihomo: YAML Schema для `config.yaml`;
-- hover-подсказки по полям;
-- autocomplete и task-oriented snippets;
-- semantic validation поверх схемы;
-- quick fixes для типовых ошибок;
-- beginner-mode с explain-first подсказками;
-- expert-mode, который полностью отключает schema-assist и скрывает кнопку `Quick fix`.
+Почему репозиторий называется `Xkeen-UI-umarcheh`, а не просто `Xkeen-UI`: в аккаунте уже есть форк `sllikmll/XKeen-UI` от `zxc-rv/XKeen-UI`, а GitHub не различает имена репозиториев только по регистру букв. Да, регистр есть, но свободы нет. Классика.
 
-Что это даёт на практике:
+---
 
-- в `05_routing.json`, `03_inbounds.json`, `04_outbounds*.json` и `config.yaml` панель умеет подсказывать допустимые поля и значения;
-- ошибки показываются не только как "битый JSON/YAML", но и как конфигурационные проблемы уровня Xray/Mihomo;
-- часть типовых проблем можно исправить кнопкой `Quick fix`;
-- режим `Эксперт` оставляет только базовый редактор без схем, сниппетов и автодополнения.
+## Что умеет именно этот форк
 
-Настройки этого слоя лежат в `UI settings -> Редактор`:
+### Unified installer
 
-- `Показывать всплывающие подсказки редактора` — включено по умолчанию;
-- `Режим новичка в подсказках` — включён по умолчанию;
-- `Эксперт` — по умолчанию выключен.
+`install.sh` ставит не только Python-панель, но и standalone `mihomo`:
 
-## Подписки Xray
-
-Подписки Xray управляются из карточки `Прокси (04_outbounds.json)`.
-
-Чтобы открыть окно подписок:
-
-1. откройте секцию `Прокси (04_outbounds.json)`;
-2. нажмите кнопку `Подписки Xray`;
-3. заполните форму источника и сохраните подписку.
-
-Что умеет подписка:
-
-- принимает HTTP(S) URL;
-- понимает share-ссылки, base64-подписки и Xray JSON outbounds;
-- создаёт отдельный managed fragment вида `04_outbounds.<tag>.json`;
-- при необходимости пишет JSONC sidecar для удобного просмотра в редакторе;
-- может добавлять generated tags в `07_observatory.json` для `leastPing`;
-- может синхронизировать routing с пулом подписки через `05_routing.json`.
-
-### Как добавить
-
-В форме подписки доступны основные поля:
-
-- `Название` — произвольное имя в списке;
-- `Tag prefix` — префикс для generated outbound tags;
-- `URL` — ссылка на подписку;
-- фильтры `Имя / Тип / Транспорт` — позволяют оставить только нужные узлы;
-- `Авто` — включает плановое автообновление;
-- `Пинг` — добавляет generated tags в `07_observatory.json` для `leastPing`;
-- `Обновить сразу` — сразу скачивает подписку и создаёт fragment после сохранения;
-- `Применение`:
-  - `Безопасно` — синхронизирует leastPing/fallback-пул, но не трогает явные правила на `vless-reality`;
-  - `Жёстко · pool` — переводит auto-правила пула на общий `balancerTag`.
-
-После сохранения панель:
-
-- создаёт `04_outbounds.<tag>.json`;
-- при включённом `Пинг` обновляет `07_observatory.json`;
-- при нужном режиме применения синхронизирует `05_routing.json`;
-- может сразу перезапустить `xkeen`, если в панели включён авто-перезапуск.
-
-> Generated `04_outbounds.<tag>.json` — это managed-файл панели. После следующего refresh подписки он будет пересобран заново.
-
-### Как обновлять
-
-Есть три основных сценария:
-
-- кнопка `Обновить` у конкретной подписки — скачать её прямо сейчас и пересобрать fragment;
-- кнопка `Обновить due` — обновить только те подписки, у которых уже наступило `next update`;
-- автообновление по интервалу из формы.
-
-Особенности:
-
-- локальный интервал задаётся в часах, от `1` до `168`;
-- значение по умолчанию — `24` часа;
-- рекомендация провайдера по `profile-update-interval` показывается как подсказка, но не перезаписывает ваш выбранный интервал;
-- справа можно посмотреть состав generated fragment, transport/protocol узлов и запустить `Пинг всех узлов`.
-
-### Как удалить
-
-Удаление подписки делает не только удаление записи из списка:
-
-- удаляется сама подписка из состояния панели;
-- удаляется generated fragment `04_outbounds.<tag>.json` и его sidecar;
-- routing и observatory пересобираются из оставшихся подписок;
-- если подписок больше не осталось, панель старается вернуть `05_routing.json` и `07_observatory.json` к состоянию до подписок.
-
-Это сделано специально, чтобы после удаления подписки не оставались "висячие" selector/balancer/observatory хвосты.
-
-## Что входит в релиз
-
-Основной установочный артефакт:
-
-- `xkeen-ui-routing.tar.gz`
-
-Обычно релизный архив уже содержит готовые `static/frontend-build` и `static/vendor`, поэтому роутеру не нужен Node.js для установки панели.
-
-Дополнительно в релизах могут публиковаться бинарники `xk-geodat` для поддерживаемых архитектур.
-
-## Установка
-
-### Архив уже на роутере
-
-```sh
-cd /opt
-tar -xzf xkeen-ui-routing.tar.gz
-cd xkeen-ui
-sh install.sh
-```
-
-### Онлайн-установка из GitHub Releases
-
-```sh
-cd /opt
-curl -fL -o xkeen-ui-routing.tar.gz "https://github.com/sllikmll/Xkeen-UI-umarcheh/releases/latest/download/xkeen-ui-routing.tar.gz"
-tar -xzf xkeen-ui-routing.tar.gz
-cd xkeen-ui
-sh install.sh
-```
-
-Установщик:
-
-- проверяет или ставит `python3`;
+- проверяет/ставит `python3`;
 - ставит `Flask`;
-- по возможности ставит `gevent/gevent-websocket` для WebSocket-сценариев;
+- по возможности ставит `gevent/gevent-websocket`;
 - ставит `lftp` для файлового менеджера;
-- ставит/проверяет standalone `Mihomo` core вместе с UI;
-- создаёт стандартный layout `/opt/etc/mihomo` и symlink `config.yaml -> profiles/default.yaml`;
-- создаёт `/opt/etc/mihomo/restart-mihomo.sh` и прописывает его в env панели;
-- регистрирует сервис `/opt/etc/init.d/S99xkeen-ui-umarcheh001`;
-- выбирает свободный порт: `8088`, затем `8091`, затем диапазон `8100-8199`;
-- очищает устаревшие файлы в `static/frontend-build` при обновлении;
-- может предложить установить `xk-geodat`.
+- ставит или проверяет `/opt/sbin/mihomo`;
+- создаёт стандартный layout `/opt/etc/mihomo`;
+- создаёт symlink `config.yaml -> profiles/default.yaml`;
+- создаёт `/opt/etc/mihomo/restart-mihomo.sh`;
+- прописывает команды validate/restart в env панели;
+- регистрирует init-сервис `/opt/etc/init.d/S99xkeen-ui-umarcheh001`.
 
-### Unified Xkeen UI + Mihomo
+### Mihomo selectors внутри панели `8088`
 
-По умолчанию `install.sh` устанавливает панель и сразу поднимает Mihomo. Бинарник берётся из релизов:
+Добавлена вкладка **Селекторы** прямо в Xkeen UI:
 
-1. сначала из форка `sllikmll/mihomo`;
-2. если в форке нет release assets — из upstream `MetaCubeX/mihomo`.
+- runtime-переключение selector-групп через Mihomo API;
+- режим **Плитки** — по умолчанию;
+- режим **Списки** — компактные строки `selector + dropdown`;
+- выбор сервера в подписке прямо из dropdown;
+- ping рядом с узлом;
+- клик по ping обновляет задержку конкретного узла;
+- кнопка **Обновить все пинги**;
+- поддержка provider-нод из `/providers/proxies`, а не только top-level `/proxies`.
 
-Полезные переменные:
+Это важно: подписочные узлы вроде `VLESS-amst` могут быть видны внутри selector-группы, но не существовать как отдельный ключ `/proxies/VLESS-amst`. Поэтому прямой запрос `/proxies/<name>/delay` может вернуть `404`. Форк умеет мапить такие узлы через provider healthcheck.
 
-```sh
-# отключить установку Mihomo core
-XKEEN_INSTALL_MIHOMO=0 sh install.sh
+### Ручной список в UI
 
-# принудительно переустановить бинарник Mihomo
-XKEEN_INSTALL_MIHOMO_FORCE=1 sh install.sh
-
-# взять бинарник из конкретного репозитория/тега/URL
-XKEEN_MIHOMO_REPO=sllikmll/mihomo XKEEN_MIHOMO_TAG=v1.19.29 sh install.sh
-XKEEN_MIHOMO_ASSET_URL=https://example/mihomo-linux-arm64.gz sh install.sh
-```
-
-Installer не перетирает существующий `/opt/etc/mihomo/profiles/default.yaml`; если конфига нет — создаёт минимальный DIRECT-конфиг с `external-controller: 0.0.0.0:9090`.
-
-## Установка xk-geodat
-
-`xk-geodat` нужен для расширенной работы с DAT-файлами:
-
-- просмотр содержимого `GeoIP / GeoSite`;
-- список тегов и быстрый поиск;
-- вставка значений в правила routing из UI.
-
-Без `xk-geodat` панель работает, но DAT-функции будут урезаны.
-
-Поддерживаемые архитектуры:
-
-- `arm64 / aarch64`
-- `mipsle / mipsel`
-
-### Через установщик панели
-
-Во время установки `install.sh` может предложить поставить `xk-geodat` автоматически.
-
-### Через UI
-
-Рекомендуемый вариант: открыть карточку `DAT GeoIP / GeoSite` в панели и поставить бинарник:
-
-- из GitHub Releases;
-- или из локального файла, если GitHub на роутере недоступен.
-
-### Через SSH вручную
-
-Для `arm64 / aarch64`:
-
-```sh
-mkdir -p /opt/etc/xkeen-ui/bin
-curl -fL -o /opt/etc/xkeen-ui/bin/xk-geodat "https://github.com/umarcheh001/Xkeen-UI/releases/latest/download/xk-geodat-linux-arm64"
-chmod +x /opt/etc/xkeen-ui/bin/xk-geodat
-/opt/etc/xkeen-ui/bin/xk-geodat --help
-```
-
-Для `mipsle / mipsel`:
-
-```sh
-mkdir -p /opt/etc/xkeen-ui/bin
-curl -fL -o /opt/etc/xkeen-ui/bin/xk-geodat "https://github.com/umarcheh001/Xkeen-UI/releases/latest/download/xk-geodat-linux-mipsle"
-chmod +x /opt/etc/xkeen-ui/bin/xk-geodat
-/opt/etc/xkeen-ui/bin/xk-geodat --help
-```
-
-## Доступ к панели
+Вкладка **Селекторы** также содержит редактор:
 
 ```text
-http://<IP_роутера>:<порт>/
+/opt/etc/mihomo/rules/manual-proxy.yaml
 ```
 
-Логи панели:
+Файл сохраняется через backend панели с backup. Больше не нужно лезть в SSH ради пары доменов.
 
-- `/opt/var/log/xkeen-ui.log`
-- `/opt/var/log/xkeen-ui/`
+---
 
-## Управление сервисом
+## Быстрая установка
+
+На Keenetic с Entware:
+
+```sh
+cd /opt
+curl -fL -o xkeen-ui-routing.tar.gz \
+  "https://github.com/sllikmll/Xkeen-UI-umarcheh/releases/latest/download/xkeen-ui-routing.tar.gz"
+tar -xzf xkeen-ui-routing.tar.gz
+cd xkeen-ui
+sh install.sh
+```
+
+После установки панель обычно доступна на:
+
+```text
+http://<IP_роутера>:8088/
+```
+
+Если `8088` занят, installer попробует:
+
+```text
+8091, затем 8100–8199
+```
+
+---
+
+## Release asset
+
+Основной установочный архив:
+
+```text
+xkeen-ui-routing.tar.gz
+```
+
+Latest:
+
+```text
+https://github.com/sllikmll/Xkeen-UI-umarcheh/releases/latest/download/xkeen-ui-routing.tar.gz
+```
+
+Checksum:
+
+```text
+https://github.com/sllikmll/Xkeen-UI-umarcheh/releases/latest/download/xkeen-ui-routing.tar.gz.sha256
+```
+
+---
+
+## Управление установкой Mihomo
+
+По умолчанию Mihomo ставится вместе с UI. Отключить:
+
+```sh
+XKEEN_INSTALL_MIHOMO=0 sh install.sh
+```
+
+Принудительно переустановить бинарник:
+
+```sh
+XKEEN_INSTALL_MIHOMO_FORCE=1 sh install.sh
+```
+
+Взять конкретный repo/tag:
+
+```sh
+XKEEN_MIHOMO_REPO=sllikmll/mihomo \
+XKEEN_MIHOMO_TAG=v1.19.29 \
+sh install.sh
+```
+
+Взять конкретный asset URL:
+
+```sh
+XKEEN_MIHOMO_ASSET_URL=https://example.com/mihomo-linux-arm64.gz sh install.sh
+```
+
+### Откуда берётся Mihomo
+
+Installer сначала пробует релизы форка:
+
+```text
+sllikmll/mihomo
+```
+
+Если там нет release assets, автоматически использует upstream:
+
+```text
+MetaCubeX/mihomo
+```
+
+Это сделано специально, потому что GitHub forks не наследуют upstream release assets.
+
+---
+
+## Пути на роутере
+
+| Назначение | Путь |
+|---|---|
+| UI | `/opt/etc/xkeen-ui` |
+| UI init script | `/opt/etc/init.d/S99xkeen-ui-umarcheh001` |
+| UI env/state | `/opt/etc/xkeen-ui/devtools.env` |
+| Mihomo binary | `/opt/sbin/mihomo` |
+| Mihomo root | `/opt/etc/mihomo` |
+| Active profile | `/opt/etc/mihomo/profiles/default.yaml` |
+| Active config symlink | `/opt/etc/mihomo/config.yaml` |
+| Mihomo restart script | `/opt/etc/mihomo/restart-mihomo.sh` |
+| Manual proxy list | `/opt/etc/mihomo/rules/manual-proxy.yaml` |
+| UI logs | `/opt/var/log/xkeen-ui/` |
+| Mihomo logs | `/opt/var/log/mihomo/` |
+
+Ожидаемый symlink:
+
+```sh
+/opt/etc/mihomo/config.yaml -> profiles/default.yaml
+```
+
+---
+
+## Управление сервисами
+
+Панель:
 
 ```sh
 /opt/etc/init.d/S99xkeen-ui-umarcheh001 start
@@ -267,14 +219,58 @@ http://<IP_роутера>:<порт>/
 /opt/etc/init.d/S99xkeen-ui-umarcheh001 status
 ```
 
-Для старых установок, которые ещё не обновлялись до новой схемы совместимости,
-init-скрипт может оставаться по legacy-пути `/opt/etc/init.d/S99xkeen-ui`.
+Mihomo:
 
-## Сбросить логин/пароль
+```sh
+/opt/etc/mihomo/restart-mihomo.sh
+```
 
-По умолчанию данные авторизации лежат в `/opt/etc/xkeen-ui/auth.json`.
+Проверка Mihomo API:
 
-Сбросить доступ можно так:
+```sh
+wget -qO- http://127.0.0.1:9090/version
+```
+
+Проверка конфига:
+
+```sh
+/opt/sbin/mihomo -t -d /opt/etc/mihomo -f /opt/etc/mihomo/config.yaml
+```
+
+---
+
+## Основные API панели для Mihomo
+
+| Endpoint | Что делает |
+|---|---|
+| `GET /api/mihomo/clash/status` | Проверяет Mihomo `/version` |
+| `GET /api/mihomo/clash/proxies` | Возвращает selectors + provider nodes |
+| `PUT /api/mihomo/clash/proxies/<selector>` | Переключает selector runtime |
+| `POST /api/mihomo/clash/proxies/<proxy>/delay` | Обновляет ping одного узла |
+| `POST /api/mihomo/clash/proxies/delay-all` | Обновляет ping всех видимых узлов |
+| `GET /api/mihomo/manual-proxy` | Читает ручной список |
+| `POST /api/mihomo/manual-proxy` | Сохраняет ручной список с backup |
+
+---
+
+## Обновление
+
+Если панель уже установлена:
+
+```sh
+cd /opt
+curl -fL -o xkeen-ui-routing.tar.gz \
+  "https://github.com/sllikmll/Xkeen-UI-umarcheh/releases/latest/download/xkeen-ui-routing.tar.gz"
+tar -xzf xkeen-ui-routing.tar.gz
+cd xkeen-ui
+sh install.sh
+```
+
+Installer сохраняет существующий порт панели и не перетирает пользовательский Mihomo profile, если он уже есть.
+
+---
+
+## Сброс логина/пароля
 
 ```sh
 /opt/etc/init.d/S99xkeen-ui-umarcheh001 stop
@@ -282,27 +278,19 @@ rm -f /opt/etc/xkeen-ui/auth.json
 /opt/etc/init.d/S99xkeen-ui-umarcheh001 start
 ```
 
-После этого панель снова предложит пройти первичную настройку логина и пароля.
+После этого панель снова предложит первичную настройку доступа.
 
-Если вы переопределяли `XKEEN_UI_STATE_DIR`, файл `auth.json` будет лежать в этой директории.
+---
 
-## Полное удаление и очистка
+## Удаление
 
-### Быстро удалить панель
+Быстро удалить панель:
 
 ```sh
 sh /opt/etc/xkeen-ui/uninstall.sh
 ```
 
-Это удалит:
-
-- файлы панели из `/opt/etc/xkeen-ui`;
-- init-скрипт `/opt/etc/init.d/S99xkeen-ui-umarcheh001`;
-- PID-файл панели.
-
-### Дополнительная очистка
-
-Если нужно убрать следы полностью, можно отдельно удалить:
+Дополнительная ручная очистка, если нужно снести хвосты:
 
 ```sh
 rm -rf /opt/var/log/xkeen-ui
@@ -310,43 +298,50 @@ rm -f /opt/var/log/xkeen-ui.log
 rm -f /opt/var/run/xkeen-ui.pid
 rm -f /opt/bin/sysmon
 rm -f /opt/bin/entware-backup
-rm -rf /opt/etc/xray/configs/backups
 ```
 
-Если больше не нужны шаблоны, поставленные панелью:
+Если Mihomo больше не нужен:
 
 ```sh
-rm -f /opt/etc/mihomo/templates/custom.yaml
-rm -f /opt/etc/mihomo/templates/zkeen.yaml
+rm -f /opt/sbin/mihomo
+rm -rf /opt/etc/mihomo
+rm -rf /opt/var/log/mihomo
+rm -f /opt/var/run/mihomo.pid
 ```
 
-Если зависимости ставились только ради панели и не используются другими сервисами:
+Осторожно: удаление `/opt/etc/mihomo` снесёт ваши профили, rule-providers и ручные списки. Без backup это будет не “очистка”, а маленький бытовой апокалипсис.
 
-```sh
-/opt/bin/python3 -m pip uninstall -y flask gevent gevent-websocket || true
-opkg remove lftp || true
-opkg remove python3-pip || true
-opkg remove python3 || true
-```
+---
 
-> Этот шаг делайте только если уверены, что эти пакеты не нужны другим сервисам на роутере.
+## Разработка
 
-## Для разработки
-
-Пересобрать фронтенд:
+Сборка frontend:
 
 ```sh
 npm run frontend:build
 ```
 
-Собрать пользовательский архив для установки:
+Сборка пользовательского архива:
 
 ```sh
 npm run archive:user
 ```
 
-## Примечания
+Быстрая проверка installer-контрактов:
 
-- WebSocket-функции используются там, где это возможно; на слабых устройствах часть сценариев может работать через fallback.
-- Все основные фронтенд-ассеты поставляются локально, без зависимости от CDN.
-- Проект ориентирован на реальную эксплуатацию на Keenetic/Entware, а не на "демо-оболочку" вокруг пары конфигов.
+```sh
+pytest tests/test_unified_mihomo_install_contract.py tests/test_install_script_pip_fallbacks.py -q
+```
+
+---
+
+## Статус проекта
+
+Этот форк — практичная сборка под рабочий Keenetic/Entware setup:
+
+- свежая Python-панель от `umarcheh001/Xkeen-UI`;
+- идеи runtime-селекторов и ручного списка из `zxc-rv/XKeen-UI`;
+- standalone Mihomo без legacy `xkeen` CLI;
+- одна панель на `8088` вместо двух отдельных UI.
+
+Фокус проекта — реальная эксплуатация на роутере, а не красивая демка, которая умирает при первом `restart`.
