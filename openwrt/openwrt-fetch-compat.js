@@ -5,21 +5,40 @@
   const jsonResponse = (obj, init={}) => new Response(JSON.stringify(obj), Object.assign({status:200, headers:{'Content-Type':'application/json; charset=utf-8'}}, init));
   const enc = encodeURIComponent;
   function installOpenWrtLogoutFallback(){
-    function goHome(ev){
-      try { if (ev) ev.preventDefault(); } catch(e) {}
-      window.location.href = '/unified-ui/';
+    async function doLogout(ev){
+      try { if (ev) { ev.preventDefault(); ev.stopPropagation(); ev.stopImmediatePropagation(); } } catch(e) {}
+      try { await nativeFetch(CGI + '/auth-logout', {method:'POST', cache:'no-store'}); } catch(e) {}
+      window.location.replace('/unified-ui/');
       return false;
+    }
+    function patchUserLabel(){
+      try{
+        nativeFetch(CGI + '/auth-check', {cache:'no-store'}).then(r=>r.json()).then(d=>{
+          const user = d && d.user ? String(d.user) : 'admin';
+          const currentBtn = document.getElementById('xk-current-user-btn');
+          if(currentBtn){
+            currentBtn.textContent = '👤 ' + user;
+            try { currentBtn.dataset.xkCurrentUser = user; } catch(e) {}
+          }
+          document.querySelectorAll('.xk-header-btn-user, [data-xk-user], [data-user-menu], button, a, span').forEach(el=>{
+            const txt=(el.textContent||'').trim();
+            if(txt==='openwrt' || txt==='👤 openwrt') el.textContent=txt.startsWith('👤') ? ('👤 ' + user) : user;
+          });
+        }).catch(()=>{});
+      }catch(e){}
     }
     document.addEventListener('submit', function(ev){
       const form = ev && ev.target;
       if(!form || !form.matches || !form.matches('form')) return;
       const action = String(form.getAttribute('action') || '');
-      if(action === '/logout' || action === '/logout_post' || action.endsWith('/logout')) goHome(ev);
+      if(action === '/logout' || action === '/logout_post' || action.endsWith('/logout')) doLogout(ev);
     }, true);
     document.addEventListener('click', function(ev){
-      const btn = ev && ev.target && ev.target.closest ? ev.target.closest('[data-logout-button], a[href="/logout"], a[href="/logout_post"]') : null;
-      if(btn) goHome(ev);
+      const btn = ev && ev.target && ev.target.closest ? ev.target.closest('button[data-logout-button], .xk-header-btn-logout, a[href="/logout"], a[href="/logout/"], a[href="/logout_post"]') : null;
+      if(btn) doLogout(ev);
     }, true);
+    document.addEventListener('DOMContentLoaded', patchUserLabel, {once:true});
+    setTimeout(patchUserLabel, 300); setTimeout(patchUserLabel, 1500); setTimeout(patchUserLabel, 4000);
   }
   installOpenWrtLogoutFallback();
   function installOpenWrtMihomoEditorFallback(){
