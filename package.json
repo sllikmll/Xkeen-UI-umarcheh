@@ -16,6 +16,7 @@
     "verify:frontend": "npm run frontend:verify",
     "archive:user": "node scripts/run_python.mjs scripts/build_user_archive.py",
     "archive:user:skip-build": "node scripts/run_python.mjs scripts/build_user_archive.py --skip-frontend-build",
+    "docs:screenshots": "node scripts/generate_readme_screenshots.mjs",
     "e2e:install": "playwright install chromium",
     "e2e": "playwright test",
     "e2e:headed": "playwright test --headed",
