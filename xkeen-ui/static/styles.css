@@ -33847,4 +33847,31 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-collapsedLines:f
 }
 .xk-autorefresh-inline { display:inline-flex; align-items:center; gap:8px; color:#cbd5e1; font-size:13px; }
 .xk-autorefresh-select { width:auto; min-width:96px; padding-right:28px; }
+/* Header user/password controls + truly rectangular protocol forms */
+.xk-user-badge { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xk-modal-shell.hidden { display: none !important; }
+.xk-modal-shell { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; padding: 24px; }
+.xk-modal-backdrop { position: absolute; inset: 0; background: rgba(2,6,23,.72); backdrop-filter: blur(8px); }
+.xk-modal-card { position: relative; width: min(520px, 100%); border: 1px solid rgba(148,163,184,.22); border-radius: 4px; background: #071225; box-shadow: 0 28px 90px rgba(0,0,0,.45); padding: 18px; }
+.xk-modal-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:14px; }
+.xk-modal-head h2 { margin:0 0 4px; }
+.xk-modal-head p { margin:0; color:#94a3b8; }
+.xk-password-form { display:grid; gap:12px; }
+.xk-password-form label { display:grid; gap:6px; color:#cbd5e1; font-size:13px; }
+.xk-password-form input,
+.xk-protocol-card input,
+.xk-protocol-card textarea,
+.xk-protocol-card select,
+.xk-protocol-card option,
+.xk-protocol-selector-select,
+.xk-protocol-field input,
+.xk-protocol-field textarea,
+.xk-protocol-field select { border-radius: 0 !important; clip-path: none !important; }
+.xk-protocol-card select[multiple],
+.xk-protocol-selector-select { min-height: 160px; overflow: auto; padding: 8px !important; }
+.xk-protocol-card select option { padding: 6px 8px; border-radius: 0 !important; }
+.xk-password-status { min-height: 18px; font-size:13px; color:#94a3b8; }
+.xk-password-status[data-status="error"] { color:#fca5a5; }
+.xk-password-status[data-status="success"] { color:#86efac; }
+.xk-modal-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:6px; }
 

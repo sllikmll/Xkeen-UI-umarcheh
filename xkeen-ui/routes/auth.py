@@ -310,6 +310,42 @@ def register_auth_routes(app: Flask) -> None:
         session.clear()
         return jsonify({"ok": True})
 
+
+    @app.post("/api/auth/password")
+    def api_auth_change_password():
+        if not auth_is_configured():
+            return jsonify({"ok": False, "error": "not_configured"}), 428
+        if not _is_logged_in():
+            return jsonify({"ok": False, "error": "unauthorized"}), 401
+        if not _check_csrf():
+            return _csrf_failed()
+        data = request.get_json(silent=True) or {}
+        current_password = data.get("current_password") or ""
+        new_password = data.get("new_password") or ""
+        new_password2 = data.get("new_password2") or ""
+        rec = _auth_load() or {}
+        try:
+            ok = check_password_hash((rec.get("password_hash") or ""), current_password)
+        except Exception:
+            ok = False
+        if not ok:
+            return jsonify({"ok": False, "error": "invalid_current_password", "message": "Текущий пароль неверный"}), 401
+        err = _validate_password(new_password)
+        if not err and new_password != new_password2:
+            err = "password_mismatch"
+        if err:
+            return jsonify({"ok": False, "error": err}), 400
+        username = (rec.get("username") or session.get("user") or "").strip()
+        if not username:
+            return jsonify({"ok": False, "error": "missing_username"}), 400
+        _auth_save(username, new_password)
+        clear_login_rate_limit(request.remote_addr)
+        session.clear()
+        _ensure_csrf_token()
+        session["auth"] = True
+        session["user"] = username
+        return jsonify({"ok": True, "user": username})
+
     @app.post("/api/auth/setup")
     def api_auth_setup():
         if auth_is_configured():

@@ -173,6 +173,14 @@
                 title="Настройки"
               >Настройки</button>
 
+              <button
+                type="button"
+                id="xk-current-user-btn"
+                class="service-core-text xk-header-btn xk-user-badge"
+                title="Текущий пользователь. Нажмите, чтобы сменить пароль"
+                data-xk-current-user="{{ auth_user or '' }}"
+              >👤 {{ auth_user or 'user' }}</button>
+
               <span
                 id="xk-version-badge"
                 class="service-core-text xk-version-badge"
@@ -4723,5 +4731,36 @@ https://..."></textarea>
   </div>
 </div>
 
+
+
+<div id="xk-password-modal" class="xk-modal-shell hidden" role="dialog" aria-modal="true" aria-labelledby="xk-password-modal-title">
+  <div class="xk-modal-backdrop" data-xk-password-close></div>
+  <div class="xk-modal-card xk-password-card">
+    <div class="xk-modal-head">
+      <div>
+        <h2 id="xk-password-modal-title">Смена пароля</h2>
+        <p>Пользователь: <strong>{{ auth_user or 'user' }}</strong></p>
+      </div>
+      <button type="button" class="btn ghost" data-xk-password-close>×</button>
+    </div>
+    <form id="xk-password-form" class="xk-password-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>Текущий пароль
+        <input type="password" name="current_password" autocomplete="current-password" required>
+      </label>
+      <label>Новый пароль
+        <input type="password" name="new_password" autocomplete="new-password" minlength="8" required>
+      </label>
+      <label>Повтор нового пароля
+        <input type="password" name="new_password2" autocomplete="new-password" minlength="8" required>
+      </label>
+      <div class="xk-password-status" data-xk-password-status></div>
+      <div class="xk-modal-actions">
+        <button type="button" class="btn ghost" data-xk-password-close>Отмена</button>
+        <button type="submit" class="btn primary">Сохранить пароль</button>
+      </div>
+    </form>
+  </div>
+</div>
 </body>
 </html>
