@@ -85,7 +85,9 @@ http://<IP_роутера>:8088/
 
 ---
 
-## Release asset
+## Release assets
+
+### Keenetic / Entware
 
 Основной архив:
 
@@ -104,6 +106,46 @@ Checksum:
 ```text
 https://github.com/sllikmll/Unified-UI/releases/latest/download/unified-ui-routing.tar.gz.sha256
 ```
+
+### OpenWrt native
+
+OpenWrt-архив:
+
+```text
+unified-ui-openwrt.tar.gz
+```
+
+Latest:
+
+```text
+https://github.com/sllikmll/Unified-UI/releases/latest/download/unified-ui-openwrt.tar.gz
+```
+
+Checksum:
+
+```text
+https://github.com/sllikmll/Unified-UI/releases/latest/download/unified-ui-openwrt.tar.gz.sha256
+```
+
+Установка на OpenWrt:
+
+```sh
+cd /tmp
+curl -fL -o unified-ui-openwrt.tar.gz \
+  "https://github.com/sllikmll/Unified-UI/releases/latest/download/unified-ui-openwrt.tar.gz"
+mkdir -p unified-ui-openwrt
+tar -xzf unified-ui-openwrt.tar.gz -C .
+cd unified-ui-openwrt
+sh install.sh
+```
+
+После установки панель доступна на:
+
+```text
+http://<IP_роутера>/unified-ui/
+```
+
+Подробности: `openwrt/README.md`
 
 ---
 
