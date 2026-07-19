@@ -32,7 +32,7 @@ async function getMihomoGeneratorPreviewText(page) {
 test('panel shell renders top-level navigation', async ({ page }) => {
   await page.goto('/');
 
-  await expect(page).toHaveTitle(/Xkeen UI/i);
+  await expect(page).toHaveTitle(/Unified UI/i);
   await expect(page.locator('#top-tab-mihomo-generator')).toBeVisible();
   await expect(page.locator('body')).toContainText('Mihomo Генератор');
   await expect(page.locator('body')).toContainText('DevTools');
@@ -65,7 +65,7 @@ test('devtools update card completes load-info and manual check flow', async ({ 
         ok: true,
         build: {
           version: '1.6.0',
-          repo: 'umarcheh001/Xkeen-UI',
+          repo: 'sllikmll/Unified-UI',
           channel: 'stable',
           commit: 'abc1234',
           built_utc: '2026-04-10T21:00:00Z',
@@ -76,7 +76,7 @@ test('devtools update card completes load-info and manual check flow', async ({ 
           sha256sum: true,
         },
         settings: {
-          repo: 'umarcheh001/Xkeen-UI',
+          repo: 'sllikmll/Unified-UI',
           channel: 'stable',
           branch: 'main',
         },
@@ -98,12 +98,12 @@ test('devtools update card completes load-info and manual check flow', async ({ 
       body: JSON.stringify({
         ok: true,
         error: null,
-        repo: 'umarcheh001/Xkeen-UI',
+        repo: 'sllikmll/Unified-UI',
         channel: 'stable',
         branch: 'main',
         current: {
           version: '1.6.0',
-          repo: 'umarcheh001/Xkeen-UI',
+          repo: 'sllikmll/Unified-UI',
           channel: 'stable',
           commit: 'abc1234',
         },
@@ -112,12 +112,12 @@ test('devtools update card completes load-info and manual check flow', async ({ 
           tag: 'v1.7.4',
           published_at: '2026-04-11T00:00:00Z',
           asset: {
-            name: 'xkeen-ui-routing.tar.gz',
-            download_url: 'https://github.com/umarcheh001/Xkeen-UI/releases/download/v1.7.4/xkeen-ui-routing.tar.gz',
+            name: 'unified-ui-routing.tar.gz',
+            download_url: 'https://github.com/sllikmll/Unified-UI/releases/download/v1.7.4/unified-ui-routing.tar.gz',
           },
           sha256_asset: {
             kind: 'sidecar',
-            download_url: 'https://github.com/umarcheh001/Xkeen-UI/releases/download/v1.7.4/xkeen-ui-routing.tar.gz.sha256',
+            download_url: 'https://github.com/sllikmll/Unified-UI/releases/download/v1.7.4/unified-ui-routing.tar.gz.sha256',
           },
         },
         update_available: true,
@@ -131,14 +131,14 @@ test('devtools update card completes load-info and manual check flow', async ({ 
             require_sha: '1',
           },
           download: {
-            url: 'https://github.com/umarcheh001/Xkeen-UI/releases/download/v1.7.4/xkeen-ui-routing.tar.gz',
+            url: 'https://github.com/sllikmll/Unified-UI/releases/download/v1.7.4/unified-ui-routing.tar.gz',
             ok: true,
             reason: 'allowed',
           },
           checksum: {
             present: true,
             kind: 'sidecar',
-            url: 'https://github.com/umarcheh001/Xkeen-UI/releases/download/v1.7.4/xkeen-ui-routing.tar.gz.sha256',
+            url: 'https://github.com/sllikmll/Unified-UI/releases/download/v1.7.4/unified-ui-routing.tar.gz.sha256',
             ok: true,
             reason: 'allowed',
           },
@@ -156,7 +156,7 @@ test('devtools update card completes load-info and manual check flow', async ({ 
   await expect.poll(() => infoHits).toBeGreaterThan(0);
   await expect.poll(() => checkHits).toBeGreaterThan(0);
 
-  await expect(page.locator('#dt-update-repo')).toContainText('umarcheh001/Xkeen-UI');
+  await expect(page.locator('#dt-update-repo')).toContainText('sllikmll/Unified-UI');
   await expect(page.locator('#dt-update-channel')).toContainText('stable');
   await expect(page.locator('#dt-update-branch')).toContainText('main');
   await expect(page.locator('#dt-update-current-version')).toContainText('1.6.0');
