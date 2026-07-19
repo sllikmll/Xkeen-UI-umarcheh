@@ -64,21 +64,32 @@ ARCHIVE="$TMP_DIR/unified-ui-openwrt.tar.gz"
 mkdir -p "$TMP_DIR"
 trap 'rm -rf "$TMP_DIR"' EXIT INT TERM
 curl_args="-fL --max-time 120"
-if [ -n "${UNIFIED_UI_DOWNLOAD_PROXY:-}" ]; then
-  curl $curl_args --proxy "$UNIFIED_UI_DOWNLOAD_PROXY" -o "$ARCHIVE" "$UPDATE_URL"
-elif [ -S /tmp/mihomo.sock ]; then
-  curl $curl_args -o "$ARCHIVE" "$UPDATE_URL"
-elif netstat -lnt 2>/dev/null | grep -q '127\.0\.0\.1:7890\|0\.0\.0\.0:7890\|:::7890'; then
-  curl $curl_args --proxy http://127.0.0.1:7890 -o "$ARCHIVE" "$UPDATE_URL"
-else
-  curl $curl_args -o "$ARCHIVE" "$UPDATE_URL"
-fi
+curl $curl_args -o "$ARCHIVE" "$UPDATE_URL"
 tar -xzf "$ARCHIVE" -C "$TMP_DIR"
 INSTALLER="$(find "$TMP_DIR" -maxdepth 2 -type f -name install.sh | head -1)"
 [ -n "$INSTALLER" ] || { echo "install.sh not found in update archive" >&2; exit 1; }
 sh "$INSTALLER"
 UPD
 chmod 755 "$UPDATE_SCRIPT"
+
+ROUTER_BYPASS_INIT="/etc/init.d/unified-ui-router-bypass"
+cat > "$ROUTER_BYPASS_INIT" <<'BYPASS'
+#!/bin/sh /etc/rc.common
+START=99
+USE_PROCD=0
+apply_rules() {
+  for p in 8986 8987 8988 8989 8996 8997 8998 8999; do while ip rule del pref "$p" 2>/dev/null; do :; done; done
+  ip rule add pref 8986 ipproto udp dport 53 lookup main
+  ip rule add pref 8987 ipproto tcp dport 53 lookup main
+  ip rule add pref 8988 ipproto tcp dport 80 lookup main
+  ip rule add pref 8989 ipproto tcp dport 443 lookup main
+}
+start() { apply_rules; }
+restart() { apply_rules; }
+BYPASS
+chmod 755 "$ROUTER_BYPASS_INIT"
+"$ROUTER_BYPASS_INIT" enable >/dev/null 2>&1 || true
+"$ROUTER_BYPASS_INIT" start >/dev/null 2>&1 || true
 
 cat > "$UNINSTALL_SCRIPT" <<'UNINST'
 #!/bin/sh
@@ -226,7 +237,6 @@ update_branch() { printf '%s' "${UNIFIED_UI_UPDATE_BRANCH:-main}"; }
 
 curl_github() {
   url="$1"
-  if curl -fsSL --max-time 20 --proxy http://127.0.0.1:7890 "$url" 2>/tmp/unified-ui-gh.err; then return 0; fi
   curl -fsSL --max-time 20 "$url" 2>/tmp/unified-ui-gh.err
 }
 
@@ -244,7 +254,7 @@ github_latest_json() {
   else
     err="$(cat /tmp/unified-ui-gh.err 2>/dev/null | json_escape)"
     rm -f "$tmp"
-    printf '{"ok":false,"error":"github_unavailable","hint":"GitHub недоступен даже через Mihomo proxy","meta":{"message":"%s"}}' "$err"
+    printf '{"ok":false,"error":"github_unavailable","hint":"GitHub недоступен с роутера напрямую","meta":{"message":"%s"}}' "$err"
   fi
 }
 
@@ -384,7 +394,7 @@ case "${PATH_INFO:-}" in
     ;;
   /env)
     hdr_json
-    printf '{"ok":true,"items":[{"key":"UNIFIED_UI_AUTH_USER","current":"%s","configured":"%s","effective":"%s"},{"key":"UNIFIED_UI_UPDATE_REPO","current":"%s","configured":"%s","effective":"%s"},{"key":"UNIFIED_UI_UPDATE_CHANNEL","current":"%s","configured":"%s","effective":"%s"},{"key":"UNIFIED_UI_DOWNLOAD_PROXY","current":"http://127.0.0.1:7890","configured":"","effective":"http://127.0.0.1:7890"}]}' "$(printf '%s' "$UNIFIED_UI_AUTH_USER" | json_escape)" "$(printf '%s' "$UNIFIED_UI_AUTH_USER" | json_escape)" "$(printf '%s' "$UNIFIED_UI_AUTH_USER" | json_escape)" "$(update_repo | json_escape)" "$(update_repo | json_escape)" "$(update_repo | json_escape)" "$(update_channel | json_escape)" "$(update_channel | json_escape)" "$(update_channel | json_escape)"
+    printf '{"ok":true,"items":[{"key":"UNIFIED_UI_AUTH_USER","current":"%s","configured":"%s","effective":"%s"},{"key":"UNIFIED_UI_UPDATE_REPO","current":"%s","configured":"%s","effective":"%s"},{"key":"UNIFIED_UI_UPDATE_CHANNEL","current":"%s","configured":"%s","effective":"%s"}]}' "$(printf '%s' "$UNIFIED_UI_AUTH_USER" | json_escape)" "$(printf '%s' "$UNIFIED_UI_AUTH_USER" | json_escape)" "$(printf '%s' "$UNIFIED_UI_AUTH_USER" | json_escape)" "$(update_repo | json_escape)" "$(update_repo | json_escape)" "$(update_repo | json_escape)" "$(update_channel | json_escape)" "$(update_channel | json_escape)" "$(update_channel | json_escape)"
     ;;
   /env-save)
     hdr_json

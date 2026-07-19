@@ -277,8 +277,6 @@ netstat -lntup | grep -E '7890|9090'
 sh /etc/unified-ui/openwrt-update.sh
 ```
 
-Если GitHub с роутера резолвится через fake-ip, updater может качать через локальный Mihomo proxy `127.0.0.1:7890`.
-
 ---
 
 # Release assets
