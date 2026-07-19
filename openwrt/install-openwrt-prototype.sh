@@ -101,6 +101,7 @@ MIHOMO_CONFIG="${MIHOMO_CONFIG:-/etc/mihomo/config.yaml}"
 MIHOMO_RUN_DIR="${MIHOMO_RUN_DIR:-/etc/mihomo}"
 MIHOMO_PROFILE="${MIHOMO_PROFILE:-/etc/mihomo/config.yaml}"
 UNIFIED_UI_BUILD_FILE="${UNIFIED_UI_BUILD_FILE:-/etc/unified-ui/BUILD.json}"
+UNIFIED_UI_CONF_DIR="${UNIFIED_UI_CONF_DIR:-/etc/unified-ui}"
 UNIFIED_UI_BACKUP_DIR="${UNIFIED_UI_BACKUP_DIR:-/etc/unified-ui/backups}"
 UNIFIED_UI_VERSION="${UNIFIED_UI_VERSION:-dev-local}"
 UNIFIED_UI_UPDATE_URL="${UNIFIED_UI_UPDATE_URL:-}"
@@ -184,6 +185,26 @@ rule_provider_file() {
     manual-proxy|manual-proxy@classical|manual|Ручной*) printf '%s/rules/manual-proxy.yaml' "$MIHOMO_RUN_DIR" ;;
     *) printf '%s/rules/%s.yaml' "$MIHOMO_RUN_DIR" "$name" ;;
   esac
+}
+
+PROXY_REGISTRY="${UNIFIED_UI_CONF_DIR:-/etc/unified-ui}/proxy-connections.json"
+proxy_protocols_json() {
+  printf '[{"id":"wireguard","label":"WireGuard"},{"id":"amnezia","label":"Amnezia"},{"id":"hysteria2","label":"Hysteria2"},{"id":"vless","label":"VLESS"},{"id":"trojan","label":"Trojan"},{"id":"mieru","label":"Mieru"},{"id":"naiveproxy","label":"NaiveProxy"}]'
+}
+selector_names_json() {
+  awk '
+    /^proxy-groups:/ { in_groups=1; next }
+    in_groups && /^[a-zA-Z0-9_-]+:/ { in_groups=0 }
+    in_groups && /^[[:space:]]*-[[:space:]]*name:/ {
+      sub(/^[[:space:]]*-[[:space:]]*name:[[:space:]]*/, "");
+      gsub(/^["'"'"']|["'"'"']$/, "");
+      gsub(/\\/, "\\\\"); gsub(/"/, "\\\"");
+      print "\"" $0 "\"";
+    }
+  ' "$MIHOMO_PROFILE" 2>/dev/null | awk 'BEGIN{printf "["} {if(NR>1)printf ","; printf "%s",$0} END{printf "]"}'
+}
+registry_json() {
+  if [ -f "$PROXY_REGISTRY" ]; then cat "$PROXY_REGISTRY"; else printf '{"connections":[]}'; fi
 }
 
 case "${PATH_INFO:-}" in
@@ -320,6 +341,52 @@ case "${PATH_INFO:-}" in
       printf '{"ok":true,"saved":true,"applied":true,"backup":"%s","before":"%s","after":"%s","pid_changed":%s,"validation_output":"%s","restart_log":"%s"}' "$backup" "$before" "$after" "$changed" "$esc_out" "$esc_restart"
     else
       printf '{"ok":true,"saved":true,"applied":false,"backup":"%s","validation_output":"%s"}' "$backup" "$esc_out"
+    fi
+    ;;
+  /proxy-connections)
+    hdr_json
+    mkdir -p "$UNIFIED_UI_CONF_DIR"
+    reg="$(registry_json)"
+    conns="$(printf '%s' "$reg" | jsonfilter -e '@.connections' 2>/dev/null || true)"
+    [ -n "$conns" ] || conns='[]'
+    printf '{"ok":true,"connections":%s,"count":0,"selectors":%s,"protocols":%s,"registry":"%s"}' "$conns" "$(selector_names_json)" "$(proxy_protocols_json)" "$PROXY_REGISTRY"
+    ;;
+  /proxy-connections-import)
+    body="$(read_body)"
+    proto="$(printf '%s' "$body" | jsonfilter -e '@.protocol' 2>/dev/null || true)"
+    name="$(printf '%s' "$body" | jsonfilter -e '@.name' 2>/dev/null || true)"
+    content="$(printf '%s' "$body" | jsonfilter -e '@.content' 2>/dev/null || true)"
+    [ -n "$proto" ] || proto=unknown
+    [ -n "$name" ] || name="$proto-$(date +%s)"
+    id="$(printf '%s-%s' "$proto" "$name" | tr -cs 'A-Za-z0-9_.-' '-' | sed 's/^-//;s/-$//')"
+    esc_id="$(printf '%s' "$id" | json_escape)"
+    esc_name="$(printf '%s' "$name" | json_escape)"
+    esc_proto="$(printf '%s' "$proto" | json_escape)"
+    esc_content="$(printf '%s' "$content" | json_escape)"
+    mkdir -p "$UNIFIED_UI_CONF_DIR"
+    tmp="$PROXY_REGISTRY.tmp.$$"
+    printf '{"connections":[{"id":"%s","name":"%s","protocol":"%s","protocolLabel":"%s","enabled":true,"mihomoSupported":false,"selectors":[],"usedBySelectors":[],"proxyYaml":"# OpenWrt registry staging only\\n# Apply full YAML via Mihomo editor for now.","rawContent":"%s"}]}' "$esc_id" "$esc_name" "$esc_proto" "$esc_proto" "$esc_content" > "$tmp"
+    mv "$tmp" "$PROXY_REGISTRY"
+    chmod 600 "$PROXY_REGISTRY"
+    hdr_json '201 Created'
+    printf '{"ok":true,"connection":{"id":"%s","name":"%s","protocol":"%s","protocolLabel":"%s","enabled":true,"mihomoSupported":false,"selectors":[],"usedBySelectors":[],"proxyYaml":"# OpenWrt registry staging only"},"replaced":false}' "$esc_id" "$esc_name" "$esc_proto" "$esc_proto"
+    ;;
+  /proxy-connections-apply)
+    hdr_json
+    printf '{"ok":true,"changed":false,"count":0,"message":"OpenWrt: registry сохранён. Для генерации native YAML используй Mihomo editor; backend генератор протоколов ещё lightweight."}'
+    ;;
+  /proxy-connections-preview)
+    hdr_json
+    printf '{"ok":true,"block":"# OpenWrt proxy-connections registry\\n# Native YAML generation for protocol tabs is not enabled in CGI mode yet.\\n# Use Mihomo editor or Proxy Tools for direct YAML insertion."}'
+    ;;
+  /proxy-connections-item/*)
+    id="${PATH_INFO#/proxy-connections-item/}"
+    hdr_json
+    if [ "${REQUEST_METHOD:-GET}" = "DELETE" ]; then
+      rm -f "$PROXY_REGISTRY"
+      printf '{"ok":true,"id":"%s","removedName":"%s","apply":{"ok":true,"changed":false,"count":0}}' "$id" "$id"
+    else
+      printf '{"ok":true,"id":"%s"}' "$id"
     fi
     ;;
 

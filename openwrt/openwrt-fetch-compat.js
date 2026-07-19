@@ -34,6 +34,19 @@
     if(path==='/api/capabilities') return jsonResponse({ok:true, platform:'openwrt', websocket:false, terminal:{enabled:false,pty:false,ws:false}, features:{mihomo:true,xray:false,files:false,commands:false}});
     if(path==='/api/restart') return cgi('/restart', Object.assign({},opts,{method:'GET'}));
     if(path==='/api/build' || path==='/api/self-update/state') return cgi('/status', opts);
+    if(path==='/api/mihomo-config') {
+      if(method==='GET') return cgi('/config-get', opts);
+      if(method==='POST') {
+        const body = JSON.parse((opts&&opts.body)||'{}');
+        return cgi('/config-save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({content:body.content||'', apply:!!body.restart})});
+      }
+    }
+    if(path==='/api/proxy-connections' && method==='GET') return cgi('/proxy-connections', opts);
+    if(path==='/api/proxy-connections/import' && method==='POST') return cgi('/proxy-connections-import', opts);
+    if(path==='/api/proxy-connections/apply' && method==='POST') return cgi('/proxy-connections-apply', opts);
+    if(path==='/api/proxy-connections/preview' && method==='POST') return cgi('/proxy-connections-preview', opts);
+    let pcm = path.match(/^\/api\/proxy-connections\/([^/]+)$/);
+    if(pcm && (method==='PATCH' || method==='DELETE')) return cgi('/proxy-connections-item/'+enc(decodeURIComponent(pcm[1])), opts);
     if(path==='/api/mihomo/clash/proxies' && method==='GET') return jsonResponse(summarizeProxies(await cgiJson('/proxies')));
     if(path==='/api/mihomo/clash/proxies/delay-all' && method==='POST'){
       const body=JSON.parse((opts&&opts.body)||'{}'); const names=Array.isArray(body.names)?body.names:[]; const results=[];
