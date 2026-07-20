@@ -394,26 +394,50 @@ QPlainTextEdit#ProviderEditor {
 }
 
 
-QPushButton#ProxyButton, QPushButton#ProxyButtonActive {
+QFrame#ProxyCardUnknown, QFrame#ProxyCardOk, QFrame#ProxyCardFail,
+QFrame#ProxyCardUnknownActive, QFrame#ProxyCardOkActive, QFrame#ProxyCardFailActive {
     background: #0A1730;
-    border: 1px solid #25385A;
+    border: 1px solid #34445F;
     border-radius: 8px;
+}
+QFrame#ProxyCardUnknownActive, QFrame#ProxyCardOkActive, QFrame#ProxyCardFailActive {
+    background: #0D2038;
+    border-width: 2px;
+}
+QFrame#ProxyCardOk, QFrame#ProxyCardOkActive { border-color: #20C878; }
+QFrame#ProxyCardFail, QFrame#ProxyCardFailActive { border-color: #EF4E5F; }
+QFrame#ProxyCardUnknown, QFrame#ProxyCardUnknownActive { border-color: #526078; }
+QPushButton#ProxySelectButton {
+    background: transparent;
+    border: 0;
     color: #E7ECF8;
-    padding: 8px 10px;
     text-align: left;
-    min-height: 44px;
-    max-height: 62px;
+    padding: 0;
     font-size: 10px;
-    font-weight: 700;
+    font-weight: 800;
 }
-QPushButton#ProxyButton:hover {
-    background: #10213E;
-    border-color: #355585;
+QPushButton#ProxySelectButton:hover { color: #67E8F9; }
+QPushButton#PingUnknown, QPushButton#PingOk, QPushButton#PingFail {
+    border-radius: 8px;
+    padding: 2px 7px;
+    font-size: 10px;
+    font-weight: 850;
+    min-height: 18px;
 }
-QPushButton#ProxyButtonActive {
-    background: #0B2030;
+QPushButton#PingUnknown {
+    background: rgba(120, 132, 154, 0.16);
+    border: 1px solid #56637A;
+    color: #A8B1C2;
+}
+QPushButton#PingOk {
+    background: rgba(33, 200, 120, 0.18);
     border: 1px solid #20C878;
-    color: #F7FFFB;
+    color: #2DDA8A;
+}
+QPushButton#PingFail {
+    background: rgba(239, 78, 95, 0.16);
+    border: 1px solid #EF4E5F;
+    color: #FF6B7A;
 }
 
 """
@@ -2616,27 +2640,81 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None) -> i
                 providers = {}
             return cfg_mgr.selectable_options_for_group(config, group_name, data, providers)
 
-        def proxy_meta(self, proxy_name: str) -> tuple[str, str, bool]:
+        def proxy_meta(self, proxy_name: str) -> tuple[str, str, str]:
+            """Return proxy type, ping label, and ping status: unknown/ok/fail."""
             try:
                 proxy = runtime.proxies().get(proxy_name)
             except Exception:
                 proxy = None
             if not isinstance(proxy, dict):
-                return "Proxy", "—", True
+                return "Proxy", "—", "unknown"
             ptype = str(proxy.get("type") or "Proxy")
-            alive = proxy.get("alive") is not False
-            delay = "0 ms"
             hist = proxy.get("history") or []
             if isinstance(hist, list) and hist:
                 latest = hist[-1] if isinstance(hist[-1], dict) else {}
-                if latest.get("delay") is not None:
+                delay_value = latest.get("delay")
+                if delay_value is not None:
                     try:
-                        delay = f"{int(latest.get('delay'))} ms"
+                        delay_int = int(delay_value)
                     except Exception:
-                        delay = f"{latest.get('delay')} ms"
-            elif not alive:
-                delay = "offline"
-            return ptype, delay, alive
+                        return ptype, f"{delay_value} ms", "ok"
+                    if delay_int > 0:
+                        return ptype, f"{delay_int} ms", "ok"
+                    return ptype, "0 ms", "fail"
+            if proxy.get("alive") is False:
+                return ptype, "offline", "fail"
+            return ptype, "—", "unknown"
+
+        def ping_one(self, proxy: str) -> None:
+            try:
+                delay = runtime.delay(proxy)
+                if delay is None:
+                    self.status.setText(f"{proxy}: ping недоступен")
+                else:
+                    self.status.setText(f"{proxy}: {delay} ms")
+                self.refresh()
+            except Exception as e:
+                self.status.setText(f"{proxy}: ping ошибка — {e}")
+                self.refresh()
+
+        def make_proxy_card(self, group: str, proxy: str, now: str) -> QFrame:
+            ptype, delay, ping_status = self.proxy_meta(proxy)
+            active = proxy == now
+            suffix = {"ok": "Ok", "fail": "Fail"}.get(ping_status, "Unknown")
+            card = QFrame()
+            card.setObjectName(f"ProxyCard{suffix}{'Active' if active else ''}")
+            card.setFixedHeight(66)
+            card.setMinimumWidth(142)
+            card.setMaximumWidth(172)
+            box = QVBoxLayout(card)
+            box.setContentsMargins(8, 6, 8, 6)
+            box.setSpacing(3)
+
+            label = proxy if len(proxy) <= 24 else proxy[:22] + "…"
+            select_btn = QPushButton(label)
+            select_btn.setObjectName("ProxySelectButton")
+            select_btn.setToolTip(proxy)
+            select_btn.clicked.connect(lambda _=False, g=group, p=proxy: self.select(g, p))
+            box.addWidget(select_btn)
+
+            sub = QLabel(f"{ptype} · {'online' if ping_status != 'fail' else 'offline'}")
+            sub.setObjectName("Muted")
+            box.addWidget(sub)
+
+            bottom = QHBoxLayout()
+            if active:
+                current = QLabel("выбрано")
+                current.setObjectName("Green")
+                bottom.addWidget(current)
+            else:
+                bottom.addStretch(1)
+            ping_btn = QPushButton(f"↻ {delay}")
+            ping_btn.setObjectName({"ok": "PingOk", "fail": "PingFail"}.get(ping_status, "PingUnknown"))
+            ping_btn.setToolTip(f"Обновить ping для {proxy}")
+            ping_btn.clicked.connect(lambda _=False, p=proxy: self.ping_one(p))
+            bottom.addWidget(ping_btn)
+            box.addLayout(bottom)
+            return card
 
         def refresh(self) -> None:
             self.clear_groups()
@@ -2695,13 +2773,8 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None) -> i
                 grid.setHorizontalSpacing(7)
                 grid.setVerticalSpacing(7)
                 for idx, proxy in enumerate(options):
-                    ptype, delay, alive = self.proxy_meta(proxy)
-                    label = proxy if len(proxy) <= 22 else proxy[:20] + "…"
-                    btn = QPushButton(f"{label}\n{ptype} · {'online' if alive else 'offline'}\n{delay}")
-                    btn.setObjectName("ProxyButtonActive" if proxy == now else "ProxyButton")
-                    btn.setFixedHeight(60)
-                    btn.clicked.connect(lambda _=False, g=name, p=proxy: self.select(g, p))
-                    grid.addWidget(btn, idx // 5, idx % 5)
+                    card_widget = self.make_proxy_card(name, proxy, now)
+                    grid.addWidget(card_widget, idx // 5, idx % 5)
                 layout.addLayout(grid)
             self.groups_box.addWidget(card)
 
@@ -2799,13 +2872,13 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None) -> i
             right = QVBoxLayout()
             right.setSpacing(8)
             row = QHBoxLayout()
-            for text in ["🌐 Светлая тема", "◉ Интерфейс", "Настройки", "👤 pavel", "v2.6.2-native", "↻ Проверить обновления"]:
+            for text in ["🌐 Светлая тема", "◉ Интерфейс", "Настройки", "👤 pavel", "v2.6.4-native", "↻ Проверить обновления"]:
                 b = QPushButton(text)
                 b.setObjectName("TopPill")
                 row.addWidget(b)
             right.addLayout(row)
             row2 = QHBoxLayout()
-            update = QPushButton("🟠 Обновление v2.6.2-native")
+            update = QPushButton("🟠 Обновление v2.6.4-native")
             update.setObjectName("TopPill")
             row2.addWidget(update)
             row2.addStretch(1)
