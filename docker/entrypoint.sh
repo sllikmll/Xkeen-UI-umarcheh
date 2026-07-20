@@ -104,6 +104,47 @@ Path('/etc/mihomo/config.yaml').write_text(yaml.safe_dump(cfg, allow_unicode=Tru
 PY
 fi
 
+python - <<'PY'
+import os
+from pathlib import Path
+import yaml
+cfg_path = Path('/etc/mihomo/config.yaml')
+enable = os.environ.get('MIHOMO_ENABLE_TUN','').lower() in ('1','true','yes','on')
+try:
+    cfg = yaml.safe_load(cfg_path.read_text(encoding='utf-8')) or {}
+except Exception as exc:
+    raise SystemExit(f'cannot read /etc/mihomo/config.yaml for TUN normalization: {exc}')
+changed = False
+if enable:
+    desired = {
+        'enable': True,
+        'stack': 'system',
+        'auto-route': True,
+        'auto-detect-interface': True,
+        'strict-route': False,
+        'dns-hijack': ['any:53'],
+    }
+    if cfg.get('tun') != desired:
+        backup = cfg_path.with_suffix(cfg_path.suffix + '.pre-tun.bak')
+        if not backup.exists():
+            backup.write_text(cfg_path.read_text(encoding='utf-8'), encoding='utf-8')
+        cfg['tun'] = desired
+        changed = True
+else:
+    # Do not remove an existing manual tun block. Disabled env only means no auto-injection.
+    pass
+if changed:
+    cfg_path.write_text(yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False), encoding='utf-8')
+    print('[unified-ui-docker] TUN full-system routing enabled in /etc/mihomo/config.yaml', flush=True)
+PY
+
+if [ "$(printf '%s' "$MIHOMO_ENABLE_TUN" | tr '[:upper:]' '[:lower:]')" = "true" ] || [ "$MIHOMO_ENABLE_TUN" = "1" ]; then
+  if [ ! -e /dev/net/tun ]; then
+    log "WARNING: MIHOMO_ENABLE_TUN=true but /dev/net/tun is missing. Compose needs devices: /dev/net/tun:/dev/net/tun"
+  fi
+  if ! grep -qw CapEff /proc/self/status 2>/dev/null; then :; fi
+fi
+
 log "validating Mihomo config"
 mihomo -t -d /etc/mihomo -f /etc/mihomo/config.yaml
 

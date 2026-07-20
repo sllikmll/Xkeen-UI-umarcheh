@@ -163,7 +163,7 @@ UNIFIED_UI_UPDATE_CHANNEL=main \
 
 ```text
 ghcr.io/sllikmll/unified-ui:latest
-ghcr.io/sllikmll/unified-ui:2.5.0
+ghcr.io/sllikmll/unified-ui:2.5.1
 ```
 
 Быстрый запуск:
@@ -199,16 +199,13 @@ Mixed proxy:     127.0.0.1:7890
 DNS optional:    127.0.0.1:1053
 ```
 
-По умолчанию контейнер стартует без TUN, чтобы не требовать `NET_ADMIN`. Для полноценной системной маршрутизации через TUN включи в compose:
+По умолчанию контейнер стартует без TUN, чтобы не требовать `NET_ADMIN`. Для полноценной системной маршрутизации через TUN используй готовый compose-profile:
 
-```yaml
-environment:
-  MIHOMO_ENABLE_TUN: "true"
-cap_add:
-  - NET_ADMIN
-devices:
-  - /dev/net/tun:/dev/net/tun
+```sh
+docker compose --profile tun up -d unified-ui-tun
 ```
+
+Этот профиль включает `network_mode: host`, `NET_ADMIN`, `/dev/net/tun` и `MIHOMO_ENABLE_TUN=true`. В уже существующий `/etc/mihomo/config.yaml` TUN-блок добавляется idempotent-миграцией с backup `config.yaml.pre-tun.bak`.
 
 > Важно: `UNIFIED_UI_AUTH_PASSWORD` и `MIHOMO_SUB_URL` нужны только для первого запуска. После создания `/data/unified-ui/auth.json` и `/etc/mihomo/config.yaml` их лучше убрать из env/compose.
 
@@ -222,11 +219,12 @@ Desktop-сборки предназначены для конечных устр
 
 | ОС | Артефакт | Назначение |
 |---|---|---|
-| Linux Debian/Ubuntu | `Unified-UI-2.5.0-amd64.deb` | `.deb` пакет |
-| Linux Fedora/RHEL/openSUSE | `Unified-UI-2.5.0-x86_64.rpm` | `.rpm` пакет |
-| Linux universal | `Unified-UI-2.5.0-x86_64.AppImage` | запуск без установки |
-| macOS Apple Silicon | `Unified-UI-2.5.0-arm64.dmg` | `.dmg` образ |
-| Windows x64 | `Unified-UI-Setup-2.5.0-x64.exe` | NSIS installer |
+| Linux Debian/Ubuntu | `Unified-UI-2.5.1-amd64.deb` | `.deb` пакет |
+| Linux Fedora/RHEL/openSUSE | `Unified-UI-2.5.1-x86_64.rpm` | `.rpm` пакет |
+| Linux universal | `Unified-UI-2.5.1-x86_64.AppImage` | запуск без установки |
+| macOS Apple Silicon | `Unified-UI-2.5.1-arm64.dmg` | Electron desktop `.dmg` |
+| macOS Apple Silicon Qt | `Unified-UI-Qt-2.5.1-arm64.dmg` | Qt/WebEngine desktop `.dmg`, стиль веб-версии + native shell |
+| Windows x64 | `Unified-UI-Setup-2.5.1-x64.exe` | NSIS installer |
 
 Локальные порты desktop-приложения:
 
@@ -239,7 +237,42 @@ DNS:             127.0.0.1:15353
 
 На первом запуске приложение создаёт runtime-папку в профиле пользователя, скачивает подходящий Mihomo binary при необходимости, создаёт Python venv и ставит зависимости из `unified-ui/requirements.txt`.
 
-Текущий desktop-режим даёт локальный proxy и управление Mihomo/selector/rule/provider через панель. Полная системная маршрутизация всего трафика через TUN/Wintun/utun требует прав администратора и будет включаться отдельным elevated-flow, чтобы не ломать сеть пользователю без спроса.
+Текущий desktop-режим даёт локальный proxy и управление Mihomo/selector/rule/provider через панель. Полная системная маршрутизация всего трафика через TUN/Wintun/utun включается явно из меню приложения:
+
+```text
+Routing → Full-system TUN routing
+```
+
+После переключения Unified UI сохраняет настройку в `desktop-settings.json` и перезапускается. Также работает env-запуск для отладки:
+
+```sh
+UNIFIED_UI_ENABLE_TUN=1 "Unified UI.app/Contents/MacOS/Unified UI"
+```
+
+В desktop-режиме Unified UI добавляет в Mihomo `tun.enable`, `auto-route`, `auto-detect-interface` и `dns-hijack: any:53`. На macOS Mihomo в таком режиме запрашивает системный administrator prompt через `osascript`, потому что маршруты/utun без повышенных прав не поднять. На Linux запускай приложение от root или с нужными capabilities. На Windows запускай installer/app от администратора, иначе Wintun/system routes могут не примениться.
+
+Обычный запуск без включённого TUN остаётся безопасным proxy-mode: UI + локальный mixed proxy, без перехвата всей системы.
+
+### Qt-версия
+
+Qt-сборка — это отдельная desktop-оболочка `Unified UI Qt`: нативное окно PySide6/QtWebEngine, верхняя панель в стиле Unified UI, кнопки обновления/runtime/TUN и тот же веб-интерфейс внутри. Она использует те же процессы: локальный Flask backend + локальный Mihomo.
+
+Для разработки/проверки:
+
+```sh
+python3 -m pip install -r desktop/qt/requirements-qt.txt
+python3 desktop/qt/unified_ui_qt.py --smoke
+python3 desktop/qt/unified_ui_qt.py
+```
+
+Сборка macOS `.app/.dmg`:
+
+```sh
+pyinstaller --noconfirm --distpath dist/qt --workpath build/qt desktop/qt/unified-ui-qt.spec
+hdiutil create -volname 'Unified UI Qt' \
+  -srcfolder 'dist/qt/Unified UI Qt.app' \
+  -ov -format UDZO 'dist/qt/Unified-UI-Qt-2.5.1-arm64.dmg'
+```
 
 ## Вариант 4 — OpenWrt / standalone Mihomo
 

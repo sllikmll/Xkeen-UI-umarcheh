@@ -22,11 +22,28 @@ services:
     volumes:
       - unified-ui-state:/data/unified-ui
       - unified-ui-mihomo:/etc/mihomo
-    # TUN mode needs elevated permissions. Keep disabled unless you know you need it.
-    # cap_add:
-    #   - NET_ADMIN
-    # devices:
-    #   - /dev/net/tun:/dev/net/tun
+
+  # Full-system routing profile for Linux hosts.
+  # Start with: docker compose --profile tun up -d unified-ui-tun
+  unified-ui-tun:
+    image: ghcr.io/sllikmll/unified-ui:latest
+    container_name: unified-ui-tun
+    profiles: ["tun"]
+    restart: unless-stopped
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      UNIFIED_UI_AUTH_USER: admin
+      UNIFIED_UI_AUTH_PASSWORD: admin
+      MIHOMO_ENABLE_TUN: "true"
+      MIHOMO_MIXED_PORT: "7890"
+      MIHOMO_DNS_PORT: "1053"
+    volumes:
+      - unified-ui-state:/data/unified-ui
+      - unified-ui-mihomo:/etc/mihomo
 
 volumes:
   unified-ui-state:

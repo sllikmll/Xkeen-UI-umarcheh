@@ -60,7 +60,7 @@
     "electron": "^43.1.1",
     "electron-builder": "^26.15.3"
   },
-  "version": "2.5.0",
+  "version": "2.5.1",
   "main": "desktop/electron/main.cjs",
   "description": "Unified UI desktop/router panel for Mihomo routing, proxy selectors, connections and service rules",
   "author": "Unified UI",

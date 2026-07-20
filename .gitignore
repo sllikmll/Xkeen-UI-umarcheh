@@ -18,6 +18,7 @@ unified-ui/static/frontend-build/
 
 # Local packaging artifacts
 dist/
+build/
 package-root/
 /unified-ui-routing.tar.gz
 /unified-ui-routing.tar.gz.sha256
