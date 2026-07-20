@@ -68,8 +68,8 @@ QPushButton:hover { background: #1b3152; }
 QPushButton:pressed { background: #0f1d31; }
 QPushButton#danger { border-color: #7f1d1d; background: #3b1116; color: #fecaca; }
 QPushButton#primary { border-color: #2563eb; background: #1d4ed8; color: white; }
-QPushButton#tile { padding: 5px 8px; min-height: 30px; border-radius: 7px; text-align: left; }
-QPushButton#tileActive { padding: 5px 8px; min-height: 30px; border-radius: 7px; text-align: left; border-color: #2563eb; background: #1d4ed8; color: white; }
+QPushButton#tile { padding: 5px 8px; min-height: 36px; border-radius: 7px; text-align: left; }
+QPushButton#tileActive { padding: 5px 8px; min-height: 36px; border-radius: 7px; text-align: left; border-color: #2563eb; background: #1d4ed8; color: white; }
 QLabel#title { font-size: 22px; font-weight: 800; color: #f8fbff; }
 QLabel#muted { color: #93a4bf; }
 QLineEdit, QTextEdit, QPlainTextEdit, QComboBox { background: #0b1628; color: #e8f0ff; border: 1px solid #263d5e; border-radius: 8px; padding: 7px; selection-background-color: #2563eb; }
@@ -364,6 +364,37 @@ class NativeConfigManager:
         if dns.get("ipv6") is not False:
             dns["ipv6"] = False
             changed = True
+
+        def safe_rel_path(value: str, prefix: str, suffix: str = ".yaml") -> str:
+            raw = str(value or "").strip()
+            name = Path(raw).name if raw else ""
+            if not name or name in {".", ".."}:
+                name = "item" + suffix
+            if not name.endswith(('.yaml', '.yml', '.mrs', '.txt')):
+                name += suffix
+            return str((self.config_path.parent / prefix / name).as_posix())
+
+        providers = data.get("proxy-providers")
+        if isinstance(providers, dict):
+            for name, provider in providers.items():
+                if not isinstance(provider, dict):
+                    continue
+                path_value = str(provider.get("path") or "").strip()
+                if path_value and (Path(path_value).is_absolute() or path_value.startswith("..")):
+                    provider["path"] = safe_rel_path(path_value, "providers")
+                    changed = True
+
+        rule_providers = data.get("rule-providers")
+        if isinstance(rule_providers, dict):
+            for name, provider in rule_providers.items():
+                if not isinstance(provider, dict):
+                    continue
+                ptype = str(provider.get("type") or "").lower()
+                path_value = str(provider.get("path") or "").strip()
+                if ptype in {"file", "inline"} or path_value:
+                    if not path_value or Path(path_value).is_absolute() or path_value.startswith(".."):
+                        provider["path"] = safe_rel_path(path_value or f"{name}.yaml", "rules")
+                        changed = True
         return changed
 
     def ensure_runtime_compatible_config(self) -> bool:
@@ -1004,6 +1035,69 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None) -> i
                     items.append((str(name), data))
             return items
 
+        def proxy_delay_label(self, proxy_name: str) -> str:
+            try:
+                proxy = runtime.proxies().get(proxy_name)
+            except Exception:
+                proxy = None
+            if not isinstance(proxy, dict):
+                return "—"
+            history = proxy.get("history") or []
+            if isinstance(history, list) and history:
+                latest = history[-1] if isinstance(history[-1], dict) else {}
+                delay = latest.get("delay")
+                if delay is not None:
+                    try:
+                        return f"{int(delay)} ms"
+                    except Exception:
+                        return f"{delay} ms"
+            alive = proxy.get("alive")
+            if alive is False:
+                return "offline"
+            return "—"
+
+        def proxy_display_label(self, proxy_name: str) -> str:
+            delay = self.proxy_delay_label(proxy_name)
+            return proxy_name if delay == "—" else f"{proxy_name} · {delay}"
+
+        def selector_options(self, data: dict[str, Any]) -> list[str]:
+            seen: set[str] = set()
+            options: list[str] = []
+
+            def add(value: Any) -> None:
+                name = str(value or "").strip()
+                if not name or name in seen:
+                    return
+                seen.add(name)
+                options.append(name)
+
+            for item in data.get("all") or []:
+                add(item)
+
+            try:
+                providers = runtime.proxy_providers()
+            except Exception:
+                providers = {}
+            if isinstance(providers, dict):
+                for provider in providers.values():
+                    if not isinstance(provider, dict):
+                        continue
+                    for item in provider.get("proxies") or []:
+                        if isinstance(item, dict):
+                            add(item.get("name"))
+                        else:
+                            add(item)
+
+            try:
+                proxies = runtime.proxies()
+            except Exception:
+                proxies = {}
+            if isinstance(proxies, dict):
+                for name, proxy in proxies.items():
+                    if isinstance(proxy, dict) and proxy.get("type") not in {"Selector", "URLTest", "Fallback", "LoadBalance"}:
+                        add(name)
+            return options
+
         def refresh(self) -> None:
             self.clear_groups()
             try:
@@ -1027,14 +1121,15 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None) -> i
                 current = QLabel(f"Сейчас: {data.get('now', '—')}")
                 current.setObjectName("muted")
                 combo = QComboBox()
-                all_names = [str(x) for x in (data.get("all") or [])]
-                combo.addItems(all_names)
-                now = data.get("now")
+                all_names = self.selector_options(data)
+                combo.addItems([self.proxy_display_label(x) for x in all_names])
+                combo.setProperty("proxy_names", all_names)
+                now = str(data.get("now") or "")
                 if now in all_names:
-                    combo.setCurrentText(str(now))
+                    combo.setCurrentIndex(all_names.index(now))
                 apply = QPushButton("Выбрать")
                 apply.setObjectName("primary")
-                apply.clicked.connect(lambda _=False, g=name, c=combo: self.select(g, c.currentText()))
+                apply.clicked.connect(lambda _=False, g=name, c=combo: self.select(g, (c.property("proxy_names") or [c.currentText()])[c.currentIndex()] if c.currentIndex() >= 0 else c.currentText()))
                 row.addWidget(current)
                 row.addWidget(combo, 1)
                 row.addWidget(apply)
@@ -1045,12 +1140,12 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None) -> i
             for name, data in items:
                 group = QGroupBox(f"{name} · сейчас: {data.get('now', '—')}")
                 grid = QGridLayout(group)
-                all_names = [str(x) for x in (data.get("all") or [])]
+                all_names = self.selector_options(data)
                 now = str(data.get("now") or "")
                 for idx, proxy in enumerate(all_names):
-                    btn = QPushButton(proxy)
-                    btn.setMinimumHeight(34)
-                    btn.setMaximumHeight(42)
+                    btn = QPushButton(self.proxy_display_label(proxy))
+                    btn.setMinimumHeight(40)
+                    btn.setMaximumHeight(48)
                     if proxy == now:
                         btn.setObjectName("tileActive")
                     else:

@@ -10,7 +10,7 @@
 |---|---|
 | Репозиторий | https://github.com/sllikmll/Unified-UI |
 | Скачать последнюю сборку | https://github.com/sllikmll/Unified-UI/releases/latest |
-| Native desktop для macOS Apple Silicon | https://github.com/sllikmll/Unified-UI/releases/download/v2.5.10-native/Unified-UI-Native-2.5.10-arm64.dmg |
+| Native desktop для macOS Apple Silicon | https://github.com/sllikmll/Unified-UI/releases/download/v2.5.11-native/Unified-UI-Native-2.5.11-arm64.dmg |
 | Legacy desktop/docker релиз | https://github.com/sllikmll/Unified-UI/releases/tag/v2.5.2 |
 | Docker image | `ghcr.io/sllikmll/unified-ui:latest` |
 | Версия Mihomo в desktop/native/docker сборках | `v1.19.29` |
@@ -25,8 +25,8 @@
 
 | Платформа | Файл | Статус |
 |---|---|---|
-| macOS Apple Silicon | [Unified-UI-Native-2.5.10-arm64.dmg](https://github.com/sllikmll/Unified-UI/releases/download/v2.5.10-native/Unified-UI-Native-2.5.10-arm64.dmg) | Есть |
-| Windows x64 | [Unified-UI-Native-2.5.10-x64.exe](https://github.com/sllikmll/Unified-UI/releases/download/v2.5.10-native/Unified-UI-Native-2.5.10-x64.exe) | Есть |
+| macOS Apple Silicon | [Unified-UI-Native-2.5.11-arm64.dmg](https://github.com/sllikmll/Unified-UI/releases/download/v2.5.11-native/Unified-UI-Native-2.5.11-arm64.dmg) | Есть |
+| Windows x64 | [Unified-UI-Native-2.5.11-x64.exe](https://github.com/sllikmll/Unified-UI/releases/download/v2.5.11-native/Unified-UI-Native-2.5.11-x64.exe) | Есть |
 | Linux x64 | native build в работе | Пока используй Docker/AppImage legacy |
 
 Native app:
