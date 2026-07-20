@@ -332,7 +332,7 @@ def human_bytes(value: Any) -> str:
     return f"{n:.1f} {units[i]}"
 
 
-def run_gui(runtime: MihomoRuntime) -> int:
+def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None) -> int:
     from PySide6.QtCore import QTimer, Qt
     from PySide6.QtWidgets import (
         QApplication,
@@ -599,6 +599,7 @@ def run_gui(runtime: MihomoRuntime) -> int:
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
     app.setStyleSheet(DARK_QSS)
+    app.setQuitOnLastWindowClosed(False)
 
     startup = QWidget()
     startup.setWindowTitle(APP_NAME)
@@ -617,19 +618,36 @@ def run_gui(runtime: MihomoRuntime) -> int:
     result: dict[str, Any] = {}
     holder: dict[str, Any] = {"window": None}
 
-    def log_native_error(text: str) -> Path:
+    def log_native_event(text: str) -> Path:
         log_dir = runtime.runtime / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
         path = log_dir / "native-app.log"
         with path.open("a", encoding="utf-8") as f:
-            f.write("\n=== Unified UI Native startup error ===\n")
+            f.write("\n=== Unified UI Native ===\n")
             f.write(text)
             f.write("\n")
         return path
 
+    def log_native_error(text: str) -> Path:
+        return log_native_event("STARTUP ERROR\n" + text)
+
+    startup_log_path = log_native_event(f"startup begin; runtime={runtime.runtime}; controller={runtime.controller}")
+
+    def excepthook(exc_type, exc, tb) -> None:  # type: ignore[no-untyped-def]
+        text = "".join(traceback.format_exception(exc_type, exc, tb))
+        log_native_error("UNHANDLED EXCEPTION\n" + text)
+        try:
+            QMessageBox.critical(startup, APP_NAME, f"Необработанная ошибка.\n\nЛог: {startup_log_path}\n\n{text[-2500:]}")
+        except Exception:
+            pass
+
+    sys.excepthook = excepthook
+
     def start_runtime_in_background() -> None:
         try:
+            log_native_event("mihomo runtime start requested")
             runtime.start()
+            log_native_event("mihomo runtime started successfully")
             result["ok"] = True
         except Exception:
             tb = traceback.format_exc()
@@ -644,10 +662,24 @@ def run_gui(runtime: MihomoRuntime) -> int:
             return
         startup.timer.stop()  # type: ignore[attr-defined]
         if result.get("ok"):
-            startup.close()
-            win = MainWindow()
-            holder["window"] = win
-            win.show()
+            try:
+                startup_status.setText("Mihomo готов. Открываю главное окно…")
+                log_native_event("creating main window")
+                win = MainWindow()
+                holder["window"] = win
+                win.show()
+                win.raise_()
+                win.activateWindow()
+                app.setQuitOnLastWindowClosed(True)
+                log_native_event("main window shown")
+                startup.close()
+                if gui_smoke_seconds is not None:
+                    QTimer.singleShot(int(gui_smoke_seconds * 1000), app.quit)
+            except Exception:
+                tb = traceback.format_exc()
+                log_path = log_native_error("MAIN WINDOW ERROR\n" + tb)
+                startup_status.setText(f"Ошибка главного окна. Лог: {log_path}")
+                QMessageBox.critical(startup, APP_NAME, f"Mihomo запущен, но главное окно не открылось.\n\nЛог: {log_path}\n\n{tb[-2500:]}")
             return
         msg = result.get("error", "Unknown startup error")
         log_path = result.get("log_path", str(runtime.runtime / "logs" / "native-app.log"))
@@ -683,11 +715,12 @@ def run_smoke(runtime: MihomoRuntime) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--smoke", action="store_true")
+    parser.add_argument("--gui-smoke", type=float, default=None, metavar="SECONDS", help="Open the real GUI, keep it alive for N seconds, then exit")
     args = parser.parse_args()
     runtime = MihomoRuntime.create()
     if args.smoke:
         return run_smoke(runtime)
-    return run_gui(runtime)
+    return run_gui(runtime, gui_smoke_seconds=args.gui_smoke)
 
 
 if __name__ == "__main__":
