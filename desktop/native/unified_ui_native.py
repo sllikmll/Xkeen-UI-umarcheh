@@ -297,11 +297,11 @@ class MihomoRuntime:
         return connections if isinstance(connections, list) else []
 
     def traffic(self) -> dict[str, Any]:
-        try:
-            data = self.get("/traffic")
-            return data if isinstance(data, dict) else {}
-        except Exception:
-            return {}
+        # Mihomo's /traffic endpoint is a streaming endpoint. Do not call it
+        # through the normal blocking JSON request path or the GUI freezes
+        # before the main window is shown. A future version should consume it
+        # from a background worker.
+        return {}
 
     def close_connection(self, conn_id: str) -> None:
         self.delete(f"/connections/{urllib.parse.quote(conn_id)}")
@@ -551,8 +551,7 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None) -> i
 
         def refresh(self) -> None:
             self.version.setText(f"Mihomo: {runtime.version()}")
-            tr = runtime.traffic()
-            self.traffic.setText(f"Traffic: ↑ {human_bytes(tr.get('up'))} / ↓ {human_bytes(tr.get('down'))}")
+            self.traffic.setText("Traffic: потоковый счётчик будет подключён отдельным фоновым worker'ом")
 
     class MainWindow(QMainWindow):
         def __init__(self) -> None:
