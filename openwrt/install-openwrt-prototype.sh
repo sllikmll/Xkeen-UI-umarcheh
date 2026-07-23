@@ -897,8 +897,30 @@ case "${PATH_INFO:-}" in
 
   /api-raw)
     hdr_json
-    raw_path="$(printf '%s' "${QUERY_STRING:-}" | sed -n 's/^path=//p' | sed 's/%2F/\//g; s/%2f/\//g')"
-    printf '{"ok":false,"error":"OpenWrt compat endpoint not mapped","path":"%s"}' "$raw_path"
+    raw_path="$(query_param path)"
+    if [ -z "$raw_path" ]; then
+      raw_qs="${QUERY_STRING:-}"
+      if [ -z "$raw_qs" ] && [ -n "${REQUEST_URI:-}" ]; then
+        case "$REQUEST_URI" in
+          *\?*) raw_qs="${REQUEST_URI#*\?}" ;;
+        esac
+      fi
+      raw_path="$(printf '%s' "$raw_qs" | tr '&' '\n' | sed -n 's/^path=//p' | head -1 | sed 's/%2[Ff]/\//g; s/%3[Aa]/:/g; s/%40/@/g; s/%20/ /g')"
+    fi
+    if [ -z "$raw_path" ]; then
+      esc_qs="$(printf '%s' "${QUERY_STRING:-}" | json_escape)"
+      printf '{"ok":false,"error":"missing_path","query":"%s"}' "$esc_qs"
+      exit 0
+    fi
+    case "$raw_path" in
+      /*) ;;
+      *) raw_path="/$raw_path" ;;
+    esac
+    body=""
+    case "${REQUEST_METHOD:-GET}" in
+      POST|PUT|PATCH|DELETE) body="$(read_body)" ;;
+    esac
+    mihomo_req "${REQUEST_METHOD:-GET}" "$raw_path" "$body"
     ;;
   /rule-provider/*)
     provider="${PATH_INFO#/rule-provider/}"

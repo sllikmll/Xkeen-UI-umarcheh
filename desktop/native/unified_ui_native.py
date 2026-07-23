@@ -1128,11 +1128,18 @@ class NativeConfigManager:
 
         # Multi-line URI subscription pasted directly.
         uri_lines = [line.strip() for line in raw.splitlines() if "://" in line and not line.strip().startswith("#")]
-        if kind_l in {"auto", "uri", "link"} and uri_lines and len(uri_lines) > 1:
+        uri_kinds = {"auto", "uri", "link", "vless", "vmess", "trojan", "hysteria2", "hy2", "wireguard", "amneziawg", "awg", "naiveproxy", "mieru", "ss", "shadowsocks"}
+        if kind_l in uri_kinds and uri_lines and len(uri_lines) > 1:
             return [self._parse_single_uri(line, name if len(uri_lines) == 1 else "") for line in uri_lines]
 
-        if kind_l in {"auto", "uri", "link"} and "://" in raw.splitlines()[0]:
-            return [self._parse_single_uri(raw, name)]
+        first_line = raw.splitlines()[0]
+        if kind_l in uri_kinds and "://" in first_line:
+            scheme = first_line.split(":", 1)[0].strip().lower()
+            aliases = {"amneziawg": "wireguard", "awg": "wireguard", "hy2": "hysteria2"}
+            expected = aliases.get(kind_l, kind_l)
+            if kind_l in {"auto", "uri", "link"} or scheme == expected or (expected == "wireguard" and scheme == "wireguard"):
+                return [self._parse_single_uri(raw, name)]
+            raise ValueError(f"Ожидался URI протокола `{kind_l}`, а получен `{scheme}://`")
 
         if kind_l in {"auto", "wireguard", "awg", "amneziawg"} and "[Interface]" in raw and "[Peer]" in raw:
             res = parse_wireguard(raw, custom_name=name or None)
@@ -1611,7 +1618,7 @@ def human_bytes(value: Any) -> str:
     return f"{n:.1f} {units[i]}"
 
 
-def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None, gui_screenshot: str | None = None) -> int:
+def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None, gui_screenshot: str | None = None, gui_page: str | None = None) -> int:
     from PySide6.QtCore import QTimer, Qt
     from PySide6.QtWidgets import (
         QApplication,
@@ -2058,15 +2065,18 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None, gui_
                 QMessageBox.critical(self, APP_NAME, f"Не удалось применить config:\n{e}")
 
     class ImportTab(QWidget):
-        def __init__(self, on_changed: Callable[[], None] | None = None) -> None:
+        def __init__(self, on_changed: Callable[[], None] | None = None, *, preset_kind: str = "auto", title_text: str = "Импорт прокси / подписок") -> None:
             super().__init__()
             self.on_changed = on_changed
+            self.preset_kind = str(preset_kind or "auto").strip().lower()
             layout = QVBoxLayout(self)
-            title = QLabel("Импорт прокси / подписок")
+            title = QLabel(title_text)
             title.setObjectName("title")
             form = QHBoxLayout()
             self.kind = QComboBox()
-            self.kind.addItems(["auto", "uri", "wireguard", "openvpn", "tailscale", "yaml", "subscription"])
+            self.kind.addItems(["auto", "uri", "subscription", "vless", "vmess", "trojan", "hysteria2", "wireguard", "amneziawg", "openvpn", "tailscale", "naiveproxy", "mieru", "yaml"])
+            if self.preset_kind:
+                self.kind.setCurrentText(self.preset_kind)
             self.name = QLineEdit()
             self.name.setPlaceholderText("Имя прокси/provider (опционально)")
             self.group = QComboBox()
@@ -2189,6 +2199,238 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None, gui_
                     self.on_changed()
             except Exception as e:
                 QMessageBox.critical(self, APP_NAME, f"Импорт не выполнен:\n{e}")
+
+
+    class ProtocolTab(QWidget):
+        TYPE_ALIASES = {
+            "wireguard": {"wireguard", "wg"},
+            "amneziawg": {"wireguard", "amneziawg", "awg"},
+            "hysteria2": {"hysteria2", "hy2"},
+            "vless": {"vless"},
+            "trojan": {"trojan"},
+            "mieru": {"mieru"},
+            "naiveproxy": {"naiveproxy", "naive"},
+        }
+
+        def __init__(self, label: str, kind: str, on_changed: Callable[[], None] | None = None) -> None:
+            super().__init__()
+            self.label = label
+            self.kind = kind
+            self.on_changed = on_changed
+            layout = QVBoxLayout(self)
+            head = QHBoxLayout()
+            title = QLabel(f"{label}: активные конфиги и добавление")
+            title.setObjectName("title")
+            refresh = QPushButton("Обновить список")
+            refresh.clicked.connect(self.refresh)
+            edit = QPushButton("Редактировать YAML")
+            edit.clicked.connect(self.edit_selected)
+            ping = QPushButton("Ping выбранного")
+            ping.clicked.connect(self.ping_selected)
+            delete = QPushButton("Удалить")
+            delete.setObjectName("danger")
+            delete.clicked.connect(self.delete_selected)
+            config = QPushButton("Открыть config.yaml")
+            config.clicked.connect(lambda: self.open_config())
+            head.addWidget(title)
+            head.addStretch(1)
+            head.addWidget(config)
+            head.addWidget(edit)
+            head.addWidget(ping)
+            head.addWidget(delete)
+            head.addWidget(refresh)
+            layout.addLayout(head)
+
+            self.table = QTableWidget(0, 6)
+            self.table.setHorizontalHeaderLabels(["Proxy", "Type", "Server", "Port", "Группы", "Details"])
+            self.table.setAlternatingRowColors(True)
+            self.table.setSelectionBehavior(QTableWidget.SelectRows)
+            box = QGroupBox(f"Активные {label} в config.yaml")
+            box_layout = QVBoxLayout(box)
+            box_layout.addWidget(self.table)
+            layout.addWidget(box, 1)
+
+            self.import_tab = ImportTab(on_changed=self.changed, preset_kind=kind, title_text=f"Добавить {label}")
+            layout.addWidget(self.import_tab, 2)
+            self.status = QLabel("Готово")
+            self.status.setObjectName("muted")
+            layout.addWidget(self.status)
+            self.refresh()
+
+        def changed(self) -> None:
+            self.refresh()
+            if self.on_changed:
+                self.on_changed()
+
+        def _matches(self, item: dict[str, Any]) -> bool:
+            ptype = str(item.get("type") or "").strip().lower()
+            name = str(item.get("name") or "").strip().lower()
+            aliases = self.TYPE_ALIASES.get(self.kind, {self.kind})
+            if ptype in aliases:
+                return True
+            if self.kind == "amneziawg" and ("awg" in name or "amnezia" in name):
+                return True
+            return False
+
+        def refresh(self) -> None:
+            try:
+                rows = [x for x in cfg_mgr.static_proxy_items() if self._matches(x)]
+                self.rows = rows
+                self.table.setRowCount(len(rows))
+                for r, row in enumerate(rows):
+                    for c, key in enumerate(["name", "type", "server", "port", "used_by", "details"]):
+                        self.table.setItem(r, c, QTableWidgetItem(str(row.get(key) or "")))
+                self.table.resizeColumnsToContents()
+                self.status.setText(f"{self.label}: найдено активных конфигов: {len(rows)}")
+                self.import_tab.refresh_groups()
+            except Exception as e:
+                self.rows = []
+                self.status.setText(f"Ошибка чтения {self.label}: {e}")
+
+        def selected_name(self) -> str:
+            row = self.table.currentRow()
+            if row < 0:
+                raise ValueError(f"Выбери {self.label} proxy в таблице")
+            item = self.table.item(row, 0)
+            name = item.text().strip() if item else ""
+            if not name:
+                raise ValueError("В выбранной строке нет имени proxy")
+            return name
+
+        def open_config(self) -> None:
+            win = self.window()
+            if hasattr(win, "activate_page"):
+                win.activate_page("Конфиг")  # type: ignore[attr-defined]
+
+        def edit_selected(self) -> None:
+            try:
+                name = self.selected_name()
+                proxy = cfg_mgr.static_proxy_config(name)
+                dialog = QDialog(self)
+                dialog.setWindowTitle(f"Редактировать {self.label}: {name}")
+                layout = QVBoxLayout(dialog)
+                editor = QPlainTextEdit()
+                editor.setPlainText(yaml.safe_dump(proxy, allow_unicode=True, sort_keys=False, width=120))
+                layout.addWidget(QLabel("Proxy YAML:"))
+                layout.addWidget(editor, 1)
+                buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+                buttons.accepted.connect(dialog.accept)
+                buttons.rejected.connect(dialog.reject)
+                layout.addWidget(buttons)
+                dialog.resize(760, 560)
+                if dialog.exec() != QDialog.Accepted:
+                    return
+                parsed = yaml.safe_load(editor.toPlainText())
+                if not isinstance(parsed, dict):
+                    raise ValueError("Proxy YAML должен быть объектом")
+                backup, msg = cfg_mgr.update_static_proxy(name, parsed, restart=True)
+                self.status.setText(f"{msg}. Backup: {backup or 'нет'}")
+                QMessageBox.information(self, APP_NAME, f"{msg}\nBackup: {backup or 'нет'}")
+                self.changed()
+            except Exception as e:
+                QMessageBox.critical(self, APP_NAME, f"Не удалось отредактировать {self.label}:\n{e}")
+
+        def delete_selected(self) -> None:
+            try:
+                name = self.selected_name()
+                answer = QMessageBox.question(self, APP_NAME, f"Удалить {self.label} proxy `{name}` из config.yaml и всех selector-групп?")
+                if answer != QMessageBox.Yes:
+                    return
+                backup, msg = cfg_mgr.delete_static_proxy(name, restart=True)
+                self.status.setText(f"{msg}. Backup: {backup or 'нет'}")
+                QMessageBox.information(self, APP_NAME, f"{msg}\nBackup: {backup or 'нет'}")
+                self.changed()
+            except Exception as e:
+                QMessageBox.critical(self, APP_NAME, f"Не удалось удалить {self.label}:\n{e}")
+
+        def ping_selected(self) -> None:
+            try:
+                name = self.selected_name()
+                delay = runtime.delay(name)
+                if delay is None:
+                    self.status.setText(f"{name}: ping не вернул delay")
+                else:
+                    self.status.setText(f"{name}: {delay} ms")
+                self.refresh()
+            except Exception as e:
+                self.status.setText(f"Ping ошибка: {e}")
+
+    class DnsRoutesTab(QWidget):
+        def __init__(self, activate: Callable[[str], None] | None = None) -> None:
+            super().__init__()
+            self.activate = activate
+            layout = QVBoxLayout(self)
+            title = QLabel("Маршруты DNS")
+            title.setObjectName("title")
+            layout.addWidget(title)
+            info = QGroupBox("DNS routing")
+            info_layout = QVBoxLayout(info)
+            info_layout.addWidget(QLabel("Native DNS-маршруты работают через Mihomo rule-providers/rules. Быстрый путь: добавь домены в ручной список, затем выбери selector для `Ручной список` в config.yaml."))
+            row = QHBoxLayout()
+            for text, target in [("Открыть ручной список", "Ручной список"), ("Открыть config.yaml", "Конфиг"), ("Открыть маршрутизацию", "Маршрутизация")]:
+                b = QPushButton(text)
+                b.clicked.connect(lambda _=False, t=target: self.activate(t) if self.activate else None)
+                row.addWidget(b)
+            row.addStretch(1)
+            info_layout.addLayout(row)
+            layout.addWidget(info)
+            self.editor = QPlainTextEdit()
+            self.editor.setPlaceholderText("example.com\n*.youtube.com\nDOMAIN-SUFFIX,openai.com")
+            apply_btn = QPushButton("Добавить в ручной список + restart")
+            apply_btn.setObjectName("primary")
+            apply_btn.clicked.connect(self.apply_domains)
+            actions = QHBoxLayout()
+            actions.addStretch(1)
+            actions.addWidget(apply_btn)
+            self.status = QLabel("Вставь домены/правила по одному на строку. Дубликаты не добавляются.")
+            self.status.setObjectName("muted")
+            layout.addWidget(QLabel("Быстро добавить домены в manual-proxy:"))
+            layout.addWidget(self.editor, 1)
+            layout.addLayout(actions)
+            layout.addWidget(self.status)
+
+        def normalize_line(self, raw: str) -> str:
+            line = str(raw or "").strip().strip(",;")
+            if not line or line.startswith("#"):
+                return ""
+            if "," in line:
+                return line
+            if line.startswith("*."):
+                return "DOMAIN-SUFFIX," + line[2:]
+            if re.match(r"^[A-Za-z0-9_.-]+\.[A-Za-z]{2,}$", line):
+                return "DOMAIN-SUFFIX," + line.lstrip(".")
+            return line
+
+        def apply_domains(self) -> None:
+            try:
+                runtime.manual_rules_path.parent.mkdir(parents=True, exist_ok=True)
+                if runtime.manual_rules_path.exists():
+                    current = runtime.manual_rules_path.read_text(encoding="utf-8")
+                else:
+                    current = "payload: []\n"
+                lines = [self.normalize_line(x) for x in self.editor.toPlainText().splitlines()]
+                lines = [x for x in lines if x]
+                if not lines:
+                    raise ValueError("Нет доменов/правил для добавления")
+                existing = set(re.findall(r"^[\t ]*-[\t ]*(.+?)\s*$", current, flags=re.M))
+                if not current.strip() or current.strip() == "payload: []":
+                    new_text = "payload:\n"
+                elif current.rstrip().endswith("payload: []"):
+                    new_text = current.rstrip()[:-len("payload: []")] + "payload:\n"
+                else:
+                    new_text = current.rstrip() + "\n"
+                added = 0
+                for line in lines:
+                    if line in existing:
+                        continue
+                    new_text += f"  - {line}\n"
+                    added += 1
+                runtime.manual_rules_path.write_text(new_text, encoding="utf-8")
+                runtime.restart()
+                self.status.setText(f"Добавлено правил: {added}; Mihomo перезапущен")
+                self.editor.clear()
+            except Exception as e:
+                QMessageBox.critical(self, APP_NAME, f"Не удалось применить DNS routes:\n{e}")
 
     class InventoryTab(QWidget):
         def __init__(self) -> None:
@@ -2803,6 +3045,73 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None, gui_
             except Exception as e:
                 self.status.setText(f"Ошибка пингов: {e}")
 
+
+    class InterfaceTab(QWidget):
+        def __init__(self, activate: Callable[[str], None] | None = None) -> None:
+            super().__init__()
+            self.activate = activate
+            layout = QVBoxLayout(self)
+            title = QLabel("Интерфейс")
+            title.setObjectName("title")
+            layout.addWidget(title)
+            info = QGroupBox("Навигация и внешний вид")
+            info_layout = QVBoxLayout(info)
+            info_layout.addWidget(QLabel("Здесь собраны настройки оболочки Native. Верхняя кнопка `Интерфейс` теперь открывает эту страницу, а не притворяется мебелью."))
+            actions = QHBoxLayout()
+            for text, target in [
+                ("Открыть маршрутизацию", "Маршрутизация"),
+                ("Открыть config.yaml", "Конфиг"),
+                ("Открыть ручной список", "Ручной список"),
+            ]:
+                b = QPushButton(text)
+                b.clicked.connect(lambda _=False, t=target: self.activate(t) if self.activate else None)
+                actions.addWidget(b)
+            actions.addStretch(1)
+            info_layout.addLayout(actions)
+            layout.addWidget(info)
+            note = QPlainTextEdit()
+            note.setReadOnly(True)
+            note.setPlainText(
+                "Активные страницы Native:\n"
+                "- Маршрутизация — селекторы и ping по нодам\n"
+                "- Mihomo — подписки, группы, static proxies, rule-providers\n"
+                "- Mihomo Генератор — импорт proxy/subscription URL\n"
+                "- Конфиг — прямое редактирование runtime/mihomo/config.yaml\n"
+                "- Ручной список — runtime/mihomo/rules/manual-proxy.yaml\n"
+            )
+            layout.addWidget(note, 1)
+
+    class SettingsTab(QWidget):
+        def __init__(self, activate: Callable[[str], None] | None = None) -> None:
+            super().__init__()
+            self.activate = activate
+            layout = QVBoxLayout(self)
+            title = QLabel("Настройки")
+            title.setObjectName("title")
+            layout.addWidget(title)
+            paths = QGroupBox("Runtime")
+            form = QFormLayout(paths)
+            form.addRow("Runtime", QLabel(str(runtime.runtime)))
+            form.addRow("Mihomo config", QLabel(str(runtime.config_path)))
+            form.addRow("Manual rules", QLabel(str(runtime.manual_rules_path)))
+            form.addRow("Controller", QLabel(runtime.controller))
+            layout.addWidget(paths)
+            actions = QHBoxLayout()
+            for text, target in [
+                ("Редактировать config.yaml", "Конфиг"),
+                ("Редактировать manual-proxy.yaml", "Ручной список"),
+                ("Смотреть логи", "Файлы"),
+            ]:
+                b = QPushButton(text)
+                b.clicked.connect(lambda _=False, t=target: self.activate(t) if self.activate else None)
+                actions.addWidget(b)
+            actions.addStretch(1)
+            layout.addLayout(actions)
+            self.status = QLabel("Готово")
+            self.status.setObjectName("muted")
+            layout.addWidget(self.status)
+            layout.addStretch(1)
+
     class MainWindow(QMainWindow):
         def __init__(self) -> None:
             super().__init__()
@@ -2829,21 +3138,34 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None, gui_
             self.manual = ManualTab()
             self.config = ConfigTab()
             self.inventory = InventoryTab()
-            self.imports = ImportTab(on_changed=self.refresh_all)
+            self.imports = ImportTab(on_changed=self.refresh_all, preset_kind="auto", title_text="Mihomo Генератор")
             self.logs = LogsTab()
+            self.interface = InterfaceTab(activate=self.activate_page)
+            self.settings = SettingsTab(activate=self.activate_page)
+            self.protocol_pages: list[ProtocolTab] = []
+            self.dns_routes = DnsRoutesTab(activate=self.activate_page)
             self.add_page("Маршрутизация", self.routing)
-            self.add_page("Mihomo", self.config)
+            self.add_page("Mihomo", self.inventory)
             self.add_page("Соединения", self.connections)
-            self.add_page("WireGuard", self.imports)
-            self.add_page("Amnezia", ImportTab(on_changed=self.refresh_all))
-            self.add_page("Hysteria2", ImportTab(on_changed=self.refresh_all))
-            self.add_page("VLESS", ImportTab(on_changed=self.refresh_all))
-            self.add_page("Trojan", ImportTab(on_changed=self.refresh_all))
-            self.add_page("Meiru", ImportTab(on_changed=self.refresh_all))
-            self.add_page("NativeProxy", self.inventory)
+            for page_name, label, kind in [
+                ("WireGuard", "WireGuard", "wireguard"),
+                ("Amnezia", "AmneziaWG", "amneziawg"),
+                ("Hysteria2", "Hysteria2", "hysteria2"),
+                ("VLESS", "VLESS", "vless"),
+                ("Trojan", "Trojan", "trojan"),
+                ("Mieru", "Mieru", "mieru"),
+                ("NaiveProxy", "NaiveProxy", "naiveproxy"),
+            ]:
+                page = ProtocolTab(label, kind, on_changed=self.refresh_all)
+                self.protocol_pages.append(page)
+                self.add_page(page_name, page)
             self.add_page("Файлы", self.logs)
             self.add_page("Mihomo Генератор", self.imports)
-            self.add_page("Маршруты DNS", self.manual)
+            self.add_page("Конфиг", self.config)
+            self.add_page("Ручной список", self.manual)
+            self.add_page("Маршруты DNS", self.dns_routes)
+            self.add_page("Интерфейс", self.interface)
+            self.add_page("Настройки", self.settings)
             root.addWidget(self.stack, 1)
             self.setCentralWidget(shell)
             self.statusBar().showMessage(f"Runtime: {runtime.runtime}")
@@ -2872,14 +3194,24 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None, gui_
             right = QVBoxLayout()
             right.setSpacing(8)
             row = QHBoxLayout()
-            for text in ["🌐 Светлая тема", "◉ Интерфейс", "Настройки", "👤 pavel", "v2.6.4-native", "↻ Проверить обновления"]:
+            top_actions = [
+                ("🌐 Светлая тема", self.toggle_theme),
+                ("◉ Интерфейс", lambda: self.activate_page("Интерфейс")),
+                ("Настройки", lambda: self.activate_page("Настройки")),
+                ("👤 pavel", lambda: self.activate_page("Настройки")),
+                ("v2.6.4-native", lambda: self.activate_page("Интерфейс")),
+                ("↻ Проверить обновления", lambda: self.activate_page("Mihomo")),
+            ]
+            for text, handler in top_actions:
                 b = QPushButton(text)
                 b.setObjectName("TopPill")
+                b.clicked.connect(handler)
                 row.addWidget(b)
             right.addLayout(row)
             row2 = QHBoxLayout()
             update = QPushButton("🟠 Обновление v2.6.4-native")
             update.setObjectName("TopPill")
+            update.clicked.connect(lambda: self.activate_page("Mihomo"))
             row2.addWidget(update)
             row2.addStretch(1)
             exit_btn = QPushButton("Выйти")
@@ -2890,13 +3222,16 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None, gui_
             layout.addLayout(right, 2)
             return header
 
+        def toggle_theme(self) -> None:
+            QMessageBox.information(self, APP_NAME, "Светлая тема пока не включена в MVP. Кнопка теперь кликабельна; настройки интерфейса — во вкладке `Интерфейс`." )
+
         def build_tabs(self) -> QFrame:
             bar = QFrame()
             bar.setFixedHeight(32)
             layout = QHBoxLayout(bar)
             layout.setContentsMargins(0, 0, 0, 0)
             layout.setSpacing(5)
-            for name in ["Маршрутизация", "Mihomo", "Соединения", "WireGuard", "Amnezia", "Hysteria2", "VLESS", "Trojan", "Meiru", "NativeProxy", "Файлы", "Mihomo Генератор", "Маршруты DNS"]:
+            for name in ["Маршрутизация", "Mihomo", "Соединения", "WireGuard", "Amnezia", "Hysteria2", "VLESS", "Trojan", "Mieru", "NaiveProxy", "Файлы", "Mihomo Генератор", "Конфиг", "Ручной список", "Маршруты DNS"]:
                 b = QPushButton(name)
                 b.setObjectName("Tab")
                 b.clicked.connect(lambda _=False, n=name: self.activate_page(n))
@@ -2930,12 +3265,20 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None, gui_
             self.stack.addWidget(widget)
 
         def activate_page(self, name: str) -> None:
-            if name in self.page_names:
-                self.stack.setCurrentIndex(self.page_names.index(name))
+            if name not in self.page_names:
+                self.statusBar().showMessage(f"Страница не найдена: {name}")
+                return
+            self.stack.setCurrentIndex(self.page_names.index(name))
             for tab_name, btn in self.tab_buttons.items():
                 btn.setObjectName("ActiveTab" if tab_name == name else "Tab")
                 btn.style().unpolish(btn)
                 btn.style().polish(btn)
+            page = self.stack.currentWidget()
+            if hasattr(page, "refresh"):
+                try:
+                    page.refresh()  # type: ignore[attr-defined]
+                except Exception:
+                    pass
 
         def stop_runtime(self) -> None:
             runtime.stop()
@@ -2987,6 +3330,8 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None, gui_
             self.dashboard.refresh()
             self.connections.refresh()
             self.inventory.refresh()
+            for page in getattr(self, "protocol_pages", []):
+                page.refresh()
             self.manual.load()
             self.config.load()
 
@@ -3085,6 +3430,9 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None, gui_
                     if not gui_screenshot:
                         return
                     try:
+                        if gui_page:
+                            win.activate_page(gui_page)
+                            QApplication.processEvents()
                         screenshot_path = Path(gui_screenshot).expanduser()
                         screenshot_path.parent.mkdir(parents=True, exist_ok=True)
                         pixmap = win.grab()
@@ -3142,11 +3490,12 @@ def main() -> int:
     parser.add_argument("--smoke", action="store_true")
     parser.add_argument("--gui-smoke", type=float, default=None, metavar="SECONDS", help="Open the real GUI, keep it alive for N seconds, then exit")
     parser.add_argument("--gui-screenshot", default=None, metavar="PNG", help="Open the real GUI, save the main window as PNG, then exit")
+    parser.add_argument("--gui-page", default=None, help="With --gui-screenshot, activate this page before saving")
     args = parser.parse_args()
     runtime = MihomoRuntime.create()
     if args.smoke:
         return run_smoke(runtime)
-    return run_gui(runtime, gui_smoke_seconds=args.gui_smoke, gui_screenshot=args.gui_screenshot)
+    return run_gui(runtime, gui_smoke_seconds=args.gui_smoke, gui_screenshot=args.gui_screenshot, gui_page=args.gui_page)
 
 
 if __name__ == "__main__":

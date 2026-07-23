@@ -13,6 +13,7 @@
       ],
       "dynamic_imports": [],
       "template_script_tags": [
+        "{{ url_for('static', filename='jsonlint/jsonlint.min.js') }}",
         "{{ url_for('static', filename='js/ui/sections.js', v='20260101c') }}",
         "{{ url_for('static', filename='js/patches/monaco_runtime_fix.js', v='20260401f') }}",
         "{{ frontend_page_entry_url('panel') }}"
@@ -654,10 +655,41 @@
           "path": "static/js/pages/panel.view_runtime.js",
           "globals": [],
           "lazy_features": [
+            "uiSettingsPanel",
             "unifiedTexts",
             "commandsList",
             "coresStatus"
           ]
+        },
+        {
+          "path": "static/js/features/mihomo_selectors.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/features/mihomo_connections.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/features/mihomo_subscriptions.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/features/proxy_connections.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/features/auth_password.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/features/mihomo_generator.js",
+          "globals": [],
+          "lazy_features": []
         },
         {
           "path": "static/js/pages/panel.bootstrap_tail.bundle.js",

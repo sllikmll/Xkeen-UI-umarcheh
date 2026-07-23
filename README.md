@@ -41,6 +41,31 @@ Native app:
 - напрямую управляет Mihomo через `external-controller API`;
 - умеет импортировать HTTP-подписки/статические прокси, добавлять узлы в selector-группы и показывать per-node ping статусы: серый — не проверялся, зелёный — online, красный — offline.
 
+
+### Download portal / установочная витрина
+
+Для desktop/native релизов в репозитории есть самодостаточная страница:
+
+```text
+docs/native-download-portal.html
+```
+
+Локально открыть:
+
+```sh
+npm run native:manifest
+npm run native:portal:open
+# затем http://127.0.0.1:8765/native-download-portal.html
+```
+
+Перед полноценным релизом строгая проверка артефактов:
+
+```sh
+npm run native:manifest:strict
+```
+
+Она проверяет наличие Mac/Windows/Linux пакетов, пересчитывает `SHA256SUMS` и пишет `dist-artifacts/native-release-manifest.json` для портала и release notes.
+
 ### Legacy desktop / Docker
 
 Старые desktop-сборки Electron/Qt-webview и Docker доступны в релизах:

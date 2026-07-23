@@ -28,7 +28,10 @@
     "desktop:pack:mac": "electron-builder --mac dmg --arm64",
     "desktop:pack:linux": "electron-builder --linux deb rpm AppImage --x64",
     "desktop:pack:win": "electron-builder --win nsis --x64",
-    "desktop:pack:all": "npm run frontend:build && electron-builder --mac dmg --arm64 && electron-builder --linux deb rpm AppImage --x64 && electron-builder --win nsis --x64"
+    "desktop:pack:all": "npm run frontend:build && electron-builder --mac dmg --arm64 && electron-builder --linux deb rpm AppImage --x64 && electron-builder --win nsis --x64",
+    "native:manifest": "python3 scripts/build_native_release_manifest.py --allow-missing",
+    "native:manifest:strict": "python3 scripts/build_native_release_manifest.py --write-sha256sums",
+    "native:portal:open": "python3 -m http.server 8765 -d docs"
   },
   "devDependencies": {
     "@codemirror/autocomplete": "^6.20.1",

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Unified UI Native — скачать</title>
+  <meta name="description" content="Unified UI Native downloads for macOS, Windows and Linux." />
+  <style>
+    :root{color-scheme:dark;--bg:#050b1a;--panel:#081625;--panel2:#0b1b30;--line:#214565;--text:#eef6ff;--muted:#92a8c6;--blue:#2188ff;--cyan:#08b7d8;--green:#2ee59d;--red:#fb7185}
+    *{box-sizing:border-box} body{margin:0;background:radial-gradient(circle at 20% 0%,#0d2a47 0,#050b1a 38%,#020715 100%);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;min-height:100vh}
+    a{color:inherit}.wrap{max-width:1180px;margin:0 auto;padding:32px 18px 46px}.hero{display:grid;grid-template-columns:1.15fr .85fr;gap:22px;align-items:stretch}.card{background:linear-gradient(145deg,rgba(10,29,52,.94),rgba(5,13,30,.96));border:1px solid rgba(91,155,214,.32);box-shadow:0 24px 90px rgba(0,0,0,.38);border-radius:28px;padding:28px}.badge{display:inline-flex;gap:8px;align-items:center;border:1px solid rgba(46,229,157,.35);background:rgba(46,229,157,.08);color:#b8ffe2;border-radius:999px;padding:7px 12px;font-weight:800;font-size:13px}.dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 18px var(--green)}h1{font-size:clamp(38px,6vw,76px);line-height:.95;margin:18px 0 16px;letter-spacing:-.055em}p{color:var(--muted);line-height:1.6}.lead{font-size:18px;max-width:760px}.actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:24px}.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;text-decoration:none;border:1px solid rgba(103,232,249,.35);background:linear-gradient(135deg,var(--blue),var(--cyan));color:white;border-radius:16px;padding:13px 18px;font-weight:900;box-shadow:0 14px 34px rgba(14,165,233,.22)}.btn.secondary{background:#0c1b2f;color:#dff2ff;box-shadow:none}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:22px}.download{border:1px solid rgba(91,155,214,.28);border-radius:22px;background:rgba(8,22,37,.82);padding:18px;display:flex;flex-direction:column;min-height:230px}.download h2{margin:0 0 6px;font-size:22px}.download .platform{color:#8ec5ff;font-weight:900;text-transform:uppercase;font-size:12px;letter-spacing:.12em}.file{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#b8c7df;word-break:break-all;background:#06101e;border-radius:12px;padding:9px;margin:12px 0}.meta{font-size:12px;color:#8ba3bf}.download .btn{margin-top:auto;width:100%;padding:11px 12px;border-radius:14px}.checks{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:18px}.check{background:rgba(8,22,37,.68);border:1px solid rgba(91,155,214,.22);border-radius:18px;padding:14px}.check strong{display:block}.check span{color:var(--muted);font-size:13px}.code{white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#030915;border:1px solid rgba(91,155,214,.24);border-radius:18px;padding:15px;color:#d8e9ff;font-size:12px;overflow:auto}.footer{margin-top:26px;color:#7890ad;font-size:13px}@media(max-width:900px){.hero,.grid,.checks{grid-template-columns:1fr}h1{font-size:44px}.card{padding:20px}}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="hero">
+      <div class="card">
+        <span class="badge"><span class="dot"></span> Unified UI Native · no WebView · no Flask UI</span>
+        <h1>Премиум-контроль Mihomo без браузерной мишуры.</h1>
+        <p class="lead">Нативное Qt-приложение для macOS, Windows и Linux: selector-группы, подписки, VLESS/WireGuard/Amnezia/Hysteria2/Trojan/Mieru/NaiveProxy, live connections, ручные rule-provider списки и full-system TUN routing.</p>
+        <div class="actions">
+          <a class="btn" href="https://github.com/sllikmll/Unified-UI/releases/latest">Скачать latest release</a>
+          <a class="btn secondary" href="https://github.com/sllikmll/Unified-UI">Открыть GitHub</a>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Что внутри</h2>
+        <div class="checks">
+          <div class="check"><strong>Native UI</strong><span>Qt Widgets, без QWebEngine</span></div>
+          <div class="check"><strong>Fast runtime</strong><span>Mihomo controller напрямую</span></div>
+          <div class="check"><strong>Safe edits</strong><span>backup перед config save</span></div>
+          <div class="check"><strong>TUN ready</strong><span>опционально, с cleanup</span></div>
+        </div>
+        <p>Если manifest лежит рядом с этой страницей, карточки ниже покажут точные SHA256 и размеры. Если нет — ссылки ведут на GitHub latest.</p>
+      </div>
+    </section>
+
+    <section class="grid" id="downloads" aria-live="polite"></section>
+
+    <section class="card" style="margin-top:22px">
+      <h2>Проверка SHA256</h2>
+      <div class="code" id="sha">Загружаю manifest…</div>
+    </section>
+    <p class="footer">Unified UI Native ships as release assets, not git blobs. If a download is missing, the release is incomplete — не делаем вид, что всё нормально.</p>
+  </main>
+  <script>
+    const TAG = 'v2.6.4-native';
+    const BASE = 'https://github.com/sllikmll/Unified-UI/releases/download/' + TAG;
+    const fallback = [
+      ['macOS','macOS Apple Silicon','Unified-UI-Native-2.6.4-mac-arm64.zip'],
+      ['Windows','Windows setup wizard','Unified-UI-Native-Setup-2.6.4-x64.exe'],
+      ['Windows','Windows portable ZIP','Unified-UI-Native-2.6.4-windows-x64-portable.zip'],
+      ['Windows','Windows standalone EXE','Unified-UI-Native-2.6.4-x64.exe'],
+      ['Linux','Linux portable tar.gz','Unified-UI-Native-2.6.4-linux-x64-portable.tar.gz'],
+      ['Linux','Debian/Ubuntu package','Unified-UI-Native-2.6.4-linux-x64.deb'],
+      ['Linux','RPM package','Unified-UI-Native-2.6.4-linux-x64.rpm'],
+    ].map(([platform,label,file])=>({platform,label,file,download_url:BASE+'/'+file,size:0,sha256:''}));
+    function size(n){ if(!n) return '—'; const u=['B','KB','MB','GB']; let i=0,v=n; while(v>1024&&i<u.length-1){v/=1024;i++} return v.toFixed(i?1:0)+' '+u[i]; }
+    function render(items){
+      document.getElementById('downloads').innerHTML = items.map(x=>`<article class="download"><div class="platform">${x.platform}</div><h2>${x.label}</h2><div class="file">${x.file}</div><div class="meta">Размер: ${size(x.size)}<br>SHA256: ${x.sha256 ? x.sha256.slice(0,18)+'…' : 'см. release'}</div><a class="btn" href="${x.download_url || BASE+'/'+x.file}">Скачать</a></article>`).join('');
+      const sums = items.filter(x=>x.sha256).map(x=>`${x.sha256}  ${x.file}`).join('\n');
+      document.getElementById('sha').textContent = sums || 'SHA256 появятся, если рядом доступен native-release-manifest.json';
+    }
+    fetch('./native-release-manifest.json', {cache:'no-store'}).then(r=>r.ok?r.json():Promise.reject()).then(m=>render(m.artifacts||fallback)).catch(()=>render(fallback));
+  </script>
+</body>
+</html>
