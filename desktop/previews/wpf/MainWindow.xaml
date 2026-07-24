@@ -1,0 +1,43 @@
+<Window x:Class="UnifiedUiWpfPreview.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Unified UI — WPF Preview" Width="1240" Height="760" MinWidth="980" MinHeight="620"
+        Background="#050B1A" Foreground="#E7ECF8" WindowStartupLocation="CenterScreen">
+  <Window.Resources>
+    <Style TargetType="Button">
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="Background" Value="#101B33"/>
+      <Setter Property="BorderBrush" Value="#24385A"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Padding" Value="10,7"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Style.Triggers>
+        <Trigger Property="IsMouseOver" Value="True">
+          <Setter Property="Background" Value="#1D3B63"/>
+          <Setter Property="BorderBrush" Value="#67E8F9"/>
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+  </Window.Resources>
+  <Grid Margin="14">
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+    <UniformGrid Rows="1" Columns="7" Grid.Row="0">
+      <Button Margin="3" Background="#2563EB" BorderBrush="#67E8F9">Маршрутизация</Button>
+      <Button Margin="3">Mihomo</Button><Button Margin="3">Соединения</Button><Button Margin="3">WireGuard</Button><Button Margin="3">VLESS</Button><Button Margin="3">Маршруты DNS</Button><Button Margin="3">Логи</Button>
+    </UniformGrid>
+    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,10,0,10">
+      <Button Margin="0,0,8,0" Background="#5A1425" BorderBrush="#FB7185">Stop unified</Button>
+      <Button Margin="0,0,16,0" Background="#7A4614" BorderBrush="#FBBF24">Restart unified</Button>
+      <TextBlock VerticalAlignment="Center" Foreground="#8DA8C8">WPF Windows-first shell · premium candidate</TextBlock>
+    </StackPanel>
+    <Grid Grid.Row="2"><Grid.ColumnDefinitions><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="1.85*"/></Grid.ColumnDefinitions>
+      <Border Background="#08142A" BorderBrush="#1F4263" BorderThickness="1" CornerRadius="20" Padding="20" Margin="0,0,10,0">
+        <StackPanel><TextBlock Text="Selector overview" FontSize="28" FontWeight="Bold"/><TextBlock Text="AI, Telegram, YouTube, GitHub" Foreground="#67E8F9" FontSize="17" Margin="0,10"/><TextBlock Text="WPF даёт аккуратный Windows-native стек: нормальные окна, DPI, установщик и быстрый UX без webview." TextWrapping="Wrap" FontSize="15"/></StackPanel>
+      </Border>
+      <Border Grid.Column="1" Background="#08142A" BorderBrush="#1F4263" BorderThickness="1" CornerRadius="20" Padding="20">
+        <StackPanel><TextBlock Text="Маршруты DNS" FontSize="28" FontWeight="Bold"/><TextBlock Text="Ручной ввод доменов" Foreground="#67E8F9" FontSize="17" Margin="0,10"/><TextBox Height="180" AcceptsReturn="True" Text="example.com&#x0a;youtube.com&#x0a;api.service.io" Background="#081625" Foreground="#EAF2FF" BorderBrush="#21405F"/><Button Margin="0,12,0,0" HorizontalAlignment="Stretch">Собрать адреса</Button></StackPanel>
+      </Border>
+    </Grid>
+  </Grid>
+</Window>
