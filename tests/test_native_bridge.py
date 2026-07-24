@@ -7,7 +7,7 @@ import pytest
 import yaml
 
 from desktop.native.unified_ui_native import MihomoRuntime, NativeConfigManager
-from desktop.previews.shared.native_bridge import BridgeState, make_server
+from desktop.previews.shared.native_bridge import BridgeState, _parse_imports_with_fallback, make_server
 
 
 def request_json(base: str, path: str, payload: dict | None = None):
@@ -130,3 +130,20 @@ def test_bridge_dns_and_logs_endpoints(bridge):
 
     logs = request_json(base, "/api/logs")
     assert logs["text"] == "hello log"
+
+
+def test_bridge_import_fallback_supports_yaml_and_vless_when_web_services_absent(monkeypatch, tmp_path):
+    runtime = MihomoRuntime(runtime=tmp_path / "runtime", controller="http://127.0.0.1:19190")
+    runtime.config_path.parent.mkdir(parents=True)
+    runtime.config_path.write_text("proxies: []\nproxy-groups: []\n", encoding="utf-8")
+    manager = NativeConfigManager(runtime)
+    monkeypatch.setattr(manager, "parse_import", lambda text: (_ for _ in ()).throw(RuntimeError("web-парсеры недоступны: No module named 'services'")))
+
+    yaml_imports = _parse_imports_with_fallback(manager, "- name: yaml-node\n  type: http\n  server: 1.2.3.4\n  port: 8080\n")
+    assert yaml_imports[0].name == "yaml-node"
+    assert "type: http" in yaml_imports[0].yaml
+
+    vless_imports = _parse_imports_with_fallback(manager, "vless://00000000-0000-0000-0000-000000000000@example.com:443?security=reality&type=tcp&sni=yandex.ru&pbk=PUB&sid=ac&fp=firefox#vless-node")
+    assert vless_imports[0].name == "vless-node"
+    assert "type: vless" in vless_imports[0].yaml
+    assert "reality-opts" in vless_imports[0].yaml

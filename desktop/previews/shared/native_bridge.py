@@ -18,6 +18,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -124,6 +126,77 @@ def _resolve_domains(raw: str) -> list[dict[str, Any]]:
     return results
 
 
+def _fallback_parse_import(text: str, *, name: str = "") -> list[ImportResult]:
+    """Small production bridge fallback when optional web parser modules are absent.
+
+    The full Qt app uses richer web-service parsers when present. The packaged
+    bridge must still support common user inputs instead of crashing: proxy YAML,
+    full Mihomo YAML, and the most common URI schemes.
+    """
+    raw = str(text or "").strip()
+    if not raw:
+        raise ValueError("Пустой импорт")
+
+    def from_proxy_dict(item: dict[str, Any], source: str) -> ImportResult:
+        proxy_name = str(item.get("name") or name or item.get("server") or "Imported Proxy")
+        item = dict(item)
+        item["name"] = proxy_name
+        return ImportResult(name=proxy_name, yaml=yaml.safe_dump([item], allow_unicode=True, sort_keys=False), kind=str(item.get("type") or "yaml"), source=source)
+
+    try:
+        data = yaml.safe_load(raw)
+        if isinstance(data, dict) and isinstance(data.get("proxies"), list):
+            imports = [from_proxy_dict(item, "mihomo-yaml") for item in data["proxies"] if isinstance(item, dict) and item.get("name")]
+            if imports:
+                return imports
+        if isinstance(data, list):
+            imports = [from_proxy_dict(item, "proxy-yaml") for item in data if isinstance(item, dict) and item.get("name")]
+            if imports:
+                return imports
+        if isinstance(data, dict) and data.get("name"):
+            return [from_proxy_dict(data, "proxy-yaml")]
+    except Exception:
+        pass
+
+    line = next((x.strip() for x in raw.splitlines() if "://" in x and not x.strip().startswith("#")), raw)
+    parsed = urllib.parse.urlparse(line)
+    scheme = parsed.scheme.lower()
+    qs = {k: urllib.parse.unquote(v[-1]) for k, v in urllib.parse.parse_qs(parsed.query, keep_blank_values=True).items()}
+    proxy_name = name or urllib.parse.unquote(parsed.fragment or "") or parsed.hostname or "Imported Proxy"
+    host = parsed.hostname or ""
+    port = int(parsed.port or (443 if scheme in {"vless", "trojan", "hysteria2", "hy2"} else 0))
+    if scheme == "vless":
+        proxy = {"name": proxy_name, "type": "vless", "server": host, "port": port, "uuid": urllib.parse.unquote(parsed.username or ""), "network": qs.get("type", "tcp"), "udp": True}
+        if qs.get("security") in {"tls", "reality"}:
+            proxy["tls"] = True
+            if qs.get("sni"):
+                proxy["servername"] = qs["sni"]
+        if qs.get("security") == "reality":
+            proxy["reality-opts"] = {"public-key": qs.get("pbk", ""), "short-id": qs.get("sid", "")}
+            if qs.get("fp"):
+                proxy["client-fingerprint"] = qs["fp"]
+        return [from_proxy_dict(proxy, "vless-uri-fallback")]
+    if scheme == "trojan":
+        proxy = {"name": proxy_name, "type": "trojan", "server": host, "port": port, "password": urllib.parse.unquote(parsed.username or ""), "udp": True, "sni": qs.get("sni", host)}
+        return [from_proxy_dict(proxy, "trojan-uri-fallback")]
+    if scheme in {"hysteria2", "hy2"}:
+        proxy = {"name": proxy_name, "type": "hysteria2", "server": host, "port": port, "password": urllib.parse.unquote(parsed.username or qs.get("password", "")), "sni": qs.get("sni", host)}
+        return [from_proxy_dict(proxy, "hysteria2-uri-fallback")]
+    if scheme == "ss":
+        proxy = {"name": proxy_name, "type": "ss", "server": host, "port": port, "cipher": qs.get("method", "auto"), "password": urllib.parse.unquote(parsed.username or "")}
+        return [from_proxy_dict(proxy, "ss-uri-fallback")]
+    raise ValueError("Не понял формат. Поддерживаются URI VLESS/Trojan/Hysteria2/SS и proxy/full Mihomo YAML.")
+
+
+def _parse_imports_with_fallback(manager: NativeConfigManager, text: str) -> list[ImportResult]:
+    try:
+        return manager.parse_import(text)
+    except RuntimeError as exc:
+        if "services" not in str(exc) and "web-парсеры" not in str(exc):
+            raise
+        return _fallback_parse_import(text)
+
+
 class BridgeHandler(BaseHTTPRequestHandler):
     state: BridgeState
 
@@ -226,7 +299,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 self._ok({"ok": True, "provider": name, "added_static": added, "backup": str(backup) if backup else None, "message": msg})
             elif path == "/api/import/static":
                 raw = str(body.get("text") or "")
-                imports = s.manager.parse_import(raw)
+                imports = _parse_imports_with_fallback(s.manager, raw)
                 added, backup, msg = s.manager.apply_imports(imports, groups=body.get("groups") if isinstance(body.get("groups"), list) else None, restart=bool(body.get("restart", False)))
                 self._ok({"ok": True, "added": added, "backup": str(backup) if backup else None, "message": msg})
             elif path == "/api/dns/resolve":
