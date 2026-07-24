@@ -9,6 +9,6 @@ public partial class MainWindow : Window
     public static int Main(string[] args)
     {
         if (args.Contains("--smoke")) { Console.WriteLine("{\"ok\":true,\"app\":\"Unified UI WPF Preview\",\"version\":\"0.1.0\",\"ui\":\"WPF\"}"); return 0; }
-        var app = new App(); app.InitializeComponent(); app.Run(new MainWindow()); return 0;
+        var app = new Application(); app.Run(new MainWindow()); return 0;
     }
 }
