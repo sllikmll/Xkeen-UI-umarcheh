@@ -54,3 +54,16 @@ def test_windows_nsis_generator_skip_build_writes_bom_script(tmp_path: Path, mon
     text = generated.read_text(encoding="utf-8-sig")
     assert "Unicode true" in text
     assert "Мастер установит Unified UI Native" in text
+
+
+def test_nsis_dir_for_standard_and_bin_layouts(tmp_path: Path):
+    standard = tmp_path / "NSIS" / "makensis.exe"
+    (standard.parent / "Stubs").mkdir(parents=True)
+    standard.write_bytes(b"")
+    assert nsis.nsis_dir_for(standard) == str(standard.parent.resolve())
+
+    bin_exe = tmp_path / "NSIS2" / "Bin" / "makensis.exe"
+    (bin_exe.parent.parent / "Stubs").mkdir(parents=True)
+    bin_exe.parent.mkdir(parents=True, exist_ok=True)
+    bin_exe.write_bytes(b"")
+    assert nsis.nsis_dir_for(bin_exe) == str(bin_exe.parent.parent.resolve())

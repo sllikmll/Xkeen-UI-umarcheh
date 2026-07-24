@@ -114,6 +114,17 @@ def find_makensis(explicit: Path | None) -> str:
     raise FileNotFoundError("makensis.exe not found. Install NSIS or pass --makensis")
 
 
+def nsis_dir_for(makensis: str | Path) -> str:
+    exe = Path(makensis).resolve()
+    # Standard install: C:\Program Files (x86)\NSIS\makensis.exe.
+    if (exe.parent / "Stubs").is_dir():
+        return str(exe.parent)
+    # Alternate PATH entry: C:\Program Files (x86)\NSIS\Bin\makensis.exe.
+    if exe.parent.name.lower() == "bin" and (exe.parent.parent / "Stubs").is_dir():
+        return str(exe.parent.parent)
+    return str(exe.parent)
+
+
 def main() -> int:
     args = parse_args()
     if args.app_dir is not None:
@@ -151,7 +162,7 @@ def main() -> int:
         return 0
     makensis = find_makensis(args.makensis)
     env = os.environ.copy()
-    env.setdefault("NSISDIR", str(Path(makensis).resolve().parent.parent))
+    env.setdefault("NSISDIR", nsis_dir_for(makensis))
     result = subprocess.run([makensis, str(nsi)], text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
     print(result.stdout)
     if result.returncode != 0:
