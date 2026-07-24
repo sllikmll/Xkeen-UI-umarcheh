@@ -3324,7 +3324,7 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None, gui_
             settings_btn.clicked.connect(lambda: self.activate_page("Настройки"))
             row.addWidget(interface_btn)
             row.addWidget(settings_btn)
-            version = QLabel("v2.6.4-native")
+            version = QLabel("v2.6.5-native")
             version.setObjectName("Muted")
             row.addWidget(version)
             row.addStretch(1)

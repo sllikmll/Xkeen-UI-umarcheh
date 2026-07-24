@@ -20,7 +20,7 @@ def test_native_startup_splash_has_no_debug_copy_and_uses_textless_progress_bar(
 def test_native_header_has_no_fake_update_or_exit_buttons():
     text = source_text()
 
-    assert "Обновление v2.6.4-native" not in text
+    assert "Обновление v2.6.5-native" not in text
     assert "Проверить обновления" not in text
     assert "Светлая тема" not in text
     assert "Выйти" not in text

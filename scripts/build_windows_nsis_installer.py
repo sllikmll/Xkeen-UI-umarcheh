@@ -21,7 +21,7 @@ PUBLISHER = "sllikmll"
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--version", default="2.6.4", help="Release version used in filenames and registry metadata")
+    parser.add_argument("--version", default="2.6.5", help="Release version used in filenames and registry metadata")
     parser.add_argument("--app-exe", default=None, type=Path, help="Path to the main Unified UI Native .exe. Defaults to <app-dir>/Unified UI Native.exe")
     parser.add_argument("--app-dir", default=None, type=Path, help="Path to the PyInstaller onedir bundle directory to install")
     parser.add_argument("--out", default=None, type=Path, help="Output setup .exe path")

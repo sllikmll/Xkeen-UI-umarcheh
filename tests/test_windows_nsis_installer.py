@@ -4,11 +4,11 @@ from scripts import build_windows_nsis_installer as nsis
 
 
 def test_windows_nsis_script_is_unicode_and_has_no_mojibake(tmp_path: Path):
-    app_exe = tmp_path / "Unified-UI-Native-2.6.4-x64.exe"
+    app_exe = tmp_path / "Unified-UI-Native-2.6.5-x64.exe"
     app_exe.write_bytes(b"MZ\0fake")
-    out_exe = tmp_path / "Unified-UI-Native-Setup-2.6.4-x64.exe"
+    out_exe = tmp_path / "Unified-UI-Native-Setup-2.6.5-x64.exe"
 
-    script = nsis.installer_script(version="2.6.4", app_dir=tmp_path, app_exe=app_exe, out_exe=out_exe)
+    script = nsis.installer_script(version="2.6.5", app_dir=tmp_path, app_exe=app_exe, out_exe=out_exe)
 
     assert "Unicode true" in script
     assert "Установка Unified UI Native" in script
@@ -34,7 +34,7 @@ def test_windows_nsis_generator_skip_build_writes_bom_script(tmp_path: Path, mon
         [
             "build_windows_nsis_installer.py",
             "--version",
-            "2.6.4",
+            "2.6.5",
             "--app-dir",
             str(tmp_path),
             "--app-exe",
