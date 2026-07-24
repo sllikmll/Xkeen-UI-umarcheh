@@ -27,18 +27,19 @@ class ExpectedArtifact:
     label: str
     platform: str
     pattern: str
+    file_template: str
     required: bool = True
 
 
 EXPECTED: tuple[ExpectedArtifact, ...] = (
-    ExpectedArtifact("mac_arm64_zip", "macOS Apple Silicon portable ZIP", "macOS", r"Unified-UI-Native-.+-mac-arm64\.zip$"),
-    ExpectedArtifact("win_setup_x64", "Windows x64 setup wizard", "Windows", r"Unified-UI-Native-Setup-.+-x64\.exe$"),
-    ExpectedArtifact("win_standalone_x64", "Windows x64 standalone EXE", "Windows", r"Unified-UI-Native-(?!Setup-).+-x64\.exe$"),
-    ExpectedArtifact("win_portable_x64", "Windows x64 portable ZIP", "Windows", r"Unified-UI-Native-.+-windows-x64-portable\.zip$"),
-    ExpectedArtifact("linux_portable_x64", "Linux x64 portable tar.gz", "Linux", r"Unified-UI-Native-.+-linux-x64-portable\.tar\.gz$"),
-    ExpectedArtifact("linux_deb_x64", "Linux Debian/Ubuntu package", "Linux", r"Unified-UI-Native-.+-linux-x64\.deb$"),
-    ExpectedArtifact("linux_rpm_x64", "Linux RPM package", "Linux", r"Unified-UI-Native-.+-linux-x64\.rpm$"),
-    ExpectedArtifact("sha256sums", "SHA256SUMS", "all", r"SHA256SUMS$", required=False),
+    ExpectedArtifact("mac_arm64_zip", "macOS Apple Silicon portable ZIP", "macOS", r"^Unified-UI-Native-{version}-mac-arm64\.zip$", "Unified-UI-Native-{version}-mac-arm64.zip"),
+    ExpectedArtifact("win_setup_x64", "Windows x64 setup wizard", "Windows", r"^Unified-UI-Native-Setup-{version}-x64\.exe$", "Unified-UI-Native-Setup-{version}-x64.exe"),
+    ExpectedArtifact("win_standalone_x64", "Windows x64 standalone EXE", "Windows", r"^Unified-UI-Native-{version}-x64\.exe$", "Unified-UI-Native-{version}-x64.exe"),
+    ExpectedArtifact("win_portable_x64", "Windows x64 portable ZIP", "Windows", r"^Unified-UI-Native-{version}-windows-x64-portable\.zip$", "Unified-UI-Native-{version}-windows-x64-portable.zip"),
+    ExpectedArtifact("linux_portable_x64", "Linux x64 portable tar.gz", "Linux", r"^Unified-UI-Native-{version}-linux-x64-portable\.tar\.gz$", "Unified-UI-Native-{version}-linux-x64-portable.tar.gz"),
+    ExpectedArtifact("linux_deb_x64", "Linux Debian/Ubuntu package", "Linux", r"^Unified-UI-Native-{version}-linux-x64\.deb$", "Unified-UI-Native-{version}-linux-x64.deb"),
+    ExpectedArtifact("linux_rpm_x64", "Linux RPM package", "Linux", r"^Unified-UI-Native-{version}-linux-x64\.rpm$", "Unified-UI-Native-{version}-linux-x64.rpm"),
+    ExpectedArtifact("sha256sums", "SHA256SUMS", "all", r"^SHA256SUMS$", "SHA256SUMS", required=False),
 )
 
 
@@ -50,8 +51,8 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
-def find_artifact(dist: Path, spec: ExpectedArtifact) -> Path | None:
-    regex = re.compile(spec.pattern)
+def find_artifact(dist: Path, spec: ExpectedArtifact, version: str) -> Path | None:
+    regex = re.compile(spec.pattern.format(version=re.escape(version)))
     matches = sorted((p for p in dist.iterdir() if p.is_file() and regex.search(p.name)), key=lambda p: p.name)
     if not matches:
         return None
@@ -60,14 +61,39 @@ def find_artifact(dist: Path, spec: ExpectedArtifact) -> Path | None:
     return max(matches, key=lambda p: (p.stat().st_mtime, p.name))
 
 
-def build_manifest(dist: Path, version: str, release_tag: str, release_base_url: str) -> tuple[dict, list[str]]:
+def load_external_artifacts(path: Path | None) -> dict[str, dict]:
+    if path is None:
+        return {}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(data, list):
+        return {str(item["file"]): dict(item) for item in data if isinstance(item, dict) and item.get("file")}
+    if isinstance(data, dict):
+        return {str(k): dict(v) for k, v in data.items() if isinstance(v, dict)}
+    raise ValueError("external artifacts metadata must be an object keyed by filename or a list with file fields")
+
+
+def build_manifest(dist: Path, version: str, release_tag: str, release_base_url: str, external_artifacts: dict[str, dict] | None = None) -> tuple[dict, list[str]]:
     errors: list[str] = []
     artifacts: list[dict] = []
+    external_artifacts = external_artifacts or {}
     for spec in EXPECTED:
-        path = find_artifact(dist, spec)
+        path = find_artifact(dist, spec, version)
         if path is None:
-            if spec.required:
-                errors.append(f"missing required artifact: {spec.key} ({spec.pattern})")
+            expected_file = spec.file_template.format(version=version)
+            external = external_artifacts.get(expected_file)
+            if external:
+                rel_url = f"{release_base_url.rstrip('/')}/{expected_file}" if release_base_url else ""
+                artifacts.append({
+                    "key": spec.key,
+                    "label": spec.label,
+                    "platform": spec.platform,
+                    "file": expected_file,
+                    "size": int(external["size"]),
+                    "sha256": str(external["sha256"]).lower(),
+                    "download_url": rel_url,
+                })
+            elif spec.required:
+                errors.append(f"missing required artifact: {spec.key} ({expected_file})")
             continue
         rel_url = f"{release_base_url.rstrip('/')}/{path.name}" if release_base_url else ""
         artifacts.append({
@@ -106,6 +132,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", type=Path, default=DEFAULT_OUT, help="Manifest JSON path")
     parser.add_argument("--write-sha256sums", action="store_true", help="Regenerate dist/SHA256SUMS from found artifacts")
     parser.add_argument("--allow-missing", action="store_true", help="Write partial manifest instead of failing when required files are absent")
+    parser.add_argument("--external-artifacts", type=Path, default=None, help="JSON metadata for artifacts uploaded from another host: {file: {size, sha256}}")
     return parser.parse_args()
 
 
@@ -115,11 +142,12 @@ def main() -> int:
     if not dist.is_dir():
         print(f"artifact directory not found: {dist}", file=sys.stderr)
         return 2
-    manifest, errors = build_manifest(dist, args.version, args.tag, args.release_base_url)
+    external_artifacts = load_external_artifacts(args.external_artifacts)
+    manifest, errors = build_manifest(dist, args.version, args.tag, args.release_base_url, external_artifacts)
     if args.write_sha256sums:
         sums = write_sha256sums(dist, manifest["artifacts"])
         # Rebuild after adding SHA256SUMS so it appears in manifest too.
-        manifest, errors = build_manifest(dist, args.version, args.tag, args.release_base_url)
+        manifest, errors = build_manifest(dist, args.version, args.tag, args.release_base_url, external_artifacts)
         manifest["sha256sums_file"] = sums.name
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
