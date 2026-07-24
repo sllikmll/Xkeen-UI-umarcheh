@@ -19,7 +19,7 @@ def main() -> int:
     expected=[
       'Unified-UI-Avalonia-Preview-0.1.0-win-x64.zip',
       'Unified-UI-WPF-Preview-0.1.0-win-x64.zip',
-      'Unified-UI-Cpp-Native-Preview-0.1.0-mac-arm64.zip',
+      'Unified-UI-Cpp-Win32-Preview-0.1.0-win-x64.zip',
     ]
     artifacts=[]; errors=[]
     for name in expected:
