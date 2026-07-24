@@ -17,16 +17,21 @@ def test_native_startup_splash_has_no_debug_copy_and_uses_textless_progress_bar(
     assert "setTextVisible(False)" in text
 
 
-def test_native_header_has_no_fake_update_or_exit_buttons():
+def test_native_header_area_is_removed_but_window_title_keeps_release_label():
     text = source_text()
 
-    assert "Обновление v2.6.6-native" not in text
+    assert "Обновление v2.6.7-native" not in text
     assert "Проверить обновления" not in text
     assert "Светлая тема" not in text
     assert "Выйти" not in text
-    assert "lambda: self.activate_page(\"Интерфейс\")" in text
-    assert "lambda: self.activate_page(\"Настройки\")" in text
+    assert "Desktop build · Mihomo runtime" not in text
+    assert "build_header" not in text
+    assert "HeaderBar" not in text
+    assert "webLogo" not in text
+    assert "QPushButton(\"◉ Интерфейс\")" not in text
+    assert "QPushButton(\"Настройки\")" not in text
     assert "version = QLabel(\"v2.6." not in text
+    assert "APP_VERSION = \"2.6.7\"" in text
     assert "APP_RELEASE_LABEL" in text
     assert "self.setWindowTitle(f\"{APP_NAME} {APP_RELEASE_LABEL}\")" in text
 
@@ -92,3 +97,31 @@ def test_native_dns_routes_has_router_style_mode_switch_and_generator():
     assert "generate_service" in text
     assert "dns_routes_path" in text
     assert "QRadioButton" in text
+
+
+def test_native_tabs_expand_and_buttons_have_strong_hover_affordance():
+    text = source_text()
+
+    assert "QSizePolicy.Expanding" in text
+    assert "b.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)" in text
+    assert "layout.addWidget(b, 1)" in text
+    assert "layout.addStretch(1)" not in text[text.index("def build_tabs"):text.index("def build_action_bar")]
+    assert "QPushButton#Tab:hover" in text
+    assert "QPushButton#ActiveTab:hover" in text
+    assert "QPushButton#SmallPill:hover" in text
+    assert "QPushButton#WarningButton:hover" in text
+    assert "QPushButton#DangerButton:hover" in text
+    assert "box-shadow" not in text  # Qt stylesheets do not support CSS shadows reliably.
+
+
+def test_dns_route_generator_has_manual_domain_input_mode():
+    text = source_text()
+
+    assert '"manual": {' in text
+    assert '"label": "Ручной ввод доменов"' in text
+    assert "self.manual_domains_edit" in text
+    assert "Домены для генератора" in text
+    assert "toggle_manual_generator" in text
+    assert "manual_generator_domains" in text
+    assert "key == \"manual\"" in text
+    assert "Введите домены для ручного генератора" in text

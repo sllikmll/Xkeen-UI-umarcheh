@@ -126,9 +126,9 @@ def write_sha256sums(dist: Path, artifacts: list[dict]) -> Path:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dist", type=Path, default=DEFAULT_DIST, help="Directory containing release artifacts")
-    parser.add_argument("--version", default="2.6.6", help="Native product version")
-    parser.add_argument("--tag", default="v2.6.6-native", help="GitHub release tag")
-    parser.add_argument("--release-base-url", default="https://github.com/sllikmll/Unified-UI/releases/download/v2.6.6-native", help="Base URL for download links")
+    parser.add_argument("--version", default="2.6.7", help="Native product version")
+    parser.add_argument("--tag", default="v2.6.7-native", help="GitHub release tag")
+    parser.add_argument("--release-base-url", default="https://github.com/sllikmll/Unified-UI/releases/download/v2.6.7-native", help="Base URL for download links")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUT, help="Manifest JSON path")
     parser.add_argument("--write-sha256sums", action="store_true", help="Regenerate dist/SHA256SUMS from found artifacts")
     parser.add_argument("--allow-missing", action="store_true", help="Write partial manifest instead of failing when required files are absent")

@@ -35,7 +35,7 @@ import yaml
 
 MIHOMO_VERSION = "1.19.29"
 APP_NAME = "Unified UI Native"
-APP_VERSION = "2.6.6"
+APP_VERSION = "2.6.7"
 APP_RELEASE_LABEL = f"v{APP_VERSION}-native"
 DEFAULT_CONTROLLER_PORT = int(os.environ.get("MIHOMO_CONTROLLER_PORT", "19190"))
 DEFAULT_MIXED_PORT = int(os.environ.get("MIHOMO_MIXED_PORT", "17990"))
@@ -106,29 +106,34 @@ QPushButton {
     font-weight: 750;
 }
 QPushButton:hover {
-    background: #132a47;
-    border-color: #3b82b6;
+    background: #1b3a60;
+    border-color: #67e8f9;
+    color: #ffffff;
 }
 QPushButton:pressed {
     background: #081524;
-    border-color: #67e8f9;
+    border-color: #a5f3fc;
+    color: #ffffff;
 }
 QPushButton#primary, QPushButton#ActiveTab {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #2563eb, stop:1 #0891b2);
     border-color: #67e8f9;
     color: #ffffff;
 }
-QPushButton#primary:hover {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #1d4ed8, stop:1 #0284c7);
+QPushButton#primary:hover, QPushButton#ActiveTab:hover {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #1e40af, stop:0.48 #0284c7, stop:1 #22d3ee);
+    border-color: #cffafe;
+    color: #ffffff;
 }
 QPushButton#danger, QPushButton#DangerButton {
     background: #28131a;
     border-color: #8f2431;
     color: #fecdd3;
 }
-QPushButton#danger:hover {
-    background: #421722;
+QPushButton#danger:hover, QPushButton#DangerButton:hover {
+    background: #5f1b2d;
     border-color: #fb7185;
+    color: #ffffff;
 }
 QPushButton#tile, QPushButton#tileActive {
     padding: 8px 11px;
@@ -278,20 +283,11 @@ QMessageBox, QDialog {
 QFrame#AppShell {
     background: #050B1A;
 }
-QFrame#HeaderBar {
-    background: #050B1A;
-    border: 0;
-}
-QLabel#webLogo {
-    font-size: 23px;
-    font-weight: 900;
-    color: #f8fbff;
-}
-QLabel#greenDot, QLabel#Green {
+QLabel#Green {
     color: #25D082;
     font-weight: 900;
 }
-QPushButton#TopPill, QPushButton#Tab, QPushButton#SmallPill {
+QPushButton#Tab, QPushButton#SmallPill {
     background: #101B33;
     border: 1px solid #24385A;
     border-radius: 10px;
@@ -299,6 +295,11 @@ QPushButton#TopPill, QPushButton#Tab, QPushButton#SmallPill {
     padding: 4px 9px;
     font-size: 10px;
     font-weight: 650;
+}
+QPushButton#Tab:hover, QPushButton#SmallPill:hover {
+    background: #1d3b63;
+    border-color: #67e8f9;
+    color: #ffffff;
 }
 QPushButton#Tab {
     border-radius: 7px;
@@ -329,6 +330,11 @@ QPushButton#WarningButton {
     padding: 4px 10px;
     font-size: 10px;
     font-weight: 700;
+}
+QPushButton#WarningButton:hover {
+    background: #a15c16;
+    border-color: #fbbf24;
+    color: #ffffff;
 }
 QFrame#ActionBar {
     background: #050B1A;
@@ -1769,6 +1775,7 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None, gui_
         QProgressBar,
         QRadioButton,
         QScrollArea,
+    QSizePolicy,
         QTableWidget,
         QTableWidgetItem,
         QStackedWidget,
@@ -2549,6 +2556,11 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None, gui_
 
     class DnsRoutesTab(QWidget):
         SERVICE_PRESETS: dict[str, dict[str, Any]] = {
+            "manual": {
+                "label": "Ручной ввод доменов",
+                "domains": [],
+                "ips": [],
+            },
             "youtube": {
                 "label": "YouTube / Google Video",
                 "domains": ["youtube.com", "youtu.be", "googlevideo.com", "ytimg.com", "ggpht.com", "youtubei.googleapis.com"],
@@ -2631,6 +2643,7 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None, gui_
             self.service_combo = QComboBox()
             for key, preset in self.SERVICE_PRESETS.items():
                 self.service_combo.addItem(str(preset.get("label") or key), key)
+            self.service_combo.currentIndexChanged.connect(self.toggle_manual_generator)
             self.dns_server = QLineEdit()
             self.dns_server.setPlaceholderText("DNS server, опционально")
             gen_btn = QPushButton("Собрать адреса")
@@ -2639,6 +2652,11 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None, gui_
             generator.addWidget(self.dns_server, 1)
             generator.addWidget(gen_btn)
             form.addRow("Генератор", generator)
+            self.manual_domains_edit = QPlainTextEdit()
+            self.manual_domains_edit.setPlaceholderText("Введите домены для ручного генератора, по одному в строке: example.com, youtube.com, api.service.io")
+            self.manual_domains_edit.setMaximumHeight(82)
+            form.addRow("Домены для генератора", self.manual_domains_edit)
+            self.toggle_manual_generator()
 
             actions = QHBoxLayout()
             actions.addStretch(1)
@@ -2755,11 +2773,35 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None, gui_
                     continue
             return ips
 
+        def toggle_manual_generator(self) -> None:
+            is_manual = str(self.service_combo.currentData() or "") == "manual"
+            self.manual_domains_edit.setVisible(is_manual)
+
+        def manual_generator_domains(self) -> list[str]:
+            domains: list[str] = []
+            seen: set[str] = set()
+            raw = self.manual_domains_edit.toPlainText().replace(",", "\n").replace(";", "\n")
+            for line in raw.splitlines():
+                norm = self.normalize_dns_route_item(line)
+                if norm and "," not in norm and not re.match(r"^\d{1,3}(?:\.\d{1,3}){3}(?:/\d{1,2})?$", norm) and norm not in seen:
+                    seen.add(norm)
+                    domains.append(norm)
+            return domains
+
         def generate_service(self) -> None:
             key = str(self.service_combo.currentData() or "")
             preset = self.SERVICE_PRESETS.get(key) or {}
-            domains = [str(x) for x in preset.get("domains") or []]
-            ips = [str(x) for x in preset.get("ips") or []]
+            if key == "manual":
+                domains = self.manual_generator_domains()
+                ips: list[str] = []
+                label = "Ручной ввод доменов"
+                if not domains:
+                    self.status.setText("Введите домены для ручного генератора")
+                    return
+            else:
+                domains = [str(x) for x in preset.get("domains") or []]
+                ips = [str(x) for x in preset.get("ips") or []]
+                label = str(preset.get("label") or key or self.description_edit.text())
             resolved = self.resolve_domains(domains, self.dns_server.text().strip())
             current = [self.normalize_dns_route_item(x) for x in self.items_edit.toPlainText().splitlines()]
             merged: list[str] = []
@@ -2769,7 +2811,7 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None, gui_
                 if norm and norm not in seen:
                     seen.add(norm)
                     merged.append(norm)
-            self.description_edit.setText(str(preset.get("label") or key or self.description_edit.text()))
+            self.description_edit.setText(label)
             self.items_edit.setPlainText("\n".join(merged))
             self.status.setText(f"Собрано: {len(domains) + len(ips)} базовых элементов; DNS-resolved IP: {len(resolved)}")
 
@@ -3581,7 +3623,6 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None, gui_
             root.setContentsMargins(12, 10, 12, 10)
             root.setSpacing(8)
 
-            root.addWidget(self.build_header())
             root.addWidget(self.build_tabs())
             root.addWidget(self.build_action_bar())
 
@@ -3629,57 +3670,19 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None, gui_
             self.timer.start(4000)
             QTimer.singleShot(100, self.refresh_current_page)
 
-        def build_header(self) -> QFrame:
-            header = QFrame()
-            header.setObjectName("HeaderBar")
-            header.setFixedHeight(92)
-            layout = QHBoxLayout(header)
-            layout.setContentsMargins(0, 0, 0, 0)
-            logo_row = QHBoxLayout()
-            logo = QLabel("Unified UI")
-            logo.setObjectName("webLogo")
-            dot = QLabel("●")
-            dot.setObjectName("greenDot")
-            logo_row.addWidget(logo)
-            logo_row.addWidget(dot)
-            logo_row.addStretch(1)
-            layout.addLayout(logo_row, 1)
-
-            right = QVBoxLayout()
-            right.setSpacing(8)
-            row = QHBoxLayout()
-            interface_btn = QPushButton("◉ Интерфейс")
-            interface_btn.setObjectName("TopPill")
-            interface_btn.clicked.connect(lambda: self.activate_page("Интерфейс"))
-            settings_btn = QPushButton("Настройки")
-            settings_btn.setObjectName("TopPill")
-            settings_btn.clicked.connect(lambda: self.activate_page("Настройки"))
-            row.addWidget(interface_btn)
-            row.addWidget(settings_btn)
-            row.addStretch(1)
-            right.addLayout(row)
-            row2 = QHBoxLayout()
-            status = QLabel("Desktop build · Mihomo runtime")
-            status.setObjectName("Muted")
-            row2.addWidget(status)
-            row2.addStretch(1)
-            right.addLayout(row2)
-            layout.addLayout(right, 2)
-            return header
-
         def build_tabs(self) -> QFrame:
             bar = QFrame()
-            bar.setFixedHeight(32)
+            bar.setFixedHeight(34)
             layout = QHBoxLayout(bar)
             layout.setContentsMargins(0, 0, 0, 0)
-            layout.setSpacing(5)
+            layout.setSpacing(4)
             for name in ["Маршрутизация", "Mihomo", "Соединения", "WireGuard", "Amnezia", "Hysteria2", "VLESS", "Trojan", "Mieru", "NaiveProxy", "Логи", "Mihomo Генератор", "Конфиг", "Ручной список", "Маршруты DNS"]:
                 b = QPushButton(name)
                 b.setObjectName("Tab")
+                b.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
                 b.clicked.connect(lambda _=False, n=name: self.activate_page(n))
                 self.tab_buttons[name] = b
-                layout.addWidget(b)
-            layout.addStretch(1)
+                layout.addWidget(b, 1)
             return bar
 
         def build_action_bar(self) -> QFrame:
