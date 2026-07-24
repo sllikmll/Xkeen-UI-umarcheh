@@ -60,7 +60,7 @@ public sealed class NativeBridgeClient
 
 public partial class MainWindow : Window
 {
-    public const string Version = "0.4.0";
+    public const string Version = "0.4.1";
     public static readonly string[] ProductionFeatures =
     [
         "runtime-start-stop-restart", "mihomo-version-health", "selector-list-and-tiles", "select-proxy", "per-node-ping",
@@ -78,7 +78,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        Title = "Unified UI — WPF User Test v0.4.0";
+        Title = "Unified UI — WPF User Test v0.4.1";
         OutputBox.Text = "Готовый конечный вариант для ручного тестирования: страницы как в Qt Native, общий unified-ui-native-bridge.exe, config.yaml/manual-proxy.yaml/proxy-providers/rule-providers. Features: " + string.Join(", ", ProductionFeatures);
         SettingsText.Text = $"BRIDGE_URL: {bridge.BridgeUrl}\nBridge exe: {bridge.BridgeExe}\nconfig.yaml / manual-proxy.yaml / proxy-providers / rule-providers";
         bridge.EnsureBridgeStarted(Log);

@@ -39,13 +39,13 @@ def sha(path: Path) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dist", type=Path, default=Path("dist-artifacts"))
-    ap.add_argument("--version", default="0.4.0")
-    ap.add_argument("--tag", default="v0.4.0-desktop-user-test")
+    ap.add_argument("--version", default="0.4.1")
+    ap.add_argument("--tag", default="v0.4.1-desktop-user-test")
     ns = ap.parse_args()
     expected = [
-        "Unified-UI-Avalonia-UserTest-0.4.0-win-x64.zip",
-        "Unified-UI-WPF-UserTest-0.4.0-win-x64.zip",
-        "Unified-UI-Cpp-Win32-UserTest-0.4.0-win-x64.zip",
+        "Unified-UI-Avalonia-UserTest-0.4.1-win-x64.zip",
+        "Unified-UI-WPF-UserTest-0.4.1-win-x64.zip",
+        "Unified-UI-Cpp-Win32-UserTest-0.4.1-win-x64.zip",
     ]
     artifacts = []
     errors = []

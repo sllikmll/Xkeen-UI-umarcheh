@@ -24,8 +24,8 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import desktop.native.unified_ui_native as native_mod  # noqa: E402
-from desktop.native.unified_ui_native import (  # noqa: E402
+from desktop.previews.shared import native_core  # noqa: E402
+from desktop.previews.shared.native_core import (  # noqa: E402
     APP_NAME,
     APP_RELEASE_LABEL,
     ImportResult,
@@ -33,7 +33,7 @@ from desktop.native.unified_ui_native import (  # noqa: E402
     NativeConfigManager,
 )
 
-if not hasattr(native_mod, "ensure_leading_dash_for_yaml_block"):
+if not hasattr(native_core, "ensure_leading_dash_for_yaml_block"):
     def _ensure_leading_dash_for_yaml_block(text: str) -> str:
         raw = str(text or "").strip()
         if not raw:
@@ -42,9 +42,9 @@ if not hasattr(native_mod, "ensure_leading_dash_for_yaml_block"):
             return raw
         return "- " + raw.replace("\n", "\n  ")
 
-    native_mod.ensure_leading_dash_for_yaml_block = _ensure_leading_dash_for_yaml_block
+    native_core.ensure_leading_dash_for_yaml_block = _ensure_leading_dash_for_yaml_block
 
-BRIDGE_VERSION = "0.4.0"
+BRIDGE_VERSION = "0.4.1"
 DEFAULT_BRIDGE_HOST = "127.0.0.1"
 DEFAULT_BRIDGE_PORT = 19191
 PRODUCTION_FEATURES = [

@@ -19,7 +19,7 @@ namespace UnifiedUiAvaloniaPreview;
 
 public static class Program
 {
-    public const string Version = "0.4.0";
+    public const string Version = "0.4.1";
     public static readonly string[] ProductionFeatures =
     [
         "runtime-start-stop-restart", "mihomo-version-health", "selector-list-and-tiles", "select-proxy", "per-node-ping",
@@ -133,7 +133,7 @@ public sealed class MainWindow : Window
 
     public MainWindow()
     {
-        Title = "Unified UI — Avalonia User Test v0.4.0";
+        Title = "Unified UI — Avalonia User Test v0.4.1";
         Width = 1480; Height = 940; MinWidth = 1180; MinHeight = 760; Background = Brush.Parse("#050B1A");
         Content = BuildShell();
         bridge.EnsureBridgeStarted(Log);
@@ -146,7 +146,7 @@ public sealed class MainWindow : Window
         var root = new Grid { ColumnDefinitions = new ColumnDefinitions("244,*"), RowDefinitions = new RowDefinitions("*,220"), Margin = new Thickness(14), ColumnSpacing = 14, RowSpacing = 12 };
         var side = new StackPanel { Spacing = 8, Background = Brush.Parse("#08142A") };
         side.Children.Add(new TextBlock { Text = "Unified UI", FontSize = 26, FontWeight = FontWeight.Black, Foreground = Brush.Parse("#67E8F9"), Margin = new Thickness(14, 14, 14, 2) });
-        side.Children.Add(new TextBlock { Text = "Desktop user-test v0.4.0\nMihomo runtime · bridge API", Foreground = Brush.Parse("#8DA8C8"), Margin = new Thickness(14, 0, 14, 10) });
+        side.Children.Add(new TextBlock { Text = "Desktop user-test v0.4.1\nMihomo runtime · bridge API", Foreground = Brush.Parse("#8DA8C8"), Margin = new Thickness(14, 0, 14, 10) });
         foreach (var page in Program.QtPages) side.Children.Add(NavButton(page));
         Grid.SetColumn(side, 0); Grid.SetRowSpan(side, 2); root.Children.Add(side);
 

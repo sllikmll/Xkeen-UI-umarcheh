@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from desktop.native.unified_ui_native import MihomoRuntime, NativeConfigManager
+from desktop.previews.shared.native_core import MihomoRuntime, NativeConfigManager
 from desktop.previews.shared.native_bridge import BridgeState, _parse_imports_with_fallback, make_server
 
 
@@ -73,7 +73,7 @@ def test_bridge_status_and_smoke_features(bridge):
     data = request_json(base, "/api/status")
 
     assert data["ok"] is True
-    assert data["bridge_version"] == "0.4.0"
+    assert data["bridge_version"] == "0.4.1"
     assert "runtime-start-stop-restart" in data["features"]
     assert "config-read-save-validate" in data["features"]
     assert data["config_path"] == str(runtime.config_path)

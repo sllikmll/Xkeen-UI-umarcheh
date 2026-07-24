@@ -1,7 +1,7 @@
 <Window x:Class="UnifiedUiWpfPreview.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Unified UI — WPF User Test v0.4.0" Width="1480" Height="940" MinWidth="1180" MinHeight="760"
+        Title="Unified UI — WPF User Test v0.4.1" Width="1480" Height="940" MinWidth="1180" MinHeight="760"
         Background="#050B1A" Foreground="#E7ECF8" WindowStartupLocation="CenterScreen">
   <Window.Resources>
     <SolidColorBrush x:Key="Bg" Color="#050B1A"/>
@@ -26,7 +26,7 @@
       <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel>
           <TextBlock Text="Unified UI" FontSize="28" FontWeight="Black" Foreground="#67E8F9"/>
-          <TextBlock Text="Desktop user-test v0.4.0&#x0a;Mihomo runtime · bridge API" Foreground="#8DA8C8" Margin="0,2,0,12"/>
+          <TextBlock Text="Desktop user-test v0.4.1&#x0a;Mihomo runtime · bridge API" Foreground="#8DA8C8" Margin="0,2,0,12"/>
           <Button Content="Маршрутизация" Click="NavRouting_Click"/><Button Content="Mihomo" Click="NavMihomo_Click"/><Button Content="Соединения" Click="NavConnections_Click"/>
           <Button Content="VLESS" Click="NavVless_Click"/><Button Content="WireGuard" Click="NavWireGuard_Click"/><Button Content="AmneziaWG" Click="NavAmnezia_Click"/><Button Content="Hysteria2" Click="NavHysteria_Click"/><Button Content="Trojan" Click="NavTrojan_Click"/><Button Content="Mieru" Click="NavMieru_Click"/><Button Content="NaiveProxy" Click="NavNaive_Click"/>
           <Button Content="Логи" Click="NavLogs_Click"/><Button Content="Mihomo Генератор" Click="NavImport_Click"/><Button Content="Конфиг" Click="NavConfig_Click"/><Button Content="Ручной список" Click="NavManual_Click"/><Button Content="Маршруты DNS" Click="NavDns_Click"/><Button Content="Интерфейс" Click="NavInterface_Click"/><Button Content="Настройки" Click="NavSettings_Click"/>

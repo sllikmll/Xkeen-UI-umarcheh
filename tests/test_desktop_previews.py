@@ -16,6 +16,6 @@ def test_preview_ui_variants_are_separate():
 
 def test_preview_manifest_lists_all_three_artifacts():
     text = read('scripts/build_desktop_previews_manifest.py')
-    assert 'Unified-UI-Avalonia-UserTest-0.4.0-win-x64.zip' in text
-    assert 'Unified-UI-WPF-UserTest-0.4.0-win-x64.zip' in text
-    assert 'Unified-UI-Cpp-Win32-UserTest-0.4.0-win-x64.zip' in text
+    assert 'Unified-UI-Avalonia-UserTest-0.4.1-win-x64.zip' in text
+    assert 'Unified-UI-WPF-UserTest-0.4.1-win-x64.zip' in text
+    assert 'Unified-UI-Cpp-Win32-UserTest-0.4.1-win-x64.zip' in text
