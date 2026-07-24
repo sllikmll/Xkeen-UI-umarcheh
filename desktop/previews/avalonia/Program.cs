@@ -163,11 +163,16 @@ public sealed class MainWindow : Window
         return root;
     }
 
-    Button NavButton(string page) => new() { Content = page, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(10, 0), Padding = new Thickness(12, 9), Background = Brush.Parse("#0A1730"), Foreground = Brush.Parse("#E7ECF8") }.Also(b => b.Click += (_, _) => Navigate(page));
-    Button ActionButton(string text, Func<Task<string>> action) => new() { Content = text, Padding = new Thickness(14, 8), Background = Brush.Parse("#101B33"), Foreground = Brushes.White }.Also(b => b.Click += async (_, _) => await Show(action()));
-    TextBlock Label(string text) => new() { Text = text, Foreground = Brush.Parse("#8DA8C8"), FontSize = 12 };
-    Border Card(string caption, Control body) => new() { Background = Brush.Parse("#08142A"), BorderBrush = Brush.Parse("#24385A"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Padding = new Thickness(14), Child = new StackPanel { Spacing = 10, Children = { new TextBlock { Text = caption, FontSize = 18, FontWeight = FontWeight.Bold, Foreground = Brush.Parse("#E7ECF8") }, body } } };
-    StackPanel Row(params Control[] controls) => new() { Orientation = Orientation.Horizontal, Spacing = 8, Children = { controls } };
+    Button NavButton(string page) => new Button { Content = page, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(10, 0), Padding = new Thickness(12, 9), Background = Brush.Parse("#0A1730"), Foreground = Brush.Parse("#E7ECF8") }.Also(b => b.Click += (_, _) => Navigate(page));
+    Button ActionButton(string text, Func<Task<string>> action) => new Button { Content = text, Padding = new Thickness(14, 8), Background = Brush.Parse("#101B33"), Foreground = Brushes.White }.Also(b => b.Click += async (_, _) => await Show(action()));
+    TextBlock Label(string text) => new TextBlock { Text = text, Foreground = Brush.Parse("#8DA8C8"), FontSize = 12 };
+    Border Card(string caption, Control body) => new Border { Background = Brush.Parse("#08142A"), BorderBrush = Brush.Parse("#24385A"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Padding = new Thickness(14), Child = new StackPanel { Spacing = 10, Children = { new TextBlock { Text = caption, FontSize = 18, FontWeight = FontWeight.Bold, Foreground = Brush.Parse("#E7ECF8") }, body } } };
+    StackPanel Row(params Control[] controls)
+    {
+        var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        foreach (var control in controls) panel.Children.Add(control);
+        return panel;
+    }
 
     void Navigate(string page)
     {
