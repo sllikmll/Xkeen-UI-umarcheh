@@ -15,7 +15,11 @@
 #pragma comment(lib, "winhttp.lib")
 #pragma comment(lib, "ws2_32.lib")
 
-static const wchar_t* APP_TITLE = L"Unified UI — C++ Win32 Production Candidate v0.3.0";
+static const wchar_t* APP_TITLE = L"Unified UI — C++ Win32 User Test v0.4.0";
+static const char* VERSION = "0.4.0";
+static const wchar_t* QT_PAGE_MAP = L"Маршрутизация | Mihomo | Соединения | VLESS | WireGuard | AmneziaWG | Hysteria2 | Trojan | Mieru | NaiveProxy | Логи | Mihomo Генератор | Конфиг | Ручной список | Маршруты DNS | Интерфейс | Настройки";
+static const wchar_t* DESIGN_TOKENS = L"Qt Native palette: #050B1A #08142A #0A1730 #67E8F9 #20C878 #EF4E5F; selector tiles; readable tables; compact cards";
+static const wchar_t* UX_PHRASES = L"Unified UI · Mihomo runtime · proxy-providers · rule-providers · config.yaml · manual-proxy.yaml · готовый конечный вариант для ручного тестирования";
 static const wchar_t* BRIDGE_HOST = L"127.0.0.1";
 static const int BRIDGE_PORT = 19191;
 static HWND gOutput{}, gDomain{}, gImport{}, gSubName{}, gSubUrl{}, gGroup{}, gProxy{};
@@ -26,7 +30,7 @@ std::wstring GetText(HWND h){ int len=GetWindowTextLengthW(h); std::wstring s(le
 void SetOut(const std::wstring& text){ SetWindowTextW(gOutput,text.c_str()); }
 
 std::wstring BridgeRequest(const std::wstring& method, const std::wstring& endpoint, const std::string& body=""){
-    HINTERNET session=WinHttpOpen(L"UnifiedUI-Cpp-Win32/0.3.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    HINTERNET session=WinHttpOpen(L"UnifiedUI-Cpp-Win32/0.4.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if(!session) return L"WinHTTP session failed";
     HINTERNET connect=WinHttpConnect(session, BRIDGE_HOST, BRIDGE_PORT, 0);
     if(!connect){ WinHttpCloseHandle(session); return L"WinHTTP connect failed to BRIDGE_URL http://127.0.0.1:19191"; }
@@ -68,6 +72,9 @@ void RunAction(int id, HWND hwnd){
         case 401: SetOut(BridgeRequest(L"GET", L"/api/config")); break;
         case 501: SetOut(BridgeRequest(L"POST", L"/api/subscription/add", "{\"name\":\""+JsonEscape(GetText(gSubName))+"\",\"url\":\""+JsonEscape(GetText(gSubUrl))+"\",\"restart\":false,\"mirror_static\":true}")); break;
         case 502: SetOut(BridgeRequest(L"POST", L"/api/import/static", "{\"text\":\""+JsonEscape(GetText(gImport))+"\",\"restart\":false}")); break;
+        case 503: SetOut(BridgeRequest(L"POST", L"/api/subscription/update", "{\"old_name\":\""+JsonEscape(GetText(gSubName))+"\",\"new_name\":\""+JsonEscape(GetText(gSubName))+"\",\"url\":\""+JsonEscape(GetText(gSubUrl))+"\",\"restart\":false}")); break;
+        case 504: SetOut(BridgeRequest(L"POST", L"/api/subscription/delete", "{\"name\":\""+JsonEscape(GetText(gSubName))+"\",\"restart\":false}")); break;
+        case 505: SetOut(BridgeRequest(L"POST", L"/api/static/delete", "{\"name\":\"manual-node\",\"restart\":false}")); break;
         case 601: SetOut(BridgeRequest(L"POST", L"/api/dns/resolve", "{\"domains\":\""+JsonEscape(GetText(gDomain))+"\"}")); break;
         case 701: SetOut(BridgeRequest(L"GET", L"/api/logs")); break;
         case 801: SetOut(BridgeRequest(L"POST", L"/api/providers/proxies/update", "{}")); break;
@@ -79,15 +86,18 @@ HWND Edit(HWND p,const wchar_t* text,int x,int y,int w,int h,DWORD extra=0){ ret
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp){
     if(msg==WM_CREATE){
-        Btn(hwnd,L"Status",101,12,12); Btn(hwnd,L"Start",102,170,12,90); Btn(hwnd,L"Restart",103,268,12,100); Btn(hwnd,L"Stop",104,376,12,90);
-        Btn(hwnd,L"Proxies",201,12,52); Btn(hwnd,L"Inventory",202,170,52); Btn(hwnd,L"Select",203,328,52); Btn(hwnd,L"Ping",204,486,52); Btn(hwnd,L"Connections",301,644,52);
-        CreateWindowW(L"STATIC",L"Group",WS_CHILD|WS_VISIBLE,12,88,50,20,hwnd,nullptr,nullptr,nullptr); gGroup=Edit(hwnd,L"Маршрутизация",68,84,180,24);
-        CreateWindowW(L"STATIC",L"Proxy",WS_CHILD|WS_VISIBLE,260,88,50,20,hwnd,nullptr,nullptr,nullptr); gProxy=Edit(hwnd,L"DIRECT",316,84,160,24);
-        Btn(hwnd,L"Config",401,12,122); Btn(hwnd,L"Update providers",801,170,122);
-        gSubName=Edit(hwnd,L"subscription_1",12,160,180,24); gSubUrl=Edit(hwnd,L"https://example.com/sub",202,160,360,24); Btn(hwnd,L"Add subscription",501,572,158,160);
-        gImport=Edit(hwnd,L"- name: manual-node\r\n  type: http\r\n  server: 1.2.3.4\r\n  port: 8080",12,196,550,92,ES_MULTILINE|WS_VSCROLL); Btn(hwnd,L"Import static",502,572,196,160);
-        gDomain=Edit(hwnd,L"youtube.com\r\ngithub.com\r\nopenai.com",12,300,550,78,ES_MULTILINE|WS_VSCROLL); Btn(hwnd,L"Resolve DNS",601,572,300,160); Btn(hwnd,L"Logs",701,572,338,160);
-        gOutput=Edit(hwnd,L"Unified UI C++ Win32 production candidate via unified-ui-native-bridge.exe\r\nBRIDGE_URL http://127.0.0.1:19191\r\nFeatures: runtime-start-stop-restart, selector-list-and-tiles, select-proxy, per-node-ping, proxy-table, provider-update, connections-table, close-connection, config-read-save-validate, subscription-add-update-delete, static-proxy-import-update-delete, rule-providers, dns-routes-manual-resolver, logs-viewer, settings-runtime-paths",12,396,1220,330,ES_MULTILINE|WS_VSCROLL|ES_AUTOVSCROLL);
+        CreateWindowW(L"STATIC",QT_PAGE_MAP,WS_CHILD|WS_VISIBLE,12,8,1220,22,hwnd,nullptr,nullptr,nullptr);
+        CreateWindowW(L"STATIC",DESIGN_TOKENS,WS_CHILD|WS_VISIBLE,12,30,1220,22,hwnd,nullptr,nullptr,nullptr);
+        CreateWindowW(L"STATIC",UX_PHRASES,WS_CHILD|WS_VISIBLE,12,52,1220,22,hwnd,nullptr,nullptr,nullptr);
+        Btn(hwnd,L"Status",101,12,82); Btn(hwnd,L"Start",102,170,82,90); Btn(hwnd,L"Restart",103,268,82,100); Btn(hwnd,L"Stop",104,376,82,90);
+        Btn(hwnd,L"Proxies",201,12,122); Btn(hwnd,L"Inventory",202,170,122); Btn(hwnd,L"Select",203,328,122); Btn(hwnd,L"Ping",204,486,122); Btn(hwnd,L"Connections",301,644,122);
+        CreateWindowW(L"STATIC",L"Group",WS_CHILD|WS_VISIBLE,12,158,50,20,hwnd,nullptr,nullptr,nullptr); gGroup=Edit(hwnd,L"Маршрутизация",68,154,180,24);
+        CreateWindowW(L"STATIC",L"Proxy",WS_CHILD|WS_VISIBLE,260,158,50,20,hwnd,nullptr,nullptr,nullptr); gProxy=Edit(hwnd,L"DIRECT",316,154,160,24);
+        Btn(hwnd,L"Config",401,12,192); Btn(hwnd,L"Update proxy-providers",801,170,192,190);
+        gSubName=Edit(hwnd,L"subscription_1",12,230,180,24); gSubUrl=Edit(hwnd,L"https://example.com/sub",202,230,360,24); Btn(hwnd,L"Add subscription",501,572,228,160); Btn(hwnd,L"Update subscription",503,740,228,170); Btn(hwnd,L"Delete subscription",504,918,228,170);
+        gImport=Edit(hwnd,L"- name: manual-node\r\n  type: http\r\n  server: 1.2.3.4\r\n  port: 8080",12,266,550,92,ES_MULTILINE|WS_VSCROLL); Btn(hwnd,L"Import static",502,572,266,160); Btn(hwnd,L"Delete static proxy",505,740,266,170);
+        gDomain=Edit(hwnd,L"youtube.com\r\ngithub.com\r\nopenai.com",12,370,550,78,ES_MULTILINE|WS_VSCROLL); Btn(hwnd,L"Resolve DNS",601,572,370,160); Btn(hwnd,L"Logs",701,572,408,160);
+        gOutput=Edit(hwnd,L"Unified UI C++ Win32 user-test production via unified-ui-native-bridge.exe\r\nBRIDGE_URL http://127.0.0.1:19191\r\nFeatures: runtime-start-stop-restart, Mihomo runtime, selector tiles, select-proxy, per-node-ping, proxy-table, provider-update, connections-table, close-connection, config-read-save-validate, subscription-add-update-delete, static-proxy-import-update-delete, proxy-providers, rule-providers, dns-routes-manual-resolver, logs-viewer, settings-runtime-paths, config.yaml, manual-proxy.yaml",12,466,1220,260,ES_MULTILINE|WS_VSCROLL|ES_AUTOVSCROLL);
         EnsureBridgeStarted(hwnd); return 0;
     }
     if(msg==WM_COMMAND){ RunAction(LOWORD(wp),hwnd); return 0; }
@@ -98,7 +108,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp){
 int WINAPI wWinMain(HINSTANCE h, HINSTANCE, PWSTR cmd, int show){
     std::wstring args=cmd?cmd:L"";
     if(args.find(L"--smoke")!=std::wstring::npos){
-        std::string json = "{\"ok\":true,\"app\":\"Unified UI C++ Win32 Preview\",\"version\":\"0.3.0\",\"ui\":\"Win32/C++\",\"quality\":\"production-candidate\",\"backend\":\"unified-ui-native-bridge\",\"features\":[\"runtime-start-stop-restart\",\"mihomo-version-health\",\"selector-list-and-tiles\",\"select-proxy\",\"per-node-ping\",\"proxy-table\",\"provider-update\",\"connections-table\",\"close-connection\",\"config-read-save-validate\",\"subscription-add-update-delete\",\"static-proxy-import-update-delete\",\"rule-providers\",\"dns-routes-manual-resolver\",\"logs-viewer\",\"settings-runtime-paths\"]}";
+        std::string json = "{\"ok\":true,\"app\":\"Unified UI C++ Win32\",\"version\":\"0.4.0\",\"ui\":\"Win32/C++\",\"quality\":\"user-test-production\",\"backend\":\"unified-ui-native-bridge\",\"features\":[\"runtime-start-stop-restart\",\"mihomo-version-health\",\"selector-list-and-tiles\",\"select-proxy\",\"per-node-ping\",\"proxy-table\",\"provider-update\",\"connections-table\",\"close-connection\",\"config-read-save-validate\",\"subscription-add-update-delete\",\"static-proxy-import-update-delete\",\"rule-providers\",\"dns-routes-manual-resolver\",\"logs-viewer\",\"settings-runtime-paths\",\"subscription-update-delete\",\"static-proxy-delete\"]}";
         DWORD written=0; HANDLE out=GetStdHandle(STD_OUTPUT_HANDLE); WriteFile(out,json.c_str(),(DWORD)json.size(),&written,nullptr); return 0;
     }
     WNDCLASSW wc{}; wc.lpfnWndProc=WndProc; wc.hInstance=h; wc.lpszClassName=L"UnifiedUiCppWin32ProductionCandidate"; wc.hbrBackground=(HBRUSH)(COLOR_WINDOW+1); RegisterClassW(&wc);

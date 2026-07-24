@@ -44,7 +44,7 @@ if not hasattr(native_mod, "ensure_leading_dash_for_yaml_block"):
 
     native_mod.ensure_leading_dash_for_yaml_block = _ensure_leading_dash_for_yaml_block
 
-BRIDGE_VERSION = "0.3.0"
+BRIDGE_VERSION = "0.4.0"
 DEFAULT_BRIDGE_HOST = "127.0.0.1"
 DEFAULT_BRIDGE_PORT = 19191
 PRODUCTION_FEATURES = [
@@ -64,6 +64,8 @@ PRODUCTION_FEATURES = [
     "dns-routes-manual-resolver",
     "logs-viewer",
     "settings-runtime-paths",
+    "subscription-update-delete",
+    "static-proxy-delete",
 ]
 
 
@@ -309,11 +311,26 @@ class BridgeHandler(BaseHTTPRequestHandler):
                     subscription_text=body.get("subscription_text") if isinstance(body.get("subscription_text"), str) else None,
                 )
                 self._ok({"ok": True, "provider": name, "added_static": added, "backup": str(backup) if backup else None, "message": msg})
+            elif path == "/api/subscription/update":
+                backup, msg = s.manager.update_subscription_provider(
+                    str(body.get("old_name") or body.get("name") or ""),
+                    new_name=str(body.get("new_name") or body.get("name") or ""),
+                    url=str(body.get("url") or ""),
+                    interval=int(body.get("interval") or 3600),
+                    restart=bool(body.get("restart", False)),
+                )
+                self._ok({"ok": True, "backup": str(backup) if backup else None, "message": msg})
+            elif path == "/api/subscription/delete":
+                backup, msg = s.manager.delete_subscription_provider(str(body.get("name") or ""), restart=bool(body.get("restart", False)))
+                self._ok({"ok": True, "backup": str(backup) if backup else None, "message": msg})
             elif path == "/api/import/static":
                 raw = str(body.get("text") or "")
                 imports = _parse_imports_with_fallback(s.manager, raw)
                 added, backup, msg = s.manager.apply_imports(imports, groups=body.get("groups") if isinstance(body.get("groups"), list) else None, restart=bool(body.get("restart", False)))
                 self._ok({"ok": True, "added": added, "backup": str(backup) if backup else None, "message": msg})
+            elif path == "/api/static/delete":
+                backup, msg = s.manager.delete_static_proxy(str(body.get("name") or ""), restart=bool(body.get("restart", False)))
+                self._ok({"ok": True, "backup": str(backup) if backup else None, "message": msg})
             elif path == "/api/dns/resolve":
                 self._ok({"ok": True, "results": _resolve_domains(str(body.get("domains") or body.get("text") or ""))})
             else:

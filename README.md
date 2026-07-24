@@ -41,18 +41,18 @@
 | Linux RPM | [Unified-UI-Native-2.6.7-linux-x64.rpm](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.7-native/Unified-UI-Native-2.6.7-linux-x64.rpm) | Есть |
 
 
-### Windows production-candidate desktop builds: Avalonia / WPF / C++ Win32
+### Windows user-test desktop builds: Avalonia / WPF / C++ Win32
 
-Отдельный экспериментальный релиз для сравнения desktop-стеков с функциональной parity-обвязкой как у Qt Native: **[`v0.3.0-desktop-production-candidates`](https://github.com/sllikmll/Unified-UI/releases/tag/v0.3.0-desktop-production-candidates)**. Это не замена актуальной Native app `v2.6.7-native`, а три параллельные Windows-сборки для выбора будущего desktop-стека.
+готовый конечный вариант для ручного тестирования пользователями: **[`v0.4.0-desktop-user-test`](https://github.com/sllikmll/Unified-UI/releases/tag/v0.4.0-desktop-user-test)**. Все три Windows-кандидата используют общий `unified-ui-native-bridge.exe` и повторяют карту Qt Native: `Маршрутизация`, `Mihomo`, `Соединения`, протокольные вкладки, `Логи`, `Mihomo Генератор`, `Конфиг`, `Ручной список`, `Маршруты DNS`, `Интерфейс`, `Настройки`.
 
 | Вариант | Файл | Что внутри |
 |---|---|---|
-| C# Avalonia | [Unified-UI-Avalonia-Preview-0.3.0-win-x64.zip](https://github.com/sllikmll/Unified-UI/releases/download/v0.3.0-desktop-production-candidates/Unified-UI-Avalonia-Preview-0.3.0-win-x64.zip) | Cross-platform кандидат: runtime controls, selectors/proxies, connections, config editor, subscriptions/import, DNS resolver, logs/settings. |
-| C# WPF | [Unified-UI-WPF-Preview-0.3.0-win-x64.zip](https://github.com/sllikmll/Unified-UI/releases/download/v0.3.0-desktop-production-candidates/Unified-UI-WPF-Preview-0.3.0-win-x64.zip) | Windows-first кандидат с тем же набором Qt Native parity hooks и рабочими обращениями к Mihomo/controller/config/logs. |
-| C++ Win32 native | [Unified-UI-Cpp-Win32-Preview-0.3.0-win-x64.zip](https://github.com/sllikmll/Unified-UI/releases/download/v0.3.0-desktop-production-candidates/Unified-UI-Cpp-Win32-Preview-0.3.0-win-x64.zip) | Самый лёгкий native-кандидат: WinHTTP `/proxies`/`/connections`, WinSock DNS resolver, config/log/import controls. |
-| Проверка | [DESKTOP_PREVIEWS_SHA256SUMS](https://github.com/sllikmll/Unified-UI/releases/download/v0.3.0-desktop-production-candidates/DESKTOP_PREVIEWS_SHA256SUMS), [desktop-previews-manifest.json](https://github.com/sllikmll/Unified-UI/releases/download/v0.3.0-desktop-production-candidates/desktop-previews-manifest.json) | SHA256 и manifest по preview artifacts. |
+| C# Avalonia | [Unified-UI-Avalonia-UserTest-0.4.0-win-x64.zip](https://github.com/sllikmll/Unified-UI/releases/download/v0.4.0-desktop-user-test/Unified-UI-Avalonia-UserTest-0.4.0-win-x64.zip) | Основной cross-platform кандидат: sidebar/app-shell, selector tiles, cards, config.yaml editor, subscriptions/import, DNS resolver, logs/settings. |
+| C# WPF | [Unified-UI-WPF-UserTest-0.4.0-win-x64.zip](https://github.com/sllikmll/Unified-UI/releases/download/v0.4.0-desktop-user-test/Unified-UI-WPF-UserTest-0.4.0-win-x64.zip) | Windows-first кандидат с тем же набором экранов и bridge actions для ручного UX-теста. |
+| C++ Win32 native | [Unified-UI-Cpp-Win32-UserTest-0.4.0-win-x64.zip](https://github.com/sllikmll/Unified-UI/releases/download/v0.4.0-desktop-user-test/Unified-UI-Cpp-Win32-UserTest-0.4.0-win-x64.zip) | Самый лёгкий native-кандидат: WinHTTP bridge control room, runtime/config/import/DNS/log actions. |
+| Проверка | [DESKTOP_PREVIEWS_SHA256SUMS](https://github.com/sllikmll/Unified-UI/releases/download/v0.4.0-desktop-user-test/DESKTOP_PREVIEWS_SHA256SUMS), [desktop-previews-manifest.json](https://github.com/sllikmll/Unified-UI/releases/download/v0.4.0-desktop-user-test/desktop-previews-manifest.json) | SHA256 и manifest по user-test artifacts. |
 
-Общий parity-набор: `runtime-controls`, `selector-list-and-tiles`, `per-node-ping`, `proxy-table`, `connections-table`, `config-editor`, `subscription-manager`, `static-proxy-import`, `dns-routes-manual-resolver`, `logs-viewer`, `settings-runtime-paths`.
+Общий функциональный набор: `runtime-start-stop-restart`, `mihomo-version-health`, `selector-list-and-tiles`, `select-proxy`, `per-node-ping`, `proxy-table`, `provider-update`, `connections-table`, `close-connection`, `config-read-save-validate`, `subscription-add-update-delete`, `subscription-update-delete`, `static-proxy-import-update-delete`, `static-proxy-delete`, `rule-providers`, `dns-routes-manual-resolver`, `logs-viewer`, `settings-runtime-paths`.
 
 Native app:
 

@@ -23,6 +23,8 @@ PRODUCTION_FEATURES = [
     "dns-routes-manual-resolver",
     "logs-viewer",
     "settings-runtime-paths",
+    "subscription-update-delete",
+    "static-proxy-delete",
 ]
 
 
@@ -37,13 +39,13 @@ def sha(path: Path) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dist", type=Path, default=Path("dist-artifacts"))
-    ap.add_argument("--version", default="0.3.0")
-    ap.add_argument("--tag", default="v0.3.0-desktop-production-candidates")
+    ap.add_argument("--version", default="0.4.0")
+    ap.add_argument("--tag", default="v0.4.0-desktop-user-test")
     ns = ap.parse_args()
     expected = [
-        "Unified-UI-Avalonia-Preview-0.3.0-win-x64.zip",
-        "Unified-UI-WPF-Preview-0.3.0-win-x64.zip",
-        "Unified-UI-Cpp-Win32-Preview-0.3.0-win-x64.zip",
+        "Unified-UI-Avalonia-UserTest-0.4.0-win-x64.zip",
+        "Unified-UI-WPF-UserTest-0.4.0-win-x64.zip",
+        "Unified-UI-Cpp-Win32-UserTest-0.4.0-win-x64.zip",
     ]
     artifacts = []
     errors = []
@@ -63,7 +65,7 @@ def main() -> int:
     manifest = {
         "version": ns.version,
         "release_tag": ns.tag,
-        "quality": "production-candidate",
+        "quality": "user-test-production",
         "backend": "unified-ui-native-bridge",
         "features": PRODUCTION_FEATURES,
         "artifact_count": len(artifacts),

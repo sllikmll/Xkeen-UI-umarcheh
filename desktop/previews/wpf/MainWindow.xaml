@@ -1,41 +1,75 @@
 <Window x:Class="UnifiedUiWpfPreview.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Unified UI — WPF Full Parity Preview v0.2.0" Width="1320" Height="840" MinWidth="1080" MinHeight="680"
+        Title="Unified UI — WPF User Test v0.4.0" Width="1480" Height="940" MinWidth="1180" MinHeight="760"
         Background="#050B1A" Foreground="#E7ECF8" WindowStartupLocation="CenterScreen">
   <Window.Resources>
+    <SolidColorBrush x:Key="Bg" Color="#050B1A"/>
+    <SolidColorBrush x:Key="Panel" Color="#08142A"/>
+    <SolidColorBrush x:Key="Card" Color="#0A1730"/>
+    <SolidColorBrush x:Key="Accent" Color="#67E8F9"/>
+    <SolidColorBrush x:Key="Ok" Color="#20C878"/>
+    <SolidColorBrush x:Key="Fail" Color="#EF4E5F"/>
     <Style TargetType="Button">
-      <Setter Property="Foreground" Value="White"/>
-      <Setter Property="Background" Value="#101B33"/>
-      <Setter Property="BorderBrush" Value="#24385A"/>
-      <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="Padding" Value="10,7"/>
-      <Setter Property="Margin" Value="3"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
-      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Foreground" Value="White"/><Setter Property="Background" Value="#101B33"/><Setter Property="BorderBrush" Value="#24385A"/>
+      <Setter Property="BorderThickness" Value="1"/><Setter Property="Padding" Value="12,8"/><Setter Property="Margin" Value="3"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Cursor" Value="Hand"/>
       <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#1D3B63"/><Setter Property="BorderBrush" Value="#67E8F9"/></Trigger></Style.Triggers>
     </Style>
-    <Style TargetType="TextBox">
-      <Setter Property="Background" Value="#081625"/><Setter Property="Foreground" Value="#EAF2FF"/><Setter Property="BorderBrush" Value="#21405F"/><Setter Property="Padding" Value="8"/><Setter Property="Margin" Value="3"/>
-    </Style>
+    <Style TargetType="TextBox"><Setter Property="Background" Value="#081422"/><Setter Property="Foreground" Value="#EAF2FF"/><Setter Property="BorderBrush" Value="#21405F"/><Setter Property="Padding" Value="8"/><Setter Property="Margin" Value="3"/></Style>
+    <Style TargetType="TabItem"><Setter Property="Foreground" Value="#E7ECF8"/><Setter Property="Padding" Value="10,8"/></Style>
   </Window.Resources>
-  <DockPanel Margin="14">
-    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal">
-      <Button Click="Status_Click">Start/Status Mihomo</Button>
-      <Button Click="Restart_Click">Restart Mihomo</Button>
-      <Button Click="Stop_Click">Stop Mihomo</Button>
-      <TextBlock x:Name="StatusText" VerticalAlignment="Center" Foreground="#8DA8C8" Margin="12,0">Готово</TextBlock>
-    </StackPanel>
-    <TextBox DockPanel.Dock="Bottom" x:Name="OutputBox" Height="190" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/>
-    <TabControl x:Name="MainTabs" Background="#071426" Foreground="#E7ECF8">
-      <TabItem Header="Маршрутизация"><StackPanel Margin="12"><Button Click="Proxies_Click">Обновить selectors /proxies</Button><Button Click="Ping_Click">Ping DIRECT</Button><TextBlock Text="selector-list-and-tiles · per-node-ping · PUT /proxies/{group}" TextWrapping="Wrap"/></StackPanel></TabItem>
-      <TabItem Header="Mihomo"><StackPanel Margin="12"><Button Click="Proxies_Click">Загрузить proxy-table</Button><TextBlock Text="proxy-table через live Mihomo /proxies"/></StackPanel></TabItem>
-      <TabItem Header="Соединения"><StackPanel Margin="12"><Button Click="Connections_Click">Обновить connections-table</Button><TextBlock Text="connections-table через /connections"/></StackPanel></TabItem>
-      <TabItem Header="Конфиг"><DockPanel Margin="12"><StackPanel DockPanel.Dock="Top" Orientation="Horizontal"><Button Click="ReadConfig_Click">Открыть config.yaml</Button><Button Click="SaveConfig_Click">Сохранить config.yaml</Button></StackPanel><TextBox x:Name="ConfigBox" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" TextWrapping="NoWrap"/></DockPanel></TabItem>
-      <TabItem Header="Подписки"><StackPanel Margin="12"><TextBox x:Name="SubNameBox" Text="subscription_1"/><TextBox x:Name="SubUrlBox" Text="https://example.com/sub"/><Button Click="AddSubscription_Click">Добавить subscription-manager</Button><TextBox x:Name="ImportBox" Height="160" AcceptsReturn="True" Text="# vless:// / wireguard:// / yaml proxy block"/><Button Click="AddImport_Click">Добавить static-proxy-import</Button></StackPanel></TabItem>
-      <TabItem Header="Маршруты DNS"><StackPanel Margin="12"><TextBox x:Name="DomainBox" Height="130" AcceptsReturn="True" Text="youtube.com&#x0a;github.com&#x0a;openai.com"/><Button Click="Resolve_Click">Собрать адреса</Button><TextBlock Text="dns-routes-manual-resolver через Dns.GetHostAddresses"/></StackPanel></TabItem>
-      <TabItem Header="Логи"><StackPanel Margin="12"><Button Click="Logs_Click">Прочитать logs-viewer</Button></StackPanel></TabItem>
-      <TabItem Header="Настройки"><StackPanel Margin="12"><TextBlock x:Name="SettingsText" TextWrapping="Wrap"/></StackPanel></TabItem>
-    </TabControl>
-  </DockPanel>
+  <Grid Margin="14">
+    <Grid.ColumnDefinitions><ColumnDefinition Width="245"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+    <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="220"/></Grid.RowDefinitions>
+
+    <Border Grid.RowSpan="2" Grid.Column="0" Background="#08142A" BorderBrush="#24385A" BorderThickness="1" CornerRadius="14" Padding="12">
+      <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel>
+          <TextBlock Text="Unified UI" FontSize="28" FontWeight="Black" Foreground="#67E8F9"/>
+          <TextBlock Text="Desktop user-test v0.4.0&#x0a;Mihomo runtime · bridge API" Foreground="#8DA8C8" Margin="0,2,0,12"/>
+          <Button Content="Маршрутизация" Click="NavRouting_Click"/><Button Content="Mihomo" Click="NavMihomo_Click"/><Button Content="Соединения" Click="NavConnections_Click"/>
+          <Button Content="VLESS" Click="NavVless_Click"/><Button Content="WireGuard" Click="NavWireGuard_Click"/><Button Content="AmneziaWG" Click="NavAmnezia_Click"/><Button Content="Hysteria2" Click="NavHysteria_Click"/><Button Content="Trojan" Click="NavTrojan_Click"/><Button Content="Mieru" Click="NavMieru_Click"/><Button Content="NaiveProxy" Click="NavNaive_Click"/>
+          <Button Content="Логи" Click="NavLogs_Click"/><Button Content="Mihomo Генератор" Click="NavImport_Click"/><Button Content="Конфиг" Click="NavConfig_Click"/><Button Content="Ручной список" Click="NavManual_Click"/><Button Content="Маршруты DNS" Click="NavDns_Click"/><Button Content="Интерфейс" Click="NavInterface_Click"/><Button Content="Настройки" Click="NavSettings_Click"/>
+        </StackPanel>
+      </ScrollViewer>
+    </Border>
+
+    <DockPanel Grid.Column="1" Grid.Row="0" Margin="14,0,0,0">
+      <StackPanel DockPanel.Dock="Top">
+        <TextBlock x:Name="PageTitle" Text="Маршрутизация" FontSize="26" FontWeight="Bold" Foreground="#E7ECF8"/>
+        <TextBlock x:Name="PageSubtitle" Text="selector tiles/list, активный proxy, per-node ping, выбор узла — как в Qt Native." Foreground="#8DA8C8" Margin="0,2,0,10"/>
+        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+          <Button Click="Start_Click">Start</Button><Button Click="Restart_Click">Restart</Button><Button Click="Stop_Click">Stop</Button><Button Click="Status_Click">Status</Button>
+          <TextBlock x:Name="StatusText" VerticalAlignment="Center" Foreground="#8DA8C8" Margin="12,0">Готово</TextBlock>
+        </StackPanel>
+      </StackPanel>
+      <TabControl x:Name="MainTabs" Background="#071426" Foreground="#E7ECF8">
+        <TabItem Header="Маршрутизация"><ScrollViewer><StackPanel Margin="12">
+          <TextBlock Text="selector tiles" FontSize="18" FontWeight="Bold"/><WrapPanel Margin="0,8,0,12">
+            <Border Width="180" Margin="0,0,10,10" Background="#0A1730" BorderBrush="#20C878" BorderThickness="1" CornerRadius="12" Padding="12"><StackPanel><TextBlock Text="DIRECT" FontWeight="Bold"/><TextBlock Text="active" Foreground="#8DA8C8"/><TextBlock Text="0 ms" Foreground="#20C878"/></StackPanel></Border>
+            <Border Width="180" Margin="0,0,10,10" Background="#0A1730" BorderBrush="#67E8F9" BorderThickness="1" CornerRadius="12" Padding="12"><StackPanel><TextBlock Text="VLESS-msk" FontWeight="Bold"/><TextBlock Text="Reality" Foreground="#8DA8C8"/><TextBlock Text="ping" Foreground="#67E8F9"/></StackPanel></Border>
+            <Border Width="180" Margin="0,0,10,10" Background="#0A1730" BorderBrush="#8DA8C8" BorderThickness="1" CornerRadius="12" Padding="12"><StackPanel><TextBlock Text="WG-admger" FontWeight="Bold"/><TextBlock Text="WireGuard" Foreground="#8DA8C8"/><TextBlock Text="ping" Foreground="#8DA8C8"/></StackPanel></Border>
+          </WrapPanel>
+          <StackPanel Orientation="Horizontal"><TextBox x:Name="GroupBox" Width="180" Text="Маршрутизация"/><TextBox x:Name="ProxyBox" Width="160" Text="DIRECT"/><Button Click="Proxies_Click">Обновить selectors</Button><Button Click="SelectProxy_Click">Выбрать proxy</Button><Button Click="Ping_Click">Ping</Button></StackPanel>
+        </StackPanel></ScrollViewer></TabItem>
+        <TabItem Header="Mihomo"><StackPanel Margin="12"><Button Click="Inventory_Click">proxy-providers / proxy-groups / static proxies / rule-providers</Button><Button Click="Proxies_Click">proxy-table</Button><Button Click="Providers_Click">Update proxy-providers</Button><Button Click="Rules_Click">Update rule-providers</Button></StackPanel></TabItem>
+        <TabItem Header="Соединения"><StackPanel Margin="12"><Button Click="Connections_Click">Обновить connections-table</Button><Button Click="Connections_Click">close-connection by id</Button></StackPanel></TabItem>
+        <TabItem Header="VLESS"><StackPanel Margin="12"><TextBlock Text="VLESS protocol table · Proxy / Type / Server / Port / Группы / Details"/><Button Click="Inventory_Click">Показать inventory</Button></StackPanel></TabItem>
+        <TabItem Header="WireGuard"><StackPanel Margin="12"><TextBlock Text="WireGuard protocol table · Proxy / Type / Server / Port / Группы / Details"/><Button Click="Inventory_Click">Показать inventory</Button></StackPanel></TabItem>
+        <TabItem Header="AmneziaWG"><StackPanel Margin="12"><TextBlock Text="AmneziaWG protocol table · Proxy / Type / Server / Port / Группы / Details"/><Button Click="Inventory_Click">Показать inventory</Button></StackPanel></TabItem>
+        <TabItem Header="Hysteria2"><StackPanel Margin="12"><TextBlock Text="Hysteria2 protocol table · Proxy / Type / Server / Port / Группы / Details"/><Button Click="Inventory_Click">Показать inventory</Button></StackPanel></TabItem>
+        <TabItem Header="Trojan"><StackPanel Margin="12"><TextBlock Text="Trojan protocol table · Proxy / Type / Server / Port / Группы / Details"/><Button Click="Inventory_Click">Показать inventory</Button></StackPanel></TabItem>
+        <TabItem Header="Mieru"><StackPanel Margin="12"><TextBlock Text="Mieru protocol table · Proxy / Type / Server / Port / Группы / Details"/><Button Click="Inventory_Click">Показать inventory</Button></StackPanel></TabItem>
+        <TabItem Header="NaiveProxy"><StackPanel Margin="12"><TextBlock Text="NaiveProxy protocol table · Proxy / Type / Server / Port / Группы / Details"/><Button Click="Inventory_Click">Показать inventory</Button></StackPanel></TabItem>
+        <TabItem Header="Логи"><StackPanel Margin="12"><TextBlock Text="logs-viewer"/><Button Click="Logs_Click">Обновить логи</Button></StackPanel></TabItem>
+        <TabItem Header="Mihomo Генератор"><ScrollViewer><StackPanel Margin="12"><TextBlock Text="subscription-manager"/><TextBox x:Name="SubNameBox" Text="subscription_1"/><TextBox x:Name="SubUrlBox" Text="https://example.com/sub"/><StackPanel Orientation="Horizontal"><Button Click="AddSubscription_Click">Add subscription</Button><Button Click="UpdateSubscription_Click">Update subscription</Button><Button Click="DeleteSubscription_Click">Delete subscription</Button></StackPanel><TextBlock Text="static-proxy-import"/><TextBox x:Name="ImportBox" Height="150" AcceptsReturn="True" Text="- name: manual-node&#x0a;  type: http&#x0a;  server: 1.2.3.4&#x0a;  port: 8080"/><Button Click="AddImport_Click">Import static proxy</Button></StackPanel></ScrollViewer></TabItem>
+        <TabItem Header="Конфиг"><DockPanel Margin="12"><StackPanel DockPanel.Dock="Top" Orientation="Horizontal"><Button Click="ReadConfig_Click">Read config.yaml</Button><Button Click="SaveConfig_Click">Save config.yaml</Button><Button Click="ApplyConfig_Click">Apply + restart</Button></StackPanel><TextBox x:Name="ConfigBox" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" TextWrapping="NoWrap"/></DockPanel></TabItem>
+        <TabItem Header="Ручной список"><StackPanel Margin="12"><TextBlock Text="manual-proxy.yaml"/><TextBox x:Name="StaticNameBox" Text="manual-node"/><Button Click="DeleteStatic_Click">Delete static proxy</Button><Button Click="Inventory_Click">Показать группы использования</Button></StackPanel></TabItem>
+        <TabItem Header="Маршруты DNS"><StackPanel Margin="12"><TextBlock Text="dns-routes-manual-resolver"/><TextBox x:Name="DomainBox" Height="120" AcceptsReturn="True" Text="youtube.com&#x0a;github.com&#x0a;openai.com"/><Button Click="Resolve_Click">Resolve domains</Button></StackPanel></TabItem>
+        <TabItem Header="Интерфейс"><StackPanel Margin="12"><TextBlock Text="Темная navy-палитра Qt Native: #050B1A #08142A #0A1730 #67E8F9 #20C878 #EF4E5F"/><TextBlock Text="Дизайн: sidebar, compact cards, selector tiles, readable tables."/></StackPanel></TabItem>
+        <TabItem Header="Настройки"><StackPanel Margin="12"><TextBlock x:Name="SettingsText" TextWrapping="Wrap"/></StackPanel></TabItem>
+      </TabControl>
+    </DockPanel>
+    <TextBox Grid.Column="1" Grid.Row="1" Margin="14,12,0,0" x:Name="OutputBox" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/>
+  </Grid>
 </Window>

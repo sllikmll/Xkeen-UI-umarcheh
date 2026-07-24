@@ -11,7 +11,7 @@ def test_dotnet_candidates_use_native_bridge_api():
     avalonia = read("desktop/previews/avalonia/Program.cs")
     wpf = read("desktop/previews/wpf/MainWindow.xaml.cs")
     for source in (avalonia, wpf):
-        assert "0.3.0" in source
+        assert "0.4.0" in source
         assert "BRIDGE_URL" in source
         assert "http://127.0.0.1:19191" in source
         assert "/api/status" in source
@@ -27,7 +27,7 @@ def test_dotnet_candidates_use_native_bridge_api():
 def test_cpp_candidate_uses_native_bridge_api_and_gui_subsystem_build():
     cpp = read("desktop/previews/cpp-native/windows/main.cpp")
     ref = read("desktop/previews/cpp-native/windows/build-win32-preview.bat") if (ROOT / "desktop/previews/cpp-native/windows/build-win32-preview.bat").exists() else ""
-    assert "0.3.0" in cpp
+    assert "0.4.0" in cpp
     assert "BRIDGE_URL" in cpp
     assert "127.0.0.1:19191" in cpp
     for endpoint in ["/api/status", "/api/proxies", "/api/connections", "/api/config", "/api/subscription/add", "/api/import/static", "/api/dns/resolve"]:
@@ -39,7 +39,7 @@ def test_cpp_candidate_uses_native_bridge_api_and_gui_subsystem_build():
 
 def test_bridge_source_declares_production_feature_contract():
     bridge = read("desktop/previews/shared/native_bridge.py")
-    assert 'BRIDGE_VERSION = "0.3.0"' in bridge
+    assert 'BRIDGE_VERSION = "0.4.0"' in bridge
     for feature in [
         "runtime-start-stop-restart",
         "select-proxy",

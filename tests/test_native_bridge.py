@@ -73,7 +73,7 @@ def test_bridge_status_and_smoke_features(bridge):
     data = request_json(base, "/api/status")
 
     assert data["ok"] is True
-    assert data["bridge_version"] == "0.3.0"
+    assert data["bridge_version"] == "0.4.0"
     assert "runtime-start-stop-restart" in data["features"]
     assert "config-read-save-validate" in data["features"]
     assert data["config_path"] == str(runtime.config_path)
