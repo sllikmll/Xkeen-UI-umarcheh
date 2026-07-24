@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+import desktop.native.unified_ui_native as native_mod  # noqa: E402
 from desktop.native.unified_ui_native import (  # noqa: E402
     APP_NAME,
     APP_RELEASE_LABEL,
@@ -31,6 +32,17 @@ from desktop.native.unified_ui_native import (  # noqa: E402
     MihomoRuntime,
     NativeConfigManager,
 )
+
+if not hasattr(native_mod, "ensure_leading_dash_for_yaml_block"):
+    def _ensure_leading_dash_for_yaml_block(text: str) -> str:
+        raw = str(text or "").strip()
+        if not raw:
+            return ""
+        if raw.startswith("-"):
+            return raw
+        return "- " + raw.replace("\n", "\n  ")
+
+    native_mod.ensure_leading_dash_for_yaml_block = _ensure_leading_dash_for_yaml_block
 
 BRIDGE_VERSION = "0.3.0"
 DEFAULT_BRIDGE_HOST = "127.0.0.1"
