@@ -40,6 +40,18 @@
 | Linux Debian/Ubuntu | [Unified-UI-Native-2.6.7-linux-x64.deb](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.7-native/Unified-UI-Native-2.6.7-linux-x64.deb) | Есть |
 | Linux RPM | [Unified-UI-Native-2.6.7-linux-x64.rpm](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.7-native/Unified-UI-Native-2.6.7-linux-x64.rpm) | Есть |
 
+
+### Windows technology previews: Avalonia / WPF / C++ Win32
+
+Отдельный экспериментальный релиз для сравнения desktop-стеков: **[`v0.1.0-desktop-previews`](https://github.com/sllikmll/Unified-UI/releases/tag/v0.1.0-desktop-previews)**. Это не замена актуальной Native app `v2.6.7-native`, а три параллельные Windows-сборки, чтобы пощупать ощущение UI и вес runtime.
+
+| Вариант | Файл | Зачем смотреть |
+|---|---|---|
+| C# Avalonia | [Unified-UI-Avalonia-Preview-0.1.0-win-x64.zip](https://github.com/sllikmll/Unified-UI/releases/download/v0.1.0-desktop-previews/Unified-UI-Avalonia-Preview-0.1.0-win-x64.zip) | Cross-platform кандидат, ближе всего к “премиум desktop” без привязки к Windows. |
+| C# WPF | [Unified-UI-WPF-Preview-0.1.0-win-x64.zip](https://github.com/sllikmll/Unified-UI/releases/download/v0.1.0-desktop-previews/Unified-UI-WPF-Preview-0.1.0-win-x64.zip) | Windows-first вариант: нормальный native Windows UX, DPI, окна, установщики. |
+| C++ Win32 native | [Unified-UI-Cpp-Win32-Preview-0.1.0-win-x64.zip](https://github.com/sllikmll/Unified-UI/releases/download/v0.1.0-desktop-previews/Unified-UI-Cpp-Win32-Preview-0.1.0-win-x64.zip) | Самый быстрый и лёгкий вариант, но самый дорогой по разработке и полировке UI. |
+| Проверка | [DESKTOP_PREVIEWS_SHA256SUMS](https://github.com/sllikmll/Unified-UI/releases/download/v0.1.0-desktop-previews/DESKTOP_PREVIEWS_SHA256SUMS), [desktop-previews-manifest.json](https://github.com/sllikmll/Unified-UI/releases/download/v0.1.0-desktop-previews/desktop-previews-manifest.json) | SHA256 и manifest по preview artifacts. |
+
 Native app:
 
 - рисует интерфейс настоящими Qt Widgets;
