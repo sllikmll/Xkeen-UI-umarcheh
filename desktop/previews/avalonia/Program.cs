@@ -31,7 +31,7 @@ public sealed class App : Application
 {
     public override void Initialize()
     {
-        Styles.Add(new FluentTheme { Mode = FluentThemeMode.Dark });
+        Styles.Add(new FluentTheme());
         RequestedThemeVariant = ThemeVariant.Dark;
     }
 
@@ -61,9 +61,13 @@ public sealed class MainWindow : Window
     Control BuildShell()
     {
         var root = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*"), Margin = new Thickness(14), RowSpacing = 10 };
-        var nav = new UniformGrid { Rows = 1, Columns = tabs.Length };
-        foreach (var tab in tabs)
-            nav.Children.Add(Pill(tab, tab == "Маршрутизация"));
+        var nav = new Grid { ColumnDefinitions = new ColumnDefinitions(string.Join(",", tabs.Select(_ => "*"))) };
+        for (var i = 0; i < tabs.Length; i++)
+        {
+            var button = Pill(tabs[i], tabs[i] == "Маршрутизация");
+            Grid.SetColumn(button, i);
+            nav.Children.Add(button);
+        }
         Grid.SetRow(nav, 0);
         root.Children.Add(nav);
 
