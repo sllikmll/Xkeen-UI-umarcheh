@@ -15,6 +15,7 @@ import gzip
 import json
 import os
 import platform
+import socket
 import re
 import shutil
 import subprocess
@@ -34,6 +35,8 @@ import yaml
 
 MIHOMO_VERSION = "1.19.29"
 APP_NAME = "Unified UI Native"
+APP_VERSION = "2.6.6"
+APP_RELEASE_LABEL = f"v{APP_VERSION}-native"
 DEFAULT_CONTROLLER_PORT = int(os.environ.get("MIHOMO_CONTROLLER_PORT", "19190"))
 DEFAULT_MIXED_PORT = int(os.environ.get("MIHOMO_MIXED_PORT", "17990"))
 DEFAULT_DNS_PORT = int(os.environ.get("MIHOMO_DNS_PORT", "15354"))
@@ -919,8 +922,17 @@ class NativeConfigManager:
             raise ValueError(f"Provider `{old_name}` не найден")
         if new_name != old_name and new_name in providers:
             raise ValueError(f"Provider `{new_name}` уже существует")
+        target_groups: list[str] = []
+        for group in data.get("proxy-groups") or []:
+            if not isinstance(group, dict):
+                continue
+            gname = str(group.get("name") or "").strip()
+            use = group.get("use")
+            if gname and isinstance(use, list) and old_name in {str(item) for item in use}:
+                target_groups.append(gname)
         provider_raw = providers.pop(old_name)
         provider: dict[str, Any] = dict(provider_raw) if isinstance(provider_raw, dict) else {"type": "http"}
+        removed_static = self._remove_subscription_mirrors(data, old_name, provider)
         provider["type"] = "http"
         provider["url"] = url
         provider["interval"] = int(interval)
@@ -937,8 +949,20 @@ class NativeConfigManager:
                 use = group.get("use")
                 if isinstance(use, list):
                     group["use"] = [new_name if str(item) == old_name else item for item in use]
+        added_static: list[str] = []
+        mirror_error = ""
+        try:
+            imports = self.fetch_subscription_imports(url)
+            added_static = self._append_imports_to_data(data, imports, target_groups, origin_provider=new_name)
+        except Exception as exc:
+            mirror_error = str(exc)
         backup, msg = self.save_config_data(data, restart=restart)
-        return backup, f"Provider `{old_name}` обновлён как `{new_name}`; {msg}"
+        suffix = f"; старые зеркальные static proxies удалены: {len(removed_static)}"
+        if added_static:
+            suffix += f"; новые добавлены: {len(added_static)}"
+        elif mirror_error:
+            suffix += f"; новые ноды не удалось зеркалировать: {mirror_error}"
+        return backup, f"Provider `{old_name}` обновлён как `{new_name}`{suffix}; {msg}"
 
     def delete_subscription_provider(self, name: str, *, restart: bool = True) -> tuple[Path | None, str]:
         name = str(name or "").strip()
@@ -948,7 +972,8 @@ class NativeConfigManager:
         providers = data.get("proxy-providers")
         if not isinstance(providers, dict) or name not in providers:
             raise ValueError(f"Provider `{name}` не найден")
-        providers.pop(name, None)
+        provider = providers.pop(name, None)
+        removed_static = self._remove_subscription_mirrors(data, name, provider if isinstance(provider, dict) else None)
         for group in data.get("proxy-groups") or []:
             if not isinstance(group, dict):
                 continue
@@ -956,7 +981,7 @@ class NativeConfigManager:
             if isinstance(use, list):
                 group["use"] = [item for item in use if str(item) != name]
         backup, msg = self.save_config_data(data, restart=restart)
-        return backup, f"Provider `{name}` удалён; {msg}"
+        return backup, f"Provider `{name}` удалён; зеркальные static proxies удалены: {len(removed_static)}; {msg}"
 
     def proxy_group_items(self) -> list[dict[str, Any]]:
         data = self.config_data()
@@ -1253,7 +1278,103 @@ class NativeConfigManager:
     def fetch_subscription_imports(self, url: str) -> list[ImportResult]:
         return self.parse_subscription_text(self.fetch_subscription_text(url))
 
-    def _append_imports_to_data(self, data: dict[str, Any], imports: list[ImportResult], target_groups: list[str]) -> list[str]:
+    def _provider_cache_path(self, provider: dict[str, Any] | None) -> Path | None:
+        if not isinstance(provider, dict):
+            return None
+        raw_path = str(provider.get("path") or "").strip()
+        if not raw_path:
+            return None
+        path = Path(raw_path)
+        if not path.is_absolute():
+            path = self.config_path.parent / raw_path
+        try:
+            return path.resolve()
+        except Exception:
+            return path
+
+    def _imports_from_provider_cache(self, provider: dict[str, Any] | None) -> list[ImportResult]:
+        path = self._provider_cache_path(provider)
+        if not path or not path.exists():
+            return []
+        try:
+            raw = path.read_text(encoding="utf-8", errors="replace")
+            data = yaml.safe_load(raw)
+            proxies = data.get("proxies") if isinstance(data, dict) else data
+            if not isinstance(proxies, list):
+                return []
+            imports: list[ImportResult] = []
+            for item in proxies:
+                if isinstance(item, dict) and str(item.get("name") or "").strip():
+                    imports.append(ImportResult(
+                        name=str(item.get("name") or ""),
+                        yaml=yaml.safe_dump([item], allow_unicode=True, sort_keys=False, width=140),
+                        kind=str(item.get("type") or "yaml"),
+                        source="provider-cache",
+                    ))
+            return imports
+        except Exception:
+            return []
+
+    def _imports_from_provider_definition(self, provider: dict[str, Any] | None) -> list[ImportResult]:
+        imports = self._imports_from_provider_cache(provider)
+        if imports:
+            return imports
+        url = str((provider or {}).get("url") or "").strip() if isinstance(provider, dict) else ""
+        if url.startswith(("http://", "https://")):
+            try:
+                return self.fetch_subscription_imports(url)
+            except Exception:
+                return []
+        return []
+
+    def _subscription_mirror_proxy_names(self, data: dict[str, Any], provider_name: str, provider: dict[str, Any] | None = None) -> list[str]:
+        provider_name = str(provider_name or "").strip()
+        names: set[str] = set()
+        for proxy in data.get("proxies") or []:
+            if not isinstance(proxy, dict):
+                continue
+            origin = proxy.get("x-unified-ui-origin")
+            if isinstance(origin, dict) and origin.get("kind") == "subscription-mirror" and str(origin.get("provider") or "") == provider_name:
+                name = str(proxy.get("name") or "").strip()
+                if name:
+                    names.add(name)
+        # Backward compatibility for 2.6.5 configs: mirrored proxies did not carry origin metadata yet.
+        # Infer only exact names from the provider cache/current subscription definition.
+        for imp in self._imports_from_provider_definition(provider):
+            if imp.name:
+                names.add(str(imp.name))
+        existing = {str(p.get("name") or "") for p in data.get("proxies") or [] if isinstance(p, dict)}
+        return [name for name in names if name in existing]
+
+    def _remove_static_proxies_by_names(self, data: dict[str, Any], names: list[str] | set[str]) -> list[str]:
+        remove = {str(name) for name in names if str(name)}
+        if not remove:
+            return []
+        proxies = data.get("proxies")
+        if not isinstance(proxies, list):
+            return []
+        removed: list[str] = []
+        kept = []
+        for proxy in proxies:
+            if isinstance(proxy, dict) and str(proxy.get("name") or "") in remove:
+                removed.append(str(proxy.get("name") or ""))
+                continue
+            kept.append(proxy)
+        data["proxies"] = kept
+        removed_set = set(removed)
+        for group in data.get("proxy-groups") or []:
+            if not isinstance(group, dict):
+                continue
+            group_proxies = group.get("proxies")
+            if isinstance(group_proxies, list):
+                group["proxies"] = [item for item in group_proxies if str(item) not in removed_set]
+        return removed
+
+    def _remove_subscription_mirrors(self, data: dict[str, Any], provider_name: str, provider: dict[str, Any] | None = None) -> list[str]:
+        names = self._subscription_mirror_proxy_names(data, provider_name, provider)
+        return self._remove_static_proxies_by_names(data, names)
+
+    def _append_imports_to_data(self, data: dict[str, Any], imports: list[ImportResult], target_groups: list[str], origin_provider: str = "") -> list[str]:
         added: list[str] = []
         for imp in imports:
             block = ensure_leading_dash_for_yaml_block(imp.yaml)
@@ -1266,6 +1387,8 @@ class NativeConfigManager:
             if desired_name in existing_names:
                 continue
             proxy["name"] = self._unique_proxy_name(data, desired_name)
+            if origin_provider:
+                proxy["x-unified-ui-origin"] = {"kind": "subscription-mirror", "provider": origin_provider}
             data["proxies"].append(proxy)
             added.append(str(proxy["name"]))
             for group in data.get("proxy-groups") or []:
@@ -1334,7 +1457,7 @@ class NativeConfigManager:
         if mirror_static:
             try:
                 imports = self.parse_subscription_text(subscription_text) if subscription_text is not None else self.fetch_subscription_imports(url)
-                added_static = self._append_imports_to_data(data, imports, list(target_groups))
+                added_static = self._append_imports_to_data(data, imports, list(target_groups), origin_provider=name)
             except Exception as exc:
                 mirror_error = str(exc)
         new_text = yaml.safe_dump(data, allow_unicode=True, sort_keys=False, width=140)
@@ -1372,6 +1495,10 @@ class MihomoRuntime:
     @property
     def manual_rules_path(self) -> Path:
         return self.runtime / "mihomo" / "rules" / "manual-proxy.yaml"
+
+    @property
+    def dns_routes_path(self) -> Path:
+        return self.runtime / "dns-routes.json"
 
     def _subprocess_window_kwargs(self) -> dict[str, Any]:
         """Hide helper console windows on Windows builds.
@@ -1633,12 +1760,14 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None, gui_
         QHBoxLayout,
         QLabel,
         QLineEdit,
+        QListWidget,
         QMainWindow,
         QMessageBox,
         QPushButton,
         QFrame,
         QPlainTextEdit,
         QProgressBar,
+        QRadioButton,
         QScrollArea,
         QTableWidget,
         QTableWidgetItem,
@@ -1856,11 +1985,12 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None, gui_
                 q.put(("done", ok, total))
 
             def drain() -> None:
-                if self.ping_all_queue is None:
+                q = self.ping_all_queue
+                if q is None:
                     return
                 while True:
                     try:
-                        event = self.ping_all_queue.get_nowait()
+                        event = q.get_nowait()
                     except queue.Empty:
                         break
                     if event[0] == "progress":
@@ -1874,8 +2004,10 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None, gui_
                         self.ping_all_btn.setEnabled(True)
                         if self.ping_all_timer:
                             self.ping_all_timer.stop()
+                            self.ping_all_timer = None
                         self.ping_all_queue = None
                         self.refresh()
+                        return
 
             self.ping_all_timer = QTimer(self)
             self.ping_all_timer.setInterval(120)
@@ -2416,79 +2548,276 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None, gui_
                 self.status.setText(f"Ping ошибка: {e}")
 
     class DnsRoutesTab(QWidget):
+        SERVICE_PRESETS: dict[str, dict[str, Any]] = {
+            "youtube": {
+                "label": "YouTube / Google Video",
+                "domains": ["youtube.com", "youtu.be", "googlevideo.com", "ytimg.com", "ggpht.com", "youtubei.googleapis.com"],
+                "ips": ["142.250.0.0/15", "172.217.0.0/16"],
+            },
+            "telegram": {
+                "label": "Telegram",
+                "domains": ["telegram.org", "t.me", "tdesktop.com", "telegra.ph"],
+                "ips": ["149.154.160.0/20", "91.108.4.0/22"],
+            },
+            "openai": {
+                "label": "OpenAI / ChatGPT",
+                "domains": ["openai.com", "chatgpt.com", "oaistatic.com", "oaiusercontent.com", "auth0.openai.com"],
+                "ips": [],
+            },
+        }
+
         def __init__(self, activate: Callable[[str], None] | None = None) -> None:
             super().__init__()
             self.activate = activate
+            self.routes: list[dict[str, Any]] = []
+            self.selected_name = ""
             layout = QVBoxLayout(self)
             title = QLabel("Маршруты DNS")
             title.setObjectName("title")
             layout.addWidget(title)
-            info = QGroupBox("DNS routing")
-            info_layout = QVBoxLayout(info)
-            info_layout.addWidget(QLabel("Native DNS-маршруты работают через Mihomo rule-providers/rules. Быстрый путь: добавь домены в ручной список, затем выбери selector для `Ручной список` в config.yaml."))
-            row = QHBoxLayout()
-            for text, target in [("Открыть ручной список", "Ручной список"), ("Открыть config.yaml", "Конфиг"), ("Открыть маршрутизацию", "Маршрутизация")]:
-                b = QPushButton(text)
-                b.clicked.connect(lambda _=False, t=target: self.activate(t) if self.activate else None)
-                row.addWidget(b)
-            row.addStretch(1)
-            info_layout.addLayout(row)
-            layout.addWidget(info)
-            self.editor = QPlainTextEdit()
-            self.editor.setPlaceholderText("example.com\n*.youtube.com\nDOMAIN-SUFFIX,openai.com")
-            apply_btn = QPushButton("Добавить в ручной список + restart")
-            apply_btn.setObjectName("primary")
-            apply_btn.clicked.connect(self.apply_domains)
+            subtitle = QLabel("Keenetic/NDMS-style routing: domain/IP lists → interface. Отдельный режим рядом с Mihomo selector routing.")
+            subtitle.setObjectName("muted")
+            layout.addWidget(subtitle)
+
+            mode_box = QGroupBox("Интерфейс маршрутизации")
+            mode_layout = QHBoxLayout(mode_box)
+            self.mode_mihomo = QRadioButton("Mihomo selectors")
+            self.mode_dns = QRadioButton("Маршруты DNS / интерфейсы роутера")
+            self.mode_dns.setChecked(True)
+            self.mode_mihomo.toggled.connect(self.switch_mode)
+            mode_layout.addWidget(self.mode_mihomo)
+            mode_layout.addWidget(self.mode_dns)
+            mode_layout.addStretch(1)
+            layout.addWidget(mode_box)
+
+            top = QHBoxLayout()
+            self.status = QLabel("")
+            self.status.setObjectName("muted")
+            refresh = QPushButton("Обновить")
+            refresh.clicked.connect(self.load)
+            new_btn = QPushButton("Новый список")
+            new_btn.clicked.connect(self.new_route)
+            top.addWidget(self.status, 1)
+            top.addWidget(refresh)
+            top.addWidget(new_btn)
+            layout.addLayout(top)
+
+            body = QHBoxLayout()
+            left = QGroupBox("Списки NDMS")
+            left_layout = QVBoxLayout(left)
+            left_layout.addWidget(QLabel("object-group fqdn domain-listN + dns-proxy route"))
+            self.list_widget = QListWidget()
+            self.list_widget.currentRowChanged.connect(self.select_row)
+            left_layout.addWidget(self.list_widget, 1)
+            body.addWidget(left, 34)
+
+            editor_box = QGroupBox("Редактор маршрута")
+            form = QFormLayout(editor_box)
+            self.name_edit = QLineEdit()
+            self.name_edit.setPlaceholderText("domain-list5")
+            self.description_edit = QLineEdit()
+            self.description_edit.setPlaceholderText("YouTube / Telegram / Manual")
+            self.interface_edit = QComboBox()
+            self.interface_edit.setEditable(True)
+            self.interface_edit.addItems(["manual-proxy", "DIRECT", "REJECT"] + cfg_mgr.group_names())
+            self.items_edit = QPlainTextEdit()
+            self.items_edit.setPlaceholderText("youtube.com\ngooglevideo.com\n142.250.0.0/15")
+            form.addRow("ID списка", self.name_edit)
+            form.addRow("Описание", self.description_edit)
+            form.addRow("Интерфейс маршрутизации", self.interface_edit)
+            form.addRow("Домены, IP и CIDR", self.items_edit)
+
+            generator = QHBoxLayout()
+            self.service_combo = QComboBox()
+            for key, preset in self.SERVICE_PRESETS.items():
+                self.service_combo.addItem(str(preset.get("label") or key), key)
+            self.dns_server = QLineEdit()
+            self.dns_server.setPlaceholderText("DNS server, опционально")
+            gen_btn = QPushButton("Собрать адреса")
+            gen_btn.clicked.connect(self.generate_service)
+            generator.addWidget(self.service_combo, 2)
+            generator.addWidget(self.dns_server, 1)
+            generator.addWidget(gen_btn)
+            form.addRow("Генератор", generator)
+
             actions = QHBoxLayout()
             actions.addStretch(1)
+            apply_btn = QPushButton("Применить")
+            apply_btn.setObjectName("primary")
+            apply_btn.clicked.connect(self.apply_route)
             actions.addWidget(apply_btn)
-            self.status = QLabel("Вставь домены/правила по одному на строку. Дубликаты не добавляются.")
-            self.status.setObjectName("muted")
-            layout.addWidget(QLabel("Быстро добавить домены в manual-proxy:"))
-            layout.addWidget(self.editor, 1)
-            layout.addLayout(actions)
-            layout.addWidget(self.status)
+            form.addRow(actions)
+            body.addWidget(editor_box, 66)
+            layout.addLayout(body, 1)
+            self.load()
 
-        def normalize_line(self, raw: str) -> str:
+        def switch_mode(self) -> None:
+            if self.mode_mihomo.isChecked() and self.activate:
+                self.activate("Маршрутизация")
+
+        def normalize_dns_route_item(self, raw: str) -> str:
             line = str(raw or "").strip().strip(",;")
             if not line or line.startswith("#"):
                 return ""
             if "," in line:
                 return line
+            if re.match(r"^\d{1,3}(?:\.\d{1,3}){3}(?:/\d{1,2})?$", line):
+                return line
             if line.startswith("*."):
-                return "DOMAIN-SUFFIX," + line[2:]
-            if re.match(r"^[A-Za-z0-9_.-]+\.[A-Za-z]{2,}$", line):
-                return "DOMAIN-SUFFIX," + line.lstrip(".")
+                return line[2:]
+            if re.match(r"^[A-Za-z0-9_.-]+\.[A-Za-z]{2,}\.?$", line):
+                return line.rstrip(".").lstrip(".")
             return line
 
-        def apply_domains(self) -> None:
+        def load_routes_data(self) -> dict[str, Any]:
+            path = runtime.dns_routes_path
+            if not path.exists():
+                return {"mode": "dns-routes", "routes": []}
             try:
-                runtime.manual_rules_path.parent.mkdir(parents=True, exist_ok=True)
-                if runtime.manual_rules_path.exists():
-                    current = runtime.manual_rules_path.read_text(encoding="utf-8")
+                data = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    data.setdefault("routes", [])
+                    return data
+            except Exception:
+                pass
+            return {"mode": "dns-routes", "routes": []}
+
+        def save_routes_data(self) -> None:
+            runtime.dns_routes_path.parent.mkdir(parents=True, exist_ok=True)
+            runtime.dns_routes_path.write_text(json.dumps({"mode": "dns-routes", "routes": self.routes}, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        def next_list_name(self) -> str:
+            used = set()
+            for route in self.routes:
+                name = str(route.get("name") or "")
+                m = re.match(r"^domain-list(\d+)$", name)
+                if m:
+                    used.add(int(m.group(1)))
+            i = 0
+            while i in used:
+                i += 1
+            return f"domain-list{i}"
+
+        def render_list(self) -> None:
+            self.list_widget.clear()
+            for route in self.routes:
+                name = str(route.get("name") or "")
+                label = str(route.get("description") or name)
+                iface = str(route.get("interface") or "интерфейс не задан")
+                count = len(route.get("items") or [])
+                self.list_widget.addItem(f"{label}  ·  {name}  ·  {iface}  ·  {count} элементов")
+            if self.routes:
+                self.list_widget.setCurrentRow(0)
+
+        def load(self) -> None:
+            data = self.load_routes_data()
+            routes = data.get("routes") if isinstance(data, dict) else []
+            self.routes = [r for r in routes if isinstance(r, dict)] if isinstance(routes, list) else []
+            self.render_list()
+            self.status.setText(f"OK · списков: {len(self.routes)} · интерфейсов: {self.interface_edit.count()} · файл: {runtime.dns_routes_path}")
+            if not self.routes:
+                self.new_route()
+
+        def new_route(self) -> None:
+            self.selected_name = ""
+            self.name_edit.setText(self.next_list_name())
+            self.description_edit.setText("Manual")
+            self.items_edit.setPlainText("")
+            self.status.setText("Новый список. После применения будет создан domain-listN.")
+
+        def select_row(self, row: int) -> None:
+            if row < 0 or row >= len(self.routes):
+                return
+            route = self.routes[row]
+            self.selected_name = str(route.get("name") or "")
+            self.name_edit.setText(self.selected_name)
+            self.description_edit.setText(str(route.get("description") or ""))
+            iface = str(route.get("interface") or "")
+            if iface and self.interface_edit.findText(iface) < 0:
+                self.interface_edit.addItem(iface)
+            if iface:
+                self.interface_edit.setCurrentText(iface)
+            self.items_edit.setPlainText("\n".join(map(str, route.get("items") or [])))
+            self.status.setText(f"{self.selected_name}: {len(route.get('items') or [])} элементов · интерфейс {iface or 'не задан'}")
+
+        def resolve_domains(self, domains: list[str], dns_server: str = "") -> list[str]:
+            # Native-local resolver: use system DNS; dns_server is kept in UI for parity and future router/DoH target.
+            ips: list[str] = []
+            seen: set[str] = set()
+            for domain in domains[:40]:
+                try:
+                    for _, _, _, _, sockaddr in socket.getaddrinfo(domain, None, family=socket.AF_INET):
+                        ip = str(sockaddr[0])
+                        if ip not in seen:
+                            seen.add(ip)
+                            ips.append(ip)
+                except Exception:
+                    continue
+            return ips
+
+        def generate_service(self) -> None:
+            key = str(self.service_combo.currentData() or "")
+            preset = self.SERVICE_PRESETS.get(key) or {}
+            domains = [str(x) for x in preset.get("domains") or []]
+            ips = [str(x) for x in preset.get("ips") or []]
+            resolved = self.resolve_domains(domains, self.dns_server.text().strip())
+            current = [self.normalize_dns_route_item(x) for x in self.items_edit.toPlainText().splitlines()]
+            merged: list[str] = []
+            seen: set[str] = set()
+            for item in current + domains + ips + resolved:
+                norm = self.normalize_dns_route_item(item)
+                if norm and norm not in seen:
+                    seen.add(norm)
+                    merged.append(norm)
+            self.description_edit.setText(str(preset.get("label") or key or self.description_edit.text()))
+            self.items_edit.setPlainText("\n".join(merged))
+            self.status.setText(f"Собрано: {len(domains) + len(ips)} базовых элементов; DNS-resolved IP: {len(resolved)}")
+
+        def write_local_mihomo_rules(self, items: list[str]) -> None:
+            runtime.manual_rules_path.parent.mkdir(parents=True, exist_ok=True)
+            lines = ["payload:"]
+            for item in items:
+                norm = self.normalize_dns_route_item(item)
+                if not norm:
+                    continue
+                if re.match(r"^\d{1,3}(?:\.\d{1,3}){3}(?:/\d{1,2})?$", norm):
+                    value = f"IP-CIDR,{norm},no-resolve" if "/" in norm else f"IP-CIDR,{norm}/32,no-resolve"
+                elif "," in norm:
+                    value = norm
                 else:
-                    current = "payload: []\n"
-                lines = [self.normalize_line(x) for x in self.editor.toPlainText().splitlines()]
-                lines = [x for x in lines if x]
-                if not lines:
-                    raise ValueError("Нет доменов/правил для добавления")
-                existing = set(re.findall(r"^[\t ]*-[\t ]*(.+?)\s*$", current, flags=re.M))
-                if not current.strip() or current.strip() == "payload: []":
-                    new_text = "payload:\n"
-                elif current.rstrip().endswith("payload: []"):
-                    new_text = current.rstrip()[:-len("payload: []")] + "payload:\n"
-                else:
-                    new_text = current.rstrip() + "\n"
-                added = 0
-                for line in lines:
-                    if line in existing:
-                        continue
-                    new_text += f"  - {line}\n"
-                    added += 1
-                runtime.manual_rules_path.write_text(new_text, encoding="utf-8")
+                    value = f"DOMAIN-SUFFIX,{norm}"
+                lines.append(f"  - {value}")
+            runtime.manual_rules_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        def apply_route(self) -> None:
+            try:
+                name = self.name_edit.text().strip() or self.next_list_name()
+                if not re.match(r"^domain-list\d+$", name):
+                    raise ValueError("ID списка должен быть domain-listN")
+                items = [self.normalize_dns_route_item(x) for x in self.items_edit.toPlainText().splitlines()]
+                items = [x for x in items if x]
+                if not items:
+                    raise ValueError("Список пуст")
+                route = {
+                    "name": name,
+                    "description": self.description_edit.text().strip() or name,
+                    "interface": self.interface_edit.currentText().strip(),
+                    "items": items,
+                }
+                replaced = False
+                for idx, existing in enumerate(self.routes):
+                    if str(existing.get("name") or "") == (self.selected_name or name):
+                        self.routes[idx] = route
+                        replaced = True
+                        break
+                if not replaced:
+                    self.routes.append(route)
+                self.selected_name = name
+                self.save_routes_data()
+                self.write_local_mihomo_rules(items)
                 runtime.restart()
-                self.status.setText(f"Добавлено правил: {added}; Mihomo перезапущен")
-                self.editor.clear()
+                self.render_list()
+                self.status.setText(f"Применено: {name} → {route['interface'] or 'manual-proxy'}; items: {len(items)}; Mihomo перезапущен")
             except Exception as e:
                 QMessageBox.critical(self, APP_NAME, f"Не удалось применить DNS routes:\n{e}")
 
@@ -3139,11 +3468,12 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None, gui_
                 q.put(("done", ok, total))
 
             def drain() -> None:
-                if self.ping_all_queue is None:
+                q = self.ping_all_queue
+                if q is None:
                     return
                 while True:
                     try:
-                        event = self.ping_all_queue.get_nowait()
+                        event = q.get_nowait()
                     except queue.Empty:
                         break
                     if event[0] == "progress":
@@ -3157,8 +3487,10 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None, gui_
                         self.ping_all_btn.setEnabled(True)
                         if self.ping_all_timer:
                             self.ping_all_timer.stop()
+                            self.ping_all_timer = None
                         self.ping_all_queue = None
                         self.refresh()
+                        return
 
             self.ping_all_timer = QTimer(self)
             self.ping_all_timer.setInterval(120)
@@ -3221,7 +3553,7 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None, gui_
             for text, target in [
                 ("Редактировать config.yaml", "Конфиг"),
                 ("Редактировать manual-proxy.yaml", "Ручной список"),
-                ("Смотреть логи", "Файлы"),
+                ("Смотреть логи", "Логи"),
             ]:
                 b = QPushButton(text)
                 b.clicked.connect(lambda _=False, t=target: self.activate(t) if self.activate else None)
@@ -3236,7 +3568,7 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None, gui_
     class MainWindow(QMainWindow):
         def __init__(self) -> None:
             super().__init__()
-            self.setWindowTitle(APP_NAME)
+            self.setWindowTitle(f"{APP_NAME} {APP_RELEASE_LABEL}")
             self.resize(1280, 720)
             self.runtime_restart_in_progress = False
             self.tab_buttons: dict[str, QPushButton] = {}
@@ -3281,7 +3613,7 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None, gui_
                 page = ProtocolTab(label, kind, on_changed=self.refresh_all)
                 self.protocol_pages.append(page)
                 self.add_page(page_name, page)
-            self.add_page("Файлы", self.logs)
+            self.add_page("Логи", self.logs)
             self.add_page("Mihomo Генератор", self.imports)
             self.add_page("Конфиг", self.config)
             self.add_page("Ручной список", self.manual)
@@ -3324,9 +3656,6 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None, gui_
             settings_btn.clicked.connect(lambda: self.activate_page("Настройки"))
             row.addWidget(interface_btn)
             row.addWidget(settings_btn)
-            version = QLabel("v2.6.5-native")
-            version.setObjectName("Muted")
-            row.addWidget(version)
             row.addStretch(1)
             right.addLayout(row)
             row2 = QHBoxLayout()
@@ -3344,7 +3673,7 @@ def run_gui(runtime: MihomoRuntime, gui_smoke_seconds: float | None = None, gui_
             layout = QHBoxLayout(bar)
             layout.setContentsMargins(0, 0, 0, 0)
             layout.setSpacing(5)
-            for name in ["Маршрутизация", "Mihomo", "Соединения", "WireGuard", "Amnezia", "Hysteria2", "VLESS", "Trojan", "Mieru", "NaiveProxy", "Файлы", "Mihomo Генератор", "Конфиг", "Ручной список", "Маршруты DNS"]:
+            for name in ["Маршрутизация", "Mihomo", "Соединения", "WireGuard", "Amnezia", "Hysteria2", "VLESS", "Trojan", "Mieru", "NaiveProxy", "Логи", "Mihomo Генератор", "Конфиг", "Ручной список", "Маршруты DNS"]:
                 b = QPushButton(name)
                 b.setObjectName("Tab")
                 b.clicked.connect(lambda _=False, n=name: self.activate_page(n))

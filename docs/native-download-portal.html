@@ -44,16 +44,16 @@
     <p class="footer">Unified UI Native ships as release assets, not git blobs. If a download is missing, the release is incomplete — не делаем вид, что всё нормально.</p>
   </main>
   <script>
-    const TAG = 'v2.6.5-native';
+    const TAG = 'v2.6.6-native';
     const BASE = 'https://github.com/sllikmll/Unified-UI/releases/download/' + TAG;
     const fallback = [
-      ['macOS','macOS Apple Silicon','Unified-UI-Native-2.6.5-mac-arm64.zip'],
-      ['Windows','Windows setup wizard','Unified-UI-Native-Setup-2.6.5-x64.exe'],
-      ['Windows','Windows portable ZIP','Unified-UI-Native-2.6.5-windows-x64-portable.zip'],
-      ['Windows','Windows standalone EXE','Unified-UI-Native-2.6.5-x64.exe'],
-      ['Linux','Linux portable tar.gz','Unified-UI-Native-2.6.5-linux-x64-portable.tar.gz'],
-      ['Linux','Debian/Ubuntu package','Unified-UI-Native-2.6.5-linux-x64.deb'],
-      ['Linux','RPM package','Unified-UI-Native-2.6.5-linux-x64.rpm'],
+      ['macOS','macOS Apple Silicon','Unified-UI-Native-2.6.6-mac-arm64.zip'],
+      ['Windows','Windows setup wizard','Unified-UI-Native-Setup-2.6.6-x64.exe'],
+      ['Windows','Windows portable ZIP','Unified-UI-Native-2.6.6-windows-x64-portable.zip'],
+      ['Windows','Windows standalone EXE','Unified-UI-Native-2.6.6-x64.exe'],
+      ['Linux','Linux portable tar.gz','Unified-UI-Native-2.6.6-linux-x64-portable.tar.gz'],
+      ['Linux','Debian/Ubuntu package','Unified-UI-Native-2.6.6-linux-x64.deb'],
+      ['Linux','RPM package','Unified-UI-Native-2.6.6-linux-x64.rpm'],
     ].map(([platform,label,file])=>({platform,label,file,download_url:BASE+'/'+file,size:0,sha256:''}));
     function size(n){ if(!n) return '—'; const u=['B','KB','MB','GB']; let i=0,v=n; while(v>1024&&i<u.length-1){v/=1024;i++} return v.toFixed(i?1:0)+' '+u[i]; }
     function render(items){

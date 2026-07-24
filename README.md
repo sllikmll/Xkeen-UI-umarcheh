@@ -9,15 +9,15 @@
 | Что | Ссылка |
 |---|---|
 | Репозиторий | https://github.com/sllikmll/Unified-UI |
-| **Актуальный Native desktop релиз** | **[`v2.6.5-native`](https://github.com/sllikmll/Unified-UI/releases/tag/v2.6.5-native)** |
-| Windows installer | [Unified-UI-Native-Setup-2.6.5-x64.exe](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.5-native/Unified-UI-Native-Setup-2.6.5-x64.exe) |
-| Windows standalone EXE | [Unified-UI-Native-2.6.5-x64.exe](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.5-native/Unified-UI-Native-2.6.5-x64.exe) |
-| Windows portable ZIP | [Unified-UI-Native-2.6.5-windows-x64-portable.zip](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.5-native/Unified-UI-Native-2.6.5-windows-x64-portable.zip) |
-| macOS Apple Silicon | [Unified-UI-Native-2.6.5-mac-arm64.zip](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.5-native/Unified-UI-Native-2.6.5-mac-arm64.zip) |
-| Linux portable | [Unified-UI-Native-2.6.5-linux-x64-portable.tar.gz](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.5-native/Unified-UI-Native-2.6.5-linux-x64-portable.tar.gz) |
-| Linux `.deb` | [Unified-UI-Native-2.6.5-linux-x64.deb](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.5-native/Unified-UI-Native-2.6.5-linux-x64.deb) |
-| Linux `.rpm` | [Unified-UI-Native-2.6.5-linux-x64.rpm](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.5-native/Unified-UI-Native-2.6.5-linux-x64.rpm) |
-| SHA256 / manifest | [SHA256SUMS](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.5-native/SHA256SUMS), [native-release-manifest.json](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.5-native/native-release-manifest.json) |
+| **Актуальный Native desktop релиз** | **[`v2.6.6-native`](https://github.com/sllikmll/Unified-UI/releases/tag/v2.6.6-native)** |
+| Windows installer | [Unified-UI-Native-Setup-2.6.6-x64.exe](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.6-native/Unified-UI-Native-Setup-2.6.6-x64.exe) |
+| Windows standalone EXE | [Unified-UI-Native-2.6.6-x64.exe](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.6-native/Unified-UI-Native-2.6.6-x64.exe) |
+| Windows portable ZIP | [Unified-UI-Native-2.6.6-windows-x64-portable.zip](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.6-native/Unified-UI-Native-2.6.6-windows-x64-portable.zip) |
+| macOS Apple Silicon | [Unified-UI-Native-2.6.6-mac-arm64.zip](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.6-native/Unified-UI-Native-2.6.6-mac-arm64.zip) |
+| Linux portable | [Unified-UI-Native-2.6.6-linux-x64-portable.tar.gz](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.6-native/Unified-UI-Native-2.6.6-linux-x64-portable.tar.gz) |
+| Linux `.deb` | [Unified-UI-Native-2.6.6-linux-x64.deb](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.6-native/Unified-UI-Native-2.6.6-linux-x64.deb) |
+| Linux `.rpm` | [Unified-UI-Native-2.6.6-linux-x64.rpm](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.6-native/Unified-UI-Native-2.6.6-linux-x64.rpm) |
+| SHA256 / manifest | [SHA256SUMS](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.6-native/SHA256SUMS), [native-release-manifest.json](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.6-native/native-release-manifest.json) |
 | Legacy desktop/docker релиз | https://github.com/sllikmll/Unified-UI/releases/tag/v2.5.2 |
 | Docker image | `ghcr.io/sllikmll/unified-ui:latest` |
 | Версия Mihomo в desktop/native/docker сборках | `v1.19.29` |
@@ -32,13 +32,13 @@
 
 | Платформа | Файл | Статус |
 |---|---|---|
-| macOS Apple Silicon | [Unified-UI-Native-2.6.5-mac-arm64.zip](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.5-native/Unified-UI-Native-2.6.5-mac-arm64.zip) | Есть |
-| Windows x64 installer / setup wizard | [Unified-UI-Native-Setup-2.6.5-x64.exe](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.5-native/Unified-UI-Native-Setup-2.6.5-x64.exe) | Есть |
-| Windows x64 portable | [Unified-UI-Native-2.6.5-windows-x64-portable.zip](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.5-native/Unified-UI-Native-2.6.5-windows-x64-portable.zip) | Есть |
-| Windows x64 standalone EXE | [Unified-UI-Native-2.6.5-x64.exe](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.5-native/Unified-UI-Native-2.6.5-x64.exe) | Есть |
-| Linux x64 portable | [Unified-UI-Native-2.6.5-linux-x64-portable.tar.gz](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.5-native/Unified-UI-Native-2.6.5-linux-x64-portable.tar.gz) | Есть |
-| Linux Debian/Ubuntu | [Unified-UI-Native-2.6.5-linux-x64.deb](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.5-native/Unified-UI-Native-2.6.5-linux-x64.deb) | Есть |
-| Linux RPM | [Unified-UI-Native-2.6.5-linux-x64.rpm](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.5-native/Unified-UI-Native-2.6.5-linux-x64.rpm) | Есть |
+| macOS Apple Silicon | [Unified-UI-Native-2.6.6-mac-arm64.zip](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.6-native/Unified-UI-Native-2.6.6-mac-arm64.zip) | Есть |
+| Windows x64 installer / setup wizard | [Unified-UI-Native-Setup-2.6.6-x64.exe](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.6-native/Unified-UI-Native-Setup-2.6.6-x64.exe) | Есть |
+| Windows x64 portable | [Unified-UI-Native-2.6.6-windows-x64-portable.zip](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.6-native/Unified-UI-Native-2.6.6-windows-x64-portable.zip) | Есть |
+| Windows x64 standalone EXE | [Unified-UI-Native-2.6.6-x64.exe](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.6-native/Unified-UI-Native-2.6.6-x64.exe) | Есть |
+| Linux x64 portable | [Unified-UI-Native-2.6.6-linux-x64-portable.tar.gz](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.6-native/Unified-UI-Native-2.6.6-linux-x64-portable.tar.gz) | Есть |
+| Linux Debian/Ubuntu | [Unified-UI-Native-2.6.6-linux-x64.deb](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.6-native/Unified-UI-Native-2.6.6-linux-x64.deb) | Есть |
+| Linux RPM | [Unified-UI-Native-2.6.6-linux-x64.rpm](https://github.com/sllikmll/Unified-UI/releases/download/v2.6.6-native/Unified-UI-Native-2.6.6-linux-x64.rpm) | Есть |
 
 Native app:
 
@@ -328,25 +328,25 @@ curl http://<mikrotik-ip>:9090/version
 
 Подробнее: `mikrotik/README.md` и `mikrotik/routeros-install-template.rsc`.
 
-## 3. Desktop Native `2.6.5`
+## 3. Desktop Native `2.6.6`
 
 Актуальная native-сборка — это не WebView и не Flask-панель в окне. Приложение напрямую управляет локальным Mihomo через controller API.
 
-Артефакты релиза `v2.6.5-native`:
+Артефакты релиза `v2.6.6-native`:
 
 | ОС | Файл |
 |---|---|
-| macOS Apple Silicon | `Unified-UI-Native-2.6.5-mac-arm64.zip` |
-| Windows x64 installer / setup wizard | `Unified-UI-Native-Setup-2.6.5-x64.exe` |
-| Windows x64 portable | `Unified-UI-Native-2.6.5-windows-x64-portable.zip` |
-| Windows x64 standalone EXE | `Unified-UI-Native-2.6.5-x64.exe` |
-| Linux portable | `Unified-UI-Native-2.6.5-linux-x64-portable.tar.gz` |
-| Linux Debian/Ubuntu | `Unified-UI-Native-2.6.5-linux-x64.deb` |
-| Linux RPM | `Unified-UI-Native-2.6.5-linux-x64.rpm` |
+| macOS Apple Silicon | `Unified-UI-Native-2.6.6-mac-arm64.zip` |
+| Windows x64 installer / setup wizard | `Unified-UI-Native-Setup-2.6.6-x64.exe` |
+| Windows x64 portable | `Unified-UI-Native-2.6.6-windows-x64-portable.zip` |
+| Windows x64 standalone EXE | `Unified-UI-Native-2.6.6-x64.exe` |
+| Linux portable | `Unified-UI-Native-2.6.6-linux-x64-portable.tar.gz` |
+| Linux Debian/Ubuntu | `Unified-UI-Native-2.6.6-linux-x64.deb` |
+| Linux RPM | `Unified-UI-Native-2.6.6-linux-x64.rpm` |
 
-Что важно в `2.6.5`:
+Что важно в `2.6.6`:
 
-- для Windows рекомендуемый вариант — `Unified-UI-Native-Setup-2.6.5-x64.exe`: NSIS-мастер установки, установка в `Program Files`, ярлыки Start Menu/Desktop и uninstall через “Приложения и компоненты”;
+- для Windows рекомендуемый вариант — `Unified-UI-Native-Setup-2.6.6-x64.exe`: NSIS-мастер установки, установка в `Program Files`, ярлыки Start Menu/Desktop и uninstall через “Приложения и компоненты”;
 - компактные selector-плитки ближе к web-панели;
 - proxy nodes из подписки доступны в selector-группах, а не теряются после импорта;
 - per-node ping: отдельное обновление на узле, зелёный online, красный offline, серый not checked;
